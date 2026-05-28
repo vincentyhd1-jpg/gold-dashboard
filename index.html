@@ -53,8 +53,8 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     <div><h1>黄金市场分析仪表盘</h1><p class="sub">COMEX 黄金期货 &middot; COT 报告 &middot; 期权数据</p></div>
   </div>
   <div class="hr">
-    <div class="gp" id="spotPrice">$3,342.50</div>
-    <div class="pc up" id="priceChange">&#9650; +18.30 (+0.55%)</div>
+    <div class="gp" id="spotPrice" style="font-size:20px;color:#6e7681">获取中...</div>
+    <div class="pc" id="priceChange" style="visibility:hidden">--</div>
     <div class="ut" id="updateTime">最后更新：--</div>
   </div>
 </header>
@@ -180,6 +180,78 @@ function renderAll(cot){
   new Chart(document.getElementById('cvolChart'),
     cfg('CVOL 隐含波动率 (%)',cvolSlice,'#58a6ff','rgba(88,166,255,0.08)'));
 }
+
+// ── 实时金价 ──
+const priceEl  = document.getElementById('spotPrice');
+const changeEl = document.getElementById('priceChange');
+let lastPrice  = null;
+
+async function fetchGoldPrice() {
+  // 主源：metals.live（免费，无需 key）
+  try {
+    const r = await fetch('https://api.metals.live/v1/spot/gold', {cache:'no-store'});
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    // 返回格式：{ price: 3342.5 } 或 [{ gold: 3342.5 }]
+    const price = typeof d.price === 'number' ? d.price
+                : Array.isArray(d) ? d[0]?.gold ?? d[0]?.price
+                : d.gold ?? d.price;
+    if (typeof price !== 'number' || isNaN(price)) throw new Error('bad data');
+    updatePriceUI(price);
+    return;
+  } catch(e) {
+    console.warn('metals.live 失败，尝试备用源', e);
+  }
+
+  // 备用源：Yahoo Finance（通过 allorigins 代理绕过 CORS）
+  try {
+    const url = 'https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1m&range=1d';
+    const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+    const r = await fetch(proxy, {cache:'no-store'});
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    const meta  = d?.chart?.result?.[0]?.meta;
+    const price = meta?.regularMarketPrice ?? meta?.previousClose;
+    if (typeof price !== 'number' || isNaN(price)) throw new Error('bad data');
+    updatePriceUI(price, meta?.chartPreviousClose);
+    return;
+  } catch(e) {
+    console.warn('Yahoo Finance 备用源也失败', e);
+  }
+
+  // 两源均失败：显示提示
+  priceEl.textContent  = '价格暂不可用';
+  priceEl.style.fontSize = '16px';
+  priceEl.style.color    = '#6e7681';
+  changeEl.style.visibility = 'hidden';
+}
+
+function updatePriceUI(price, prevClose) {
+  priceEl.textContent   = '$' + price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  priceEl.style.fontSize = '';
+  priceEl.style.color    = '';
+
+  if (prevClose && prevClose > 0) {
+    const chg    = price - prevClose;
+    const chgPct = (chg / prevClose) * 100;
+    const up     = chg >= 0;
+    changeEl.textContent  = (up ? '▲ +' : '▼ ') + Math.abs(chg).toFixed(2)
+                          + ' (' + (up ? '+' : '') + chgPct.toFixed(2) + '%)';
+    changeEl.className    = 'pc ' + (up ? 'up' : 'dn');
+  } else if (lastPrice !== null) {
+    const chg = price - lastPrice;
+    const up  = chg >= 0;
+    changeEl.textContent = (up ? '▲ +' : '▼ ') + Math.abs(chg).toFixed(2);
+    changeEl.className   = 'pc ' + (up ? 'up' : 'dn');
+  } else {
+    changeEl.style.visibility = 'hidden';
+  }
+  changeEl.style.visibility = 'visible';
+  lastPrice = price;
+}
+
+fetchGoldPrice();
+setInterval(fetchGoldPrice, 5 * 60 * 1000);  // 每 5 分钟刷新
 
 // ── 加载 data/cot.json，失败则用模拟数据 ──
 fetch('data/cot.json?_=' + Date.now())
