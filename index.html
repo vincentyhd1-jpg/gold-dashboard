@@ -2,10 +2,121 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>黄金市场分析</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>黄金市场分析仪表盘</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+header{background:linear-gradient(135deg,#161b22,#1c2128);border-bottom:1px solid #30363d;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.hl{display:flex;align-items:center;gap:14px}
+.gi{width:42px;height:42px;background:linear-gradient(135deg,#f5c842,#d4a017);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 16px rgba(245,200,66,.35)}
+header h1{font-size:22px;font-weight:700;color:#f0f6fc}
+header .sub{font-size:13px;color:#8b949e;margin-top:2px}
+.hr{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.gp{font-size:28px;font-weight:700;color:#f5c842}
+.pc{font-size:13px;padding:2px 8px;border-radius:4px;font-weight:600}
+.pc.up{background:rgba(63,185,80,.15);color:#3fb950}
+.pc.dn{background:rgba(248,81,73,.15);color:#f85149}
+.ut{font-size:12px;color:#6e7681;margin-top:2px}
+main{max-width:1400px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
+.sr{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.sc{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px 20px;display:flex;flex-direction:column;gap:6px;transition:border-color .2s}
+.sc:hover{border-color:#58a6ff}
+.sc .lbl{font-size:12px;color:#8b949e;text-transform:uppercase;letter-spacing:.8px}
+.sc .val{font-size:26px;font-weight:700}
+.sc .hnt{font-size:12px;color:#6e7681}
+.bull{color:#3fb950}.bear{color:#f85149}.neut{color:#f5c842}
+.sb{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:15px;font-weight:700;width:fit-content}
+.sb.bull{background:rgba(63,185,80,.15);color:#3fb950;border:1px solid rgba(63,185,80,.3)}
+.sb.bear{background:rgba(248,81,73,.15);color:#f85149;border:1px solid rgba(248,81,73,.3)}
+.sb.neut{background:rgba(245,200,66,.12);color:#f5c842;border:1px solid rgba(245,200,66,.3)}
+.cg{display:grid;grid-template-columns:repeat(auto-fit,minmax(540px,1fr));gap:24px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:22px 24px}
+.ch{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px}
+.ct{font-size:15px;font-weight:600;color:#f0f6fc}
+.cs{font-size:12px;color:#8b949e;margin-top:3px}
+.tag{font-size:11px;padding:3px 9px;border-radius:4px;font-weight:600;background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25)}
+.cw{position:relative;height:260px}
+.sdg{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:4px}
+.si{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0d1117;border:1px solid #21262d;border-radius:8px}
+.si .sil{font-size:13px;color:#8b949e}
+.si .siv{font-size:14px;font-weight:600}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dot.bull{background:#3fb950}.dot.bear{background:#f85149}.dot.neut{background:#f5c842}
+footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1px solid #21262d;margin-top:8px}
+@media(max-width:640px){.cg{grid-template-columns:1fr}header{padding:16px}.gp{font-size:22px}}</style>
 </head>
 <body>
-<h1>黄金市场分析仪表盘</h1>
-<p>即将上线，敬请期待。</p>
+<header>
+  <div class="hl">
+    <div class="gi">&#127945;</div>
+    <div><h1>黄金市场分析仪表盘</h1><p class="sub">COMEX 黄金期货 &middot; COT 报告 &middot; 期权数据</p></div>
+  </div>
+  <div class="hr">
+    <div class="gp" id="spotPrice">$3,342.50</div>
+    <div class="pc up" id="priceChange">&#9650; +18.30 (+0.55%)</div>
+    <div class="ut" id="updateTime">最后更新：--</div>
+  </div>
+</header>
+<main>
+  <div class="sr">
+    <div class="sc"><div class="lbl">综合市场信号</div><div class="sb bull" id="overallSignal">&#9650; 看涨</div><div class="hnt">基于 COT + 期权综合判断</div></div>
+    <div class="sc"><div class="lbl">管理基金净多持仓</div><div class="val bull" id="mfNet">+187,432</div><div class="hnt">较上周 +12,340 手</div></div>
+    <div class="sc"><div class="lbl">Put/Call 比率</div><div class="val neut" id="pcRatio">0.82</div><div class="hnt">低于 1.0 偏多头情绪</div></div>
+    <div class="sc"><div class="lbl">隐含波动率 CVOL</div><div class="val" id="cvol" style="color:#58a6ff">14.3%</div><div class="hnt">较上周 -0.8%，波动收窄</div></div>
+    <div class="sc"><div class="lbl">商业套保净持仓</div><div class="val bear" id="commNet">-201,876</div><div class="hnt">套保压力仍较大</div></div>
+  </div>
+  <div class="cg">
+    <div class="card"><div class="ch"><div><div class="ct">COT 报告 — 管理基金净多持仓</div><div class="cs">Managed Money Net Long Positions（手）</div></div><span class="tag">每周更新</span></div><div class="cw"><canvas id="cotMFChart"></canvas></div></div>
+    <div class="card"><div class="ch"><div><div class="ct">COT 报告 — 商业套保者净持仓</div><div class="cs">Commercial Hedgers Net Positions（手）</div></div><span class="tag">每周更新</span></div><div class="cw"><canvas id="cotCommChart"></canvas></div></div>
+  </div>
+  <div class="cg">
+    <div class="card"><div class="ch"><div><div class="ct">期权 — Put/Call 比率</div><div class="cs">Put/Call Ratio &gt;1.0 偏空，&lt;1.0 偏多</div></div><span class="tag">期权数据</span></div><div class="cw"><canvas id="pcChart"></canvas></div></div>
+    <div class="card"><div class="ch"><div><div class="ct">期权 — 隐含波动率 CVOL</div><div class="cs">CME CVOL Gold Implied Volatility（%）</div></div><span class="tag">期权数据</span></div><div class="cw"><canvas id="cvolChart"></canvas></div></div>
+  </div>
+  <div class="card">
+    <div class="ch"><div><div class="ct">市场信号详情</div><div class="cs">各维度信号综合评估</div></div></div>
+    <div class="sdg">
+      <div class="si"><span class="sil"><span class="dot bull"></span>COT 管理基金持仓趋势</span><span class="siv bull">看涨</span></div>
+      <div class="si"><span class="sil"><span class="dot bear"></span>COT 商业套保压力</span><span class="siv bear">看跌</span></div>
+      <div class="si"><span class="sil"><span class="dot bull"></span>Put/Call 比率</span><span class="siv bull">看涨 (0.82)</span></div>
+      <div class="si"><span class="sil"><span class="dot neut"></span>隐含波动率 CVOL</span><span class="siv neut">中性 (14.3%)</span></div>
+      <div class="si"><span class="sil"><span class="dot bull"></span>价格动量（4周）</span><span class="siv bull">看涨 (+4.2%)</span></div>
+      <div class="si"><span class="sil"><span class="dot bull"></span>综合评分</span><span class="siv bull">3 看涨 / 1 看跌 / 1 中性</span></div>
+    </div>
+  </div>
+</main>
+<footer>数据为模拟演示数据，仅供参考 &middot; 真实数据接入后自动更新 &middot; zhangtongxue.com</footer>
+<script>(function(){
+  document.getElementById('updateTime').textContent='最后更新：'+new Date().toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'});
+  Chart.defaults.color='#8b949e';
+  Chart.defaults.borderColor='#21262d';
+  const W=['1/7','1/14','1/21','1/28','2/4','2/11','2/18','2/25','3/4','3/11','3/18','3/25','4/1','4/8','4/15','4/22','4/29','5/6','5/13','5/20'];
+  const mfD=[142000,148500,155200,161800,158400,163200,170100,175600,168900,172300,178500,182100,176800,180400,183700,185200,184100,186300,187432,187432];
+  const cmD=[-168000,-172400,-178900,-183200,-179600,-184100,-190300,-195800,-188400,-192700,-198100,-202400,-196300,-199800,-203100,-204600,-203200,-205400,-201876,-201876];
+  const pcD=[0.95,0.91,0.88,0.85,0.92,0.89,0.86,0.83,0.90,0.87,0.84,0.81,0.88,0.85,0.83,0.80,0.84,0.82,0.82,0.82];
+  const cvD=[16.2,15.8,15.4,15.1,15.7,15.3,14.9,14.6,15.2,14.8,14.5,14.2,14.8,14.5,14.3,14.1,14.4,14.3,14.3,14.3];
+
+  const cfg=(label,data,color,fill)=>({
+    type:'line',
+    data:{labels:W,datasets:[{label,data,borderColor:color,backgroundColor:fill||'transparent',borderWidth:2,pointRadius:2,pointHoverRadius:5,tension:0.3,fill:!!fill}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,backgroundColor:'#1c2128',borderColor:'#30363d',borderWidth:1,titleColor:'#f0f6fc',bodyColor:'#8b949e'}},
+      scales:{x:{grid:{color:'#21262d'},ticks:{maxTicksLimit:8,font:{size:11}}},y:{grid:{color:'#21262d'},ticks:{font:{size:11}}}}}
+  });
+
+  new Chart(document.getElementById('cotMFChart'), cfg('管理基金净多持仓',mfD,'#3fb950','rgba(63,185,80,0.08)'));
+  new Chart(document.getElementById('cotCommChart'), cfg('商业套保净持仓',cmD,'#f85149','rgba(248,81,73,0.08)'));
+
+  const pcCfg={type:'line',data:{labels:W,datasets:[
+    {label:'Put/Call 比率',data:pcD,borderColor:'#f5c842',backgroundColor:'rgba(245,200,66,0.08)',borderWidth:2,pointRadius:2,pointHoverRadius:5,tension:0.3,fill:true},
+    {label:'基准线 1.0',data:W.map(()=>1.0),borderColor:'#484f58',borderWidth:1,borderDash:[4,4],pointRadius:0,fill:false}
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:true,labels:{color:'#8b949e',font:{size:11}}},tooltip:{mode:'index',intersect:false,backgroundColor:'#1c2128',borderColor:'#30363d',borderWidth:1,titleColor:'#f0f6fc',bodyColor:'#8b949e'}},
+    scales:{x:{grid:{color:'#21262d'},ticks:{maxTicksLimit:8,font:{size:11}}},y:{grid:{color:'#21262d'},ticks:{font:{size:11}},min:0.6,max:1.2}}}};
+  new Chart(document.getElementById('pcChart'), pcCfg);
+
+  new Chart(document.getElementById('cvolChart'), cfg('CVOL 隐含波动率 (%)',cvD,'#58a6ff','rgba(88,166,255,0.08)'));
+})();</script>
 </body>
 </html>
