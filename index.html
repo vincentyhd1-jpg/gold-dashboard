@@ -50,7 +50,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
 <header>
   <div class="hl">
     <div class="gi">&#127945;</div>
-    <div><h1>黄金市场分析仪表盘</h1><p class="sub">COMEX 黄金期货 &middot; COT 报告 &middot; 期权数据</p></div>
+    <div><h1>黄金市场分析仪表盘</h1><p class="sub">现货黄金 XAU/USD &middot; COT 报告 &middot; 期权数据</p></div>
   </div>
   <div class="hr">
     <div class="gp" id="spotPrice" style="font-size:20px;color:#6e7681">获取中...</div>
@@ -181,31 +181,52 @@ function renderAll(cot){
     cfg('CVOL 隐含波动率 (%)',cvolSlice,'#58a6ff','rgba(88,166,255,0.08)'));
 }
 
-// ── 实时金价 ──
+// ── 实时金价（现货 XAU/USD）──
 const priceEl  = document.getElementById('spotPrice');
 const changeEl = document.getElementById('priceChange');
 let lastPrice  = null;
 
 async function fetchGoldPrice() {
-  // 主源：metals.live（免费，无需 key）
+  // 源 1：metals.live — 直接返回现货金价，免费无需注册
   try {
     const r = await fetch('https://api.metals.live/v1/spot/gold', {cache:'no-store'});
     if (!r.ok) throw new Error(r.status);
     const d = await r.json();
-    // 返回格式：{ price: 3342.5 } 或 [{ gold: 3342.5 }]
     const price = typeof d.price === 'number' ? d.price
-                : Array.isArray(d) ? d[0]?.gold ?? d[0]?.price
-                : d.gold ?? d.price;
+                : Array.isArray(d) ? (d[0]?.gold ?? d[0]?.price)
+                : (d.gold ?? d.price);
     if (typeof price !== 'number' || isNaN(price)) throw new Error('bad data');
     updatePriceUI(price);
     return;
   } catch(e) {
-    console.warn('metals.live 失败，尝试备用源', e);
+    console.warn('[金价] metals.live 失败', e);
   }
 
-  // 备用源：Yahoo Finance（通过 allorigins 代理绕过 CORS）
+  // 源 2：Swissquote 现货 XAU/USD 报价
   try {
-    const url = 'https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1m&range=1d';
+    const url = 'https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD';
+    const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+    const r = await fetch(proxy, {cache:'no-store'});
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    // 返回格式：[{ spreadProfilePrices:[{ ask, bid }] }]
+    const entry = Array.isArray(d) ? d[0] : d;
+    const sp    = entry?.spreadProfilePrices?.[0];
+    const ask   = sp?.ask;
+    const bid   = sp?.bid;
+    const price = (typeof ask === 'number' && typeof bid === 'number')
+                ? (ask + bid) / 2
+                : (ask ?? bid);
+    if (typeof price !== 'number' || isNaN(price)) throw new Error('bad data');
+    updatePriceUI(price);
+    return;
+  } catch(e) {
+    console.warn('[金价] Swissquote 失败', e);
+  }
+
+  // 源 3：Yahoo Finance 现货 XAUUSD=X（通过 allorigins 代理）
+  try {
+    const url = 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD%3DX?interval=1m&range=1d';
     const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
     const r = await fetch(proxy, {cache:'no-store'});
     if (!r.ok) throw new Error(r.status);
@@ -216,14 +237,14 @@ async function fetchGoldPrice() {
     updatePriceUI(price, meta?.chartPreviousClose);
     return;
   } catch(e) {
-    console.warn('Yahoo Finance 备用源也失败', e);
+    console.warn('[金价] Yahoo Finance 失败', e);
   }
 
-  // 两源均失败：显示提示
-  priceEl.textContent  = '价格暂不可用';
-  priceEl.style.fontSize = '16px';
-  priceEl.style.color    = '#6e7681';
-  changeEl.style.visibility = 'hidden';
+  // 三源均失败
+  priceEl.textContent        = '价格暂不可用';
+  priceEl.style.fontSize     = '16px';
+  priceEl.style.color        = '#6e7681';
+  changeEl.style.visibility  = 'hidden';
 }
 
 function updatePriceUI(price, prevClose) {
