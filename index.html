@@ -3,280 +3,346 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>黄金市场分析仪表盘</title>
+<title>黄金 COT 持仓分析</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>*{margin:0;padding:0;box-sizing:border-box}
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
 body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
-header{background:linear-gradient(135deg,#161b22,#1c2128);border-bottom:1px solid #30363d;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
-.hl{display:flex;align-items:center;gap:14px}
-.gi{width:42px;height:42px;background:linear-gradient(135deg,#f5c842,#d4a017);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 16px rgba(245,200,66,.35)}
-header h1{font-size:22px;font-weight:700;color:#f0f6fc}
-header .sub{font-size:13px;color:#8b949e;margin-top:2px}
-.hr{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
-.gp{font-size:28px;font-weight:700;color:#f5c842}
-.pc{font-size:13px;padding:2px 8px;border-radius:4px;font-weight:600}
-.pc.up{background:rgba(63,185,80,.15);color:#3fb950}
-.pc.dn{background:rgba(248,81,73,.15);color:#f85149}
-.ut{font-size:12px;color:#6e7681;margin-top:2px}
-main{max-width:1400px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
-.sr{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
-.sc{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px 20px;display:flex;flex-direction:column;gap:6px;transition:border-color .2s}
-.sc:hover{border-color:#58a6ff}
-.sc .lbl{font-size:12px;color:#8b949e;text-transform:uppercase;letter-spacing:.8px}
-.sc .val{font-size:26px;font-weight:700}
-.sc .hnt{font-size:12px;color:#6e7681}
+
+/* header */
+header{background:#161b22;border-bottom:1px solid #30363d;padding:16px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:10}
+.h-left{display:flex;align-items:center;gap:12px}
+.gi{width:36px;height:36px;background:linear-gradient(135deg,#f5c842,#d4a017);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+header h1{font-size:18px;font-weight:700;color:#f0f6fc}
+header .sub{font-size:12px;color:#8b949e;margin-top:1px}
+.h-right{font-size:12px;color:#6e7681;text-align:right}
+.h-right span{display:block}
+
+/* layout */
+main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
+
+/* ── 第一屏：核心数据 ── */
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:800px){.hero{grid-template-columns:1fr}}
+
+/* 信号大卡 */
+.signal-card{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:28px 32px;display:flex;flex-direction:column;gap:10px}
+.signal-card .sc-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:1px}
+.signal-card .sc-date{font-size:13px;color:#6e7681;margin-top:-4px}
+.signal-badge{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:24px;font-size:20px;font-weight:800;width:fit-content;margin-top:4px;letter-spacing:.5px}
+.signal-badge.extreme-bull{background:rgba(63,185,80,.18);color:#3fb950;border:1.5px solid rgba(63,185,80,.4)}
+.signal-badge.bull       {background:rgba(63,185,80,.10);color:#56d364;border:1.5px solid rgba(63,185,80,.25)}
+.signal-badge.neut       {background:rgba(245,200,66,.12);color:#f5c842;border:1.5px solid rgba(245,200,66,.3)}
+.signal-badge.bear       {background:rgba(248,81,73,.10);color:#f85149;border:1.5px solid rgba(248,81,73,.25)}
+.signal-badge.extreme-bear{background:rgba(248,81,73,.18);color:#ff6b6b;border:1.5px solid rgba(248,81,73,.4)}
+
+/* COT Index 百分位 */
+.pct-row{display:flex;align-items:center;gap:12px;margin-top:6px}
+.pct-label{font-size:12px;color:#8b949e;white-space:nowrap}
+.pct-bar-wrap{flex:1;height:10px;background:#21262d;border-radius:5px;overflow:hidden;position:relative}
+.pct-bar-fill{height:100%;border-radius:5px;transition:width .6s ease}
+.pct-value{font-size:14px;font-weight:700;min-width:42px;text-align:right}
+
+/* 数据网格 */
+.data-grid{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:24px 28px;display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:500px){.data-grid{grid-template-columns:1fr}}
+.dg-item{}
+.dg-item .dg-label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.dg-item .dg-val{font-size:28px;font-weight:700;line-height:1}
+.dg-item .dg-chg{font-size:13px;margin-top:5px;font-weight:600}
+.dg-item .dg-chg.up{color:#3fb950}.dg-item .dg-chg.dn{color:#f85149}.dg-item .dg-chg.flat{color:#6e7681}
 .bull{color:#3fb950}.bear{color:#f85149}.neut{color:#f5c842}
-.sb{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:15px;font-weight:700;width:fit-content}
-.sb.bull{background:rgba(63,185,80,.15);color:#3fb950;border:1px solid rgba(63,185,80,.3)}
-.sb.bear{background:rgba(248,81,73,.15);color:#f85149;border:1px solid rgba(248,81,73,.3)}
-.sb.neut{background:rgba(245,200,66,.12);color:#f5c842;border:1px solid rgba(245,200,66,.3)}
-.cg{display:grid;grid-template-columns:repeat(auto-fit,minmax(540px,1fr));gap:24px}
-.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:22px 24px}
-.ch{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px}
-.ct{font-size:15px;font-weight:600;color:#f0f6fc}
-.cs{font-size:12px;color:#8b949e;margin-top:3px}
-.tag{font-size:11px;padding:3px 9px;border-radius:4px;font-weight:600;background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25)}
-.cw{position:relative;height:260px}
-.sdg{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:4px}
-.si{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0d1117;border:1px solid #21262d;border-radius:8px}
-.si .sil{font-size:13px;color:#8b949e}
-.si .siv{font-size:14px;font-weight:600}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.dot.bull{background:#3fb950}.dot.bear{background:#f85149}.dot.neut{background:#f5c842}
+
+/* ── 第二屏：图表 ── */
+.charts-section{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:800px){.charts-section{grid-template-columns:1fr}}
+.card{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px 24px}
+.card-title{font-size:14px;font-weight:600;color:#f0f6fc;margin-bottom:4px}
+.card-sub{font-size:11px;color:#8b949e;margin-bottom:16px}
+.chart-wrap{position:relative;height:240px}
+
+/* COT Index 指示条（图表下方） */
+.index-bar-section{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px 28px}
+.index-bar-title{font-size:14px;font-weight:600;color:#f0f6fc;margin-bottom:6px}
+.index-bar-sub{font-size:11px;color:#8b949e;margin-bottom:18px}
+.index-track{position:relative;height:28px;background:#21262d;border-radius:6px;overflow:hidden}
+.index-track-fill{height:100%;border-radius:6px;transition:width .8s ease}
+.index-ticks{display:flex;justify-content:space-between;margin-top:6px;padding:0 2px}
+.index-ticks span{font-size:10px;color:#484f58}
+.index-pointer{position:absolute;top:0;height:100%;width:3px;background:#fff;border-radius:2px;transform:translateX(-50%);transition:left .8s ease;box-shadow:0 0 6px rgba(255,255,255,.5)}
+.index-zones{display:flex;margin-top:14px;gap:8px;flex-wrap:wrap}
+.iz{font-size:11px;padding:3px 10px;border-radius:4px;font-weight:600}
+.iz.active{outline:1.5px solid currentColor}
+.iz.extreme-bull{background:rgba(63,185,80,.12);color:#3fb950}
+.iz.bull       {background:rgba(63,185,80,.07);color:#56d364}
+.iz.neut       {background:rgba(245,200,66,.10);color:#f5c842}
+.iz.bear       {background:rgba(248,81,73,.07);color:#f85149}
+.iz.extreme-bear{background:rgba(248,81,73,.12);color:#ff6b6b}
+
 footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1px solid #21262d;margin-top:8px}
-@media(max-width:640px){.cg{grid-template-columns:1fr}header{padding:16px}.gp{font-size:22px}}</style>
+@media(max-width:640px){header{padding:14px 16px}main{padding:20px 16px}}
+</style>
 </head>
 <body>
+
 <header>
-  <div class="hl">
+  <div class="h-left">
     <div class="gi">&#127945;</div>
-    <div><h1>黄金市场分析仪表盘</h1><p class="sub">现货黄金 XAU/USD &middot; COT 报告 &middot; 期权数据</p></div>
-  </div>
-  <div class="hr">
-    <div class="gp" id="spotPrice" style="font-size:20px;color:#6e7681">获取中...</div>
-    <div class="pc" id="priceChange" style="visibility:hidden">--</div>
-    <div class="ut" id="updateTime">最后更新：--</div>
-  </div>
-</header>
-<main>
-  <div class="sr">
-    <div class="sc"><div class="lbl">综合市场信号</div><div class="sb bull" id="overallSignal">&#9650; 看涨</div><div class="hnt">基于 COT + 期权综合判断</div></div>
-    <div class="sc"><div class="lbl">管理基金净多持仓</div><div class="val bull" id="mfNet">+187,432</div><div class="hnt">较上周 +12,340 手</div></div>
-    <div class="sc"><div class="lbl">Put/Call 比率</div><div class="val neut" id="pcRatio">0.82</div><div class="hnt">低于 1.0 偏多头情绪</div></div>
-    <div class="sc"><div class="lbl">隐含波动率 CVOL</div><div class="val" id="cvol" style="color:#58a6ff">14.3%</div><div class="hnt">较上周 -0.8%，波动收窄</div></div>
-    <div class="sc"><div class="lbl">商业套保净持仓</div><div class="val bear" id="commNet">-201,876</div><div class="hnt">套保压力仍较大</div></div>
-  </div>
-  <div class="cg">
-    <div class="card"><div class="ch"><div><div class="ct">COT 报告 — 管理基金净多持仓</div><div class="cs">Managed Money Net Long Positions（手）</div></div><span class="tag">每周更新</span></div><div class="cw"><canvas id="cotMFChart"></canvas></div></div>
-    <div class="card"><div class="ch"><div><div class="ct">COT 报告 — 商业套保者净持仓</div><div class="cs">Commercial Hedgers Net Positions（手）</div></div><span class="tag">每周更新</span></div><div class="cw"><canvas id="cotCommChart"></canvas></div></div>
-  </div>
-  <div class="cg">
-    <div class="card"><div class="ch"><div><div class="ct">期权 — Put/Call 比率</div><div class="cs">Put/Call Ratio &gt;1.0 偏空，&lt;1.0 偏多</div></div><span class="tag">期权数据</span></div><div class="cw"><canvas id="pcChart"></canvas></div></div>
-    <div class="card"><div class="ch"><div><div class="ct">期权 — 隐含波动率 CVOL</div><div class="cs">CME CVOL Gold Implied Volatility（%）</div></div><span class="tag">期权数据</span></div><div class="cw"><canvas id="cvolChart"></canvas></div></div>
-  </div>
-  <div class="card">
-    <div class="ch"><div><div class="ct">市场信号详情</div><div class="cs">各维度信号综合评估</div></div></div>
-    <div class="sdg">
-      <div class="si"><span class="sil"><span class="dot bull"></span>COT 管理基金持仓趋势</span><span class="siv bull">看涨</span></div>
-      <div class="si"><span class="sil"><span class="dot bear"></span>COT 商业套保压力</span><span class="siv bear">看跌</span></div>
-      <div class="si"><span class="sil"><span class="dot bull"></span>Put/Call 比率</span><span class="siv bull">看涨 (0.82)</span></div>
-      <div class="si"><span class="sil"><span class="dot neut"></span>隐含波动率 CVOL</span><span class="siv neut">中性 (14.3%)</span></div>
-      <div class="si"><span class="sil"><span class="dot bull"></span>价格动量（4周）</span><span class="siv bull">看涨 (+4.2%)</span></div>
-      <div class="si"><span class="sil"><span class="dot bull"></span>综合评分</span><span class="siv bull">3 看涨 / 1 看跌 / 1 中性</span></div>
+    <div>
+      <h1>黄金市场分析仪表盘</h1>
+      <p class="sub">COT 持仓报告 &middot; CFTC 数据</p>
     </div>
   </div>
+  <div class="h-right">
+    <span id="cotDate">COT 数据截至：--</span>
+    <span id="updateTime">页面更新：--</span>
+  </div>
+</header>
+
+<main>
+  <!-- ── 第一屏：核心数据 ── -->
+  <div class="hero">
+
+    <!-- 左：综合信号 + COT Index -->
+    <div class="signal-card">
+      <div class="sc-label">综合信号判断</div>
+      <div class="sc-date" id="signalDate">--</div>
+      <div class="signal-badge neut" id="signalBadge">◆ 加载中</div>
+
+      <div style="margin-top:12px">
+        <div style="font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">COT Index 百分位（近52周）</div>
+        <div class="pct-row">
+          <span class="pct-label">管理基金</span>
+          <div class="pct-bar-wrap">
+            <div class="pct-bar-fill" id="mfPctBar" style="width:0%;background:#3fb950"></div>
+          </div>
+          <span class="pct-value bull" id="mfPctVal">--%</span>
+        </div>
+        <div class="pct-row" style="margin-top:8px">
+          <span class="pct-label">商业套保</span>
+          <div class="pct-bar-wrap">
+            <div class="pct-bar-fill" id="cmPctBar" style="width:0%;background:#f85149"></div>
+          </div>
+          <span class="pct-value bear" id="cmPctVal">--%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：数值网格 -->
+    <div class="data-grid">
+      <div class="dg-item">
+        <div class="dg-label">管理基金净多持仓</div>
+        <div class="dg-val bull" id="mfNet">--</div>
+        <div class="dg-chg" id="mfChg">--</div>
+      </div>
+      <div class="dg-item">
+        <div class="dg-label">商业套保净持仓</div>
+        <div class="dg-val bear" id="commNet">--</div>
+        <div class="dg-chg" id="commChg">--</div>
+      </div>
+      <div class="dg-item" style="grid-column:1/-1;border-top:1px solid #21262d;padding-top:16px;margin-top:4px">
+        <div class="dg-label">信号依据</div>
+        <div id="signalReason" style="font-size:13px;color:#8b949e;margin-top:6px;line-height:1.6">--</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 第二屏：图表 ── -->
+  <div class="charts-section">
+    <div class="card">
+      <div class="card-title">管理基金净多持仓</div>
+      <div class="card-sub">Managed Money Net Long — 近52周（手）</div>
+      <div class="chart-wrap"><canvas id="cotMFChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">商业套保者净持仓</div>
+      <div class="card-sub">Commercial Hedgers Net — 近52周（手）</div>
+      <div class="chart-wrap"><canvas id="cotCommChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- COT Index 指示条 -->
+  <div class="index-bar-section">
+    <div class="index-bar-title">COT Index — 管理基金净多持仓百分位</div>
+    <div class="index-bar-sub">当前值在近52周历史区间中的位置（0% = 历史最低，100% = 历史最高）</div>
+    <div class="index-track">
+      <!-- 渐变背景：空头→中性→多头 -->
+      <div style="position:absolute;inset:0;background:linear-gradient(to right,#f85149,#f5c842 50%,#3fb950);opacity:.25;border-radius:6px"></div>
+      <div class="index-pointer" id="indexPointer" style="left:50%"></div>
+    </div>
+    <div class="index-ticks">
+      <span>0%<br>极度空头</span><span>25%</span><span>50%<br>中性</span><span>75%</span><span>100%<br>极度多头</span>
+    </div>
+    <div class="index-zones" id="indexZones">
+      <span class="iz extreme-bear">极度空头 0–20%</span>
+      <span class="iz bear">偏空 20–40%</span>
+      <span class="iz neut">中性 40–60%</span>
+      <span class="iz bull">偏多 60–80%</span>
+      <span class="iz extreme-bull">极度多头 80–100%</span>
+    </div>
+  </div>
+
 </main>
 <footer id="footerNote">COT 数据来源：CFTC &middot; 每周六自动更新 &middot; zhangtongxue.com</footer>
+
 <script>
-// ── 模拟数据（data/cot.json 不存在时使用）──
+// 模拟数据（data/cot.json 不存在时使用）
 const MOCK = {
   updated_at: null,
   latest: { date:'2025-05-20', mf_net:187432, comm_net:-201876, mf_net_chg:12340, comm_net_chg:-4200 },
   weekly: (function(){
-    const dates=['1/7','1/14','1/21','1/28','2/4','2/11','2/18','2/25','3/4','3/11','3/18','3/25','4/1','4/8','4/15','4/22','4/29','5/6','5/13','5/20'];
-    const mf=  [142000,148500,155200,161800,158400,163200,170100,175600,168900,172300,178500,182100,176800,180400,183700,185200,184100,186300,187432,187432];
-    const cm=  [-168000,-172400,-178900,-183200,-179600,-184100,-190300,-195800,-188400,-192700,-198100,-202400,-196300,-199800,-203100,-204600,-203200,-205400,-201876,-201876];
-    return dates.map((d,i)=>({date:d,mf_net:mf[i],comm_net:cm[i]}));
+    const d=['2024-06-04','2024-06-11','2024-06-18','2024-06-25','2024-07-02','2024-07-09','2024-07-16','2024-07-23','2024-07-30','2024-08-06','2024-08-13','2024-08-20','2024-08-27','2024-09-03','2024-09-10','2024-09-17','2024-09-24','2024-10-01','2024-10-08','2024-10-15','2024-10-22','2024-10-29','2024-11-05','2024-11-12','2024-11-19','2024-11-26','2024-12-03','2024-12-10','2024-12-17','2024-12-24','2025-01-07','2025-01-14','2025-01-21','2025-01-28','2025-02-04','2025-02-11','2025-02-18','2025-02-25','2025-03-04','2025-03-11','2025-03-18','2025-03-25','2025-04-01','2025-04-08','2025-04-15','2025-04-22','2025-04-29','2025-05-06','2025-05-13','2025-05-20'];
+    const mf=[98000,105000,112000,118000,115000,121000,128000,134000,130000,136000,142000,148500,155200,161800,158400,163200,170100,175600,168900,172300,178500,182100,176800,180400,183700,185200,184100,186300,187432,187432,180000,175000,168000,172000,178000,182000,176000,180000,184000,185000,184000,186000,187000,185000,183000,186000,187000,184000,186000,187432];
+    const cm=[-88000,-93000,-99000,-104000,-101000,-107000,-113000,-118000,-114000,-120000,-126000,-131000,-137000,-143000,-140000,-145000,-151000,-156000,-150000,-154000,-159000,-163000,-158000,-162000,-165000,-167000,-166000,-168000,-169000,-169000,-162000,-158000,-152000,-155000,-160000,-164000,-159000,-163000,-167000,-168000,-167000,-169000,-170000,-168000,-166000,-169000,-170000,-167000,-169000,-201876];
+    return d.map((date,i)=>({date,mf_net:mf[i],comm_net:cm[i]}));
   })()
 };
-
-// ── 期权模拟数据（暂无真实来源，保持模拟）──
-const PC_MOCK  = [0.95,0.91,0.88,0.85,0.92,0.89,0.86,0.83,0.90,0.87,0.84,0.81,0.88,0.85,0.83,0.80,0.84,0.82,0.82,0.82];
-const CVOL_MOCK= [16.2,15.8,15.4,15.1,15.7,15.3,14.9,14.6,15.2,14.8,14.5,14.2,14.8,14.5,14.3,14.1,14.4,14.3,14.3,14.3];
 
 Chart.defaults.color='#8b949e';
 Chart.defaults.borderColor='#21262d';
 
-function fmt(n){return(n>=0?'+':'')+n.toLocaleString('zh-CN');}
+function fmtNum(n){
+  return (n>=0?'+':'')+Math.round(n).toLocaleString('zh-CN');
+}
 
-function renderAll(cot){
-  const weekly = cot.weekly.slice(-20);
-  const W      = weekly.map(r=>r.date.slice(5));   // MM-DD
-  const mfD    = weekly.map(r=>r.mf_net);
-  const cmD    = weekly.map(r=>r.comm_net);
+function calcPct(arr, val) {
+  if (!arr.length) return 50;
+  const mn = Math.min(...arr), mx = Math.max(...arr);
+  if (mx === mn) return 50;
+  return Math.round((val - mn) / (mx - mn) * 100);
+}
+
+function signalFromPct(pct) {
+  if (pct >= 80) return { cls:'extreme-bull', text:'极度多头拥挤', icon:'▲▲' };
+  if (pct >= 60) return { cls:'bull',          text:'偏多',         icon:'▲'  };
+  if (pct >= 40) return { cls:'neut',          text:'中性',         icon:'◆'  };
+  if (pct >= 20) return { cls:'bear',          text:'偏空',         icon:'▼'  };
+  return              { cls:'extreme-bear',  text:'极度空头',     icon:'▼▼' };
+}
+
+function pctBarColor(pct) {
+  if (pct >= 80) return '#3fb950';
+  if (pct >= 60) return '#56d364';
+  if (pct >= 40) return '#f5c842';
+  if (pct >= 20) return '#f85149';
+  return '#ff6b6b';
+}
+
+let mfChart = null, cmChart = null;
+
+function renderAll(cot) {
+  const weekly = cot.weekly.slice(-52);
   const latest = cot.latest;
+  const W      = weekly.map(r => r.date.slice(5).replace('-','/'));
+  const mfD    = weekly.map(r => r.mf_net);
+  const cmD    = weekly.map(r => r.comm_net);
 
-  // 更新时间
+  // 时间
   const ts = cot.updated_at
     ? new Date(cot.updated_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})
     : new Date().toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'});
-  document.getElementById('updateTime').textContent = 'COT 数据截至：' + latest.date + '　页面更新：' + ts;
+  document.getElementById('cotDate').textContent    = 'COT 数据截至：' + latest.date;
+  document.getElementById('updateTime').textContent = '页面更新：' + ts;
+  document.getElementById('signalDate').textContent = '报告日期：' + latest.date;
 
-  // 信号卡片
-  document.getElementById('mfNet').textContent   = fmt(latest.mf_net);
-  document.getElementById('commNet').textContent = fmt(latest.comm_net);
-  document.getElementById('mfNet').closest('.sc').querySelector('.hnt').textContent =
-    '较上周 ' + fmt(latest.mf_net_chg) + ' 手';
-  document.getElementById('commNet').closest('.sc').querySelector('.hnt').textContent =
-    '较上周 ' + fmt(latest.comm_net_chg) + ' 手';
+  // 数值卡片
+  const mfEl   = document.getElementById('mfNet');
+  const commEl = document.getElementById('commNet');
+  mfEl.textContent   = fmtNum(latest.mf_net);
+  commEl.textContent = fmtNum(latest.comm_net);
+  mfEl.className     = 'dg-val ' + (latest.mf_net >= 0 ? 'bull' : 'bear');
+  commEl.className   = 'dg-val ' + (latest.comm_net >= 0 ? 'bull' : 'bear');
 
-  // 综合信号逻辑
-  const bullCount = (latest.mf_net > 0 ? 1 : 0) + (latest.mf_net_chg > 0 ? 1 : 0);
-  const sig = bullCount >= 2 ? {cls:'bull', text:'▲ 看涨'} :
-              bullCount === 0 ? {cls:'bear', text:'▼ 看跌'} :
-                                {cls:'neut', text:'◆ 中性'};
-  const el = document.getElementById('overallSignal');
-  el.textContent = sig.text;
-  el.className = 'sb ' + sig.cls;
+  const mfChgEl   = document.getElementById('mfChg');
+  const commChgEl = document.getElementById('commChg');
+  const mfUp   = latest.mf_net_chg >= 0;
+  const commUp = latest.comm_net_chg >= 0;
+  mfChgEl.textContent   = '较上周 ' + fmtNum(latest.mf_net_chg) + ' 手';
+  commChgEl.textContent = '较上周 ' + fmtNum(latest.comm_net_chg) + ' 手';
+  mfChgEl.className     = 'dg-chg ' + (mfUp ? 'up' : 'dn');
+  commChgEl.className   = 'dg-chg ' + (commUp ? 'up' : 'dn');
 
-  // 图表通用配置
-  const cfg = (label,data,color,fill) => ({
-    type:'line',
-    data:{labels:W,datasets:[{label,data,borderColor:color,
-      backgroundColor:fill||'transparent',borderWidth:2,
-      pointRadius:2,pointHoverRadius:5,tension:0.3,fill:!!fill}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},
-        tooltip:{mode:'index',intersect:false,backgroundColor:'#1c2128',
-          borderColor:'#30363d',borderWidth:1,titleColor:'#f0f6fc',bodyColor:'#8b949e',
-          callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.parsed.y)}}},
-      scales:{x:{grid:{color:'#21262d'},ticks:{maxTicksLimit:8,font:{size:11}}},
-              y:{grid:{color:'#21262d'},ticks:{font:{size:11},
-                callback:v=>(v>=0?'+':'')+v.toLocaleString()}}}}
+  // COT Index 百分位
+  const mfPct = calcPct(mfD, latest.mf_net);
+  const cmPct = calcPct(cmD, latest.comm_net);
+
+  document.getElementById('mfPctBar').style.width    = mfPct + '%';
+  document.getElementById('mfPctBar').style.background = pctBarColor(mfPct);
+  document.getElementById('mfPctVal').textContent    = mfPct + '%';
+  document.getElementById('mfPctVal').style.color    = pctBarColor(mfPct);
+
+  document.getElementById('cmPctBar').style.width    = cmPct + '%';
+  document.getElementById('cmPctBar').style.background = pctBarColor(100 - cmPct);
+  document.getElementById('cmPctVal').textContent    = cmPct + '%';
+  document.getElementById('cmPctVal').style.color    = pctBarColor(100 - cmPct);
+
+  // 综合信号（以管理基金百分位为主）
+  const sig = signalFromPct(mfPct);
+  const badge = document.getElementById('signalBadge');
+  badge.textContent = sig.icon + ' ' + sig.text;
+  badge.className   = 'signal-badge ' + sig.cls;
+
+  // 信号依据文字
+  const reasons = [];
+  if (mfPct >= 80) reasons.push('管理基金净多持仓处于近52周 ' + mfPct + '% 高位，多头拥挤风险上升');
+  else if (mfPct <= 20) reasons.push('管理基金净多持仓处于近52周 ' + mfPct + '% 低位，空头情绪极端');
+  else reasons.push('管理基金净多持仓百分位 ' + mfPct + '%，处于历史中性区间');
+  if (mfUp) reasons.push('本周净多持仓增加 ' + fmtNum(latest.mf_net_chg) + ' 手，趋势向多');
+  else reasons.push('本周净多持仓减少 ' + fmtNum(Math.abs(latest.mf_net_chg)) + ' 手，趋势向空');
+  document.getElementById('signalReason').textContent = reasons.join('；') + '。';
+
+  // COT Index 指示条
+  document.getElementById('indexPointer').style.left = mfPct + '%';
+  const zones = document.getElementById('indexZones').querySelectorAll('.iz');
+  const zoneMap = ['extreme-bear','bear','neut','bull','extreme-bull'];
+  zones.forEach((z,i) => {
+    z.classList.toggle('active', zoneMap[i] === sig.cls);
   });
 
-  new Chart(document.getElementById('cotMFChart'),
-    cfg('管理基金净多持仓',mfD,'#3fb950','rgba(63,185,80,0.08)'));
-  new Chart(document.getElementById('cotCommChart'),
-    cfg('商业套保净持仓',cmD,'#f85149','rgba(248,81,73,0.08)'));
+  // 图表
+  const chartOpts = (label, color) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        mode: 'index', intersect: false,
+        backgroundColor: '#1c2128', borderColor: '#30363d', borderWidth: 1,
+        titleColor: '#f0f6fc', bodyColor: '#8b949e',
+        callbacks: { label: ctx => label + ': ' + fmtNum(ctx.parsed.y) }
+      }
+    },
+    scales: {
+      x: { grid: { color: '#21262d' }, ticks: { maxTicksLimit: 10, font: { size: 10 } } },
+      y: { grid: { color: '#21262d' }, ticks: { font: { size: 10 }, callback: v => (v>=0?'+':'')+Math.round(v/1000)+'k' } }
+    }
+  });
 
-  // 期权图表（模拟数据，长度对齐）
-  const pcSlice   = PC_MOCK.slice(-W.length);
-  const cvolSlice = CVOL_MOCK.slice(-W.length);
+  if (mfChart) mfChart.destroy();
+  mfChart = new Chart(document.getElementById('cotMFChart'), {
+    type: 'line',
+    data: { labels: W, datasets: [{
+      data: mfD, borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.07)',
+      borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0.3, fill: true
+    }]},
+    options: chartOpts('管理基金净多', '#3fb950')
+  });
 
-  const pcCfg = {type:'line',data:{labels:W,datasets:[
-    {label:'Put/Call 比率',data:pcSlice,borderColor:'#f5c842',
-      backgroundColor:'rgba(245,200,66,0.08)',borderWidth:2,
-      pointRadius:2,pointHoverRadius:5,tension:0.3,fill:true},
-    {label:'基准线 1.0',data:W.map(()=>1.0),borderColor:'#484f58',
-      borderWidth:1,borderDash:[4,4],pointRadius:0,fill:false}
-  ]},options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:true,labels:{color:'#8b949e',font:{size:11}}},
-      tooltip:{mode:'index',intersect:false,backgroundColor:'#1c2128',
-        borderColor:'#30363d',borderWidth:1,titleColor:'#f0f6fc',bodyColor:'#8b949e'}},
-    scales:{x:{grid:{color:'#21262d'},ticks:{maxTicksLimit:8,font:{size:11}}},
-            y:{grid:{color:'#21262d'},ticks:{font:{size:11}},min:0.6,max:1.2}}}};
-  new Chart(document.getElementById('pcChart'), pcCfg);
-  new Chart(document.getElementById('cvolChart'),
-    cfg('CVOL 隐含波动率 (%)',cvolSlice,'#58a6ff','rgba(88,166,255,0.08)'));
+  if (cmChart) cmChart.destroy();
+  cmChart = new Chart(document.getElementById('cotCommChart'), {
+    type: 'line',
+    data: { labels: W, datasets: [{
+      data: cmD, borderColor: '#f85149', backgroundColor: 'rgba(248,81,73,0.07)',
+      borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0.3, fill: true
+    }]},
+    options: chartOpts('商业套保净持', '#f85149')
+  });
 }
 
-// ── 实时金价（现货 XAU/USD）──
-const priceEl  = document.getElementById('spotPrice');
-const changeEl = document.getElementById('priceChange');
-let lastPrice  = null;
-
-async function fetchGoldPrice() {
-  // 源 1：metals.live — 直接返回现货金价，免费无需注册
-  try {
-    const r = await fetch('https://api.metals.live/v1/spot/gold', {cache:'no-store'});
-    if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
-    const price = typeof d.price === 'number' ? d.price
-                : Array.isArray(d) ? (d[0]?.gold ?? d[0]?.price)
-                : (d.gold ?? d.price);
-    if (typeof price !== 'number' || isNaN(price)) throw new Error('bad data');
-    updatePriceUI(price);
-    return;
-  } catch(e) {
-    console.warn('[金价] metals.live 失败', e);
-  }
-
-  // 源 2：Swissquote 现货 XAU/USD 报价
-  try {
-    const url = 'https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD';
-    const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-    const r = await fetch(proxy, {cache:'no-store'});
-    if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
-    // 返回格式：[{ spreadProfilePrices:[{ ask, bid }] }]
-    const entry = Array.isArray(d) ? d[0] : d;
-    const sp    = entry?.spreadProfilePrices?.[0];
-    const ask   = sp?.ask;
-    const bid   = sp?.bid;
-    const price = (typeof ask === 'number' && typeof bid === 'number')
-                ? (ask + bid) / 2
-                : (ask ?? bid);
-    if (typeof price !== 'number' || isNaN(price)) throw new Error('bad data');
-    updatePriceUI(price);
-    return;
-  } catch(e) {
-    console.warn('[金价] Swissquote 失败', e);
-  }
-
-  // 源 3：Yahoo Finance 现货 XAUUSD=X（通过 allorigins 代理）
-  try {
-    const url = 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD%3DX?interval=1m&range=1d';
-    const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-    const r = await fetch(proxy, {cache:'no-store'});
-    if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
-    const meta  = d?.chart?.result?.[0]?.meta;
-    const price = meta?.regularMarketPrice ?? meta?.previousClose;
-    if (typeof price !== 'number' || isNaN(price)) throw new Error('bad data');
-    updatePriceUI(price, meta?.chartPreviousClose);
-    return;
-  } catch(e) {
-    console.warn('[金价] Yahoo Finance 失败', e);
-  }
-
-  // 三源均失败
-  priceEl.textContent        = '价格暂不可用';
-  priceEl.style.fontSize     = '16px';
-  priceEl.style.color        = '#6e7681';
-  changeEl.style.visibility  = 'hidden';
-}
-
-function updatePriceUI(price, prevClose) {
-  priceEl.textContent   = '$' + price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-  priceEl.style.fontSize = '';
-  priceEl.style.color    = '';
-
-  if (prevClose && prevClose > 0) {
-    const chg    = price - prevClose;
-    const chgPct = (chg / prevClose) * 100;
-    const up     = chg >= 0;
-    changeEl.textContent  = (up ? '▲ +' : '▼ ') + Math.abs(chg).toFixed(2)
-                          + ' (' + (up ? '+' : '') + chgPct.toFixed(2) + '%)';
-    changeEl.className    = 'pc ' + (up ? 'up' : 'dn');
-  } else if (lastPrice !== null) {
-    const chg = price - lastPrice;
-    const up  = chg >= 0;
-    changeEl.textContent = (up ? '▲ +' : '▼ ') + Math.abs(chg).toFixed(2);
-    changeEl.className   = 'pc ' + (up ? 'up' : 'dn');
-  } else {
-    changeEl.style.visibility = 'hidden';
-  }
-  changeEl.style.visibility = 'visible';
-  lastPrice = price;
-}
-
-fetchGoldPrice();
-setInterval(fetchGoldPrice, 5 * 60 * 1000);  // 每 5 分钟刷新
-
-// ── 加载 data/cot.json，失败则用模拟数据 ──
+// 加载 data/cot.json，失败则用模拟数据
 fetch('data/cot.json?_=' + Date.now())
-  .then(r => { if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
   .then(data => {
     document.getElementById('footerNote').textContent =
       'COT 数据来源：CFTC · 每周六自动更新 · zhangtongxue.com';
