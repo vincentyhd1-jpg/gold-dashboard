@@ -1,0 +1,327 @@
+{
+  "updated_at": "2026-06-03T03:20:34Z",
+  "latest": {
+    "date": "2026-05-26",
+    "mf_net": 97446,
+    "comm_net": -185766,
+    "open_interest": 353489,
+    "mf_net_chg": 3906,
+    "comm_net_chg": 5863,
+    "mf_index": 10,
+    "comm_index": 100
+  },
+  "weekly": [
+    {
+      "date": "2025-06-03",
+      "mf_net": 123582,
+      "comm_net": -220826,
+      "open_interest": 415941
+    },
+    {
+      "date": "2025-06-10",
+      "mf_net": 124091,
+      "comm_net": -222718,
+      "open_interest": 417143
+    },
+    {
+      "date": "2025-06-17",
+      "mf_net": 130511,
+      "comm_net": -237727,
+      "open_interest": 441214
+    },
+    {
+      "date": "2025-06-24",
+      "mf_net": 125128,
+      "comm_net": -230560,
+      "open_interest": 434958
+    },
+    {
+      "date": "2025-07-01",
+      "mf_net": 130360,
+      "comm_net": -236069,
+      "open_interest": 437662
+    },
+    {
+      "date": "2025-07-08",
+      "mf_net": 128942,
+      "comm_net": -238354,
+      "open_interest": 443144
+    },
+    {
+      "date": "2025-07-15",
+      "mf_net": 136727,
+      "comm_net": -250688,
+      "open_interest": 448531
+    },
+    {
+      "date": "2025-07-22",
+      "mf_net": 159934,
+      "comm_net": -282337,
+      "open_interest": 489423
+    },
+    {
+      "date": "2025-07-29",
+      "mf_net": 134256,
+      "comm_net": -259079,
+      "open_interest": 445259
+    },
+    {
+      "date": "2025-08-05",
+      "mf_net": 153987,
+      "comm_net": -270146,
+      "open_interest": 449647
+    },
+    {
+      "date": "2025-08-12",
+      "mf_net": 148287,
+      "comm_net": -263065,
+      "open_interest": 446152
+    },
+    {
+      "date": "2025-08-19",
+      "mf_net": 137385,
+      "comm_net": -249965,
+      "open_interest": 438541
+    },
+    {
+      "date": "2025-08-26",
+      "mf_net": 141917,
+      "comm_net": -250965,
+      "open_interest": 443760
+    },
+    {
+      "date": "2025-09-02",
+      "mf_net": 161502,
+      "comm_net": -273898,
+      "open_interest": 492908
+    },
+    {
+      "date": "2025-09-09",
+      "mf_net": 163519,
+      "comm_net": -273375,
+      "open_interest": 509625
+    },
+    {
+      "date": "2025-09-16",
+      "mf_net": 158971,
+      "comm_net": -302371,
+      "open_interest": 516221
+    },
+    {
+      "date": "2025-09-23",
+      "mf_net": 160549,
+      "comm_net": -298403,
+      "open_interest": 528789
+    },
+    {
+      "date": "2025-09-30",
+      "mf_net": 145227,
+      "comm_net": -288236,
+      "open_interest": 493748
+    },
+    {
+      "date": "2025-10-07",
+      "mf_net": 129759,
+      "comm_net": -263772,
+      "open_interest": 485559
+    },
+    {
+      "date": "2025-10-14",
+      "mf_net": 108310,
+      "comm_net": -236867,
+      "open_interest": 485788
+    },
+    {
+      "date": "2025-10-21",
+      "mf_net": 92227,
+      "comm_net": -210117,
+      "open_interest": 472421
+    },
+    {
+      "date": "2025-10-28",
+      "mf_net": 104159,
+      "comm_net": -237027,
+      "open_interest": 457122
+    },
+    {
+      "date": "2025-11-04",
+      "mf_net": 100545,
+      "comm_net": -236542,
+      "open_interest": 450399
+    },
+    {
+      "date": "2025-11-10",
+      "mf_net": 104087,
+      "comm_net": -244823,
+      "open_interest": 459997
+    },
+    {
+      "date": "2025-11-18",
+      "mf_net": 98205,
+      "comm_net": -245585,
+      "open_interest": 471953
+    },
+    {
+      "date": "2025-11-25",
+      "mf_net": 109309,
+      "comm_net": -241403,
+      "open_interest": 432946
+    },
+    {
+      "date": "2025-12-02",
+      "mf_net": 120324,
+      "comm_net": -255348,
+      "open_interest": 418490
+    },
+    {
+      "date": "2025-12-09",
+      "mf_net": 123548,
+      "comm_net": -262579,
+      "open_interest": 432569
+    },
+    {
+      "date": "2025-12-16",
+      "mf_net": 132596,
+      "comm_net": -274358,
+      "open_interest": 471093
+    },
+    {
+      "date": "2025-12-23",
+      "mf_net": 136270,
+      "comm_net": -283526,
+      "open_interest": 492103
+    },
+    {
+      "date": "2025-12-30",
+      "mf_net": 126040,
+      "comm_net": -275246,
+      "open_interest": 481866
+    },
+    {
+      "date": "2026-01-06",
+      "mf_net": 123213,
+      "comm_net": -272035,
+      "open_interest": 488116
+    },
+    {
+      "date": "2026-01-13",
+      "mf_net": 134745,
+      "comm_net": -297106,
+      "open_interest": 527455
+    },
+    {
+      "date": "2026-01-20",
+      "mf_net": 137444,
+      "comm_net": -289689,
+      "open_interest": 528004
+    },
+    {
+      "date": "2026-01-27",
+      "mf_net": 118159,
+      "comm_net": -248285,
+      "open_interest": 488463
+    },
+    {
+      "date": "2026-02-03",
+      "mf_net": 92072,
+      "comm_net": -207778,
+      "open_interest": 409694
+    },
+    {
+      "date": "2026-02-10",
+      "mf_net": 92022,
+      "comm_net": -197738,
+      "open_interest": 404391
+    },
+    {
+      "date": "2026-02-17",
+      "mf_net": 95893,
+      "comm_net": -196782,
+      "open_interest": 407078
+    },
+    {
+      "date": "2026-02-24",
+      "mf_net": 95974,
+      "comm_net": -200806,
+      "open_interest": 420182
+    },
+    {
+      "date": "2026-03-03",
+      "mf_net": 97917,
+      "comm_net": -200583,
+      "open_interest": 409789
+    },
+    {
+      "date": "2026-03-10",
+      "mf_net": 98399,
+      "comm_net": -202976,
+      "open_interest": 413956
+    },
+    {
+      "date": "2026-03-17",
+      "mf_net": 102043,
+      "comm_net": -198648,
+      "open_interest": 411388
+    },
+    {
+      "date": "2026-03-24",
+      "mf_net": 91621,
+      "comm_net": -203828,
+      "open_interest": 403925
+    },
+    {
+      "date": "2026-03-31",
+      "mf_net": 92814,
+      "comm_net": -201640,
+      "open_interest": 361409
+    },
+    {
+      "date": "2026-04-07",
+      "mf_net": 90032,
+      "comm_net": -193751,
+      "open_interest": 354877
+    },
+    {
+      "date": "2026-04-14",
+      "mf_net": 95141,
+      "comm_net": -201082,
+      "open_interest": 362274
+    },
+    {
+      "date": "2026-04-21",
+      "mf_net": 92976,
+      "comm_net": -202940,
+      "open_interest": 365842
+    },
+    {
+      "date": "2026-04-28",
+      "mf_net": 89752,
+      "comm_net": -194813,
+      "open_interest": 369530
+    },
+    {
+      "date": "2026-05-05",
+      "mf_net": 94254,
+      "comm_net": -198935,
+      "open_interest": 367932
+    },
+    {
+      "date": "2026-05-12",
+      "mf_net": 98015,
+      "comm_net": -210258,
+      "open_interest": 376496
+    },
+    {
+      "date": "2026-05-19",
+      "mf_net": 93540,
+      "comm_net": -191629,
+      "open_interest": 379325
+    },
+    {
+      "date": "2026-05-26",
+      "mf_net": 97446,
+      "comm_net": -185766,
+      "open_interest": 353489
+    }
+  ]
+}

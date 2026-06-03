@@ -1,115 +1,110 @@
 #!/usr/bin/env python3
 """
-从 CFTC 下载最新 COT 报告，提取黄金期货（代码 088691）的
-管理基金和商业套保者净持仓，保存到 data/cot.json。
+从 CFTC Socrata API 获取黄金期货 COT 数据（代码 088691），
+计算管理基金净多持仓、商业套保净持仓、COT Index，
+保存到 data/cot.json。
 """
 
-import csv
-import io
 import json
 import os
-import zipfile
 from datetime import datetime, timezone
 from urllib.request import urlopen, Request
+from urllib.parse import urlencode
 
+API_URL = "https://publicreporting.cftc.gov/resource/72hh-3qpy.json"
 GOLD_CODE = "088691"
-CURRENT_URL = "https://www.cftc.gov/dea/newcot/deahistfo.zip"
-HISTORY_URL = "https://www.cftc.gov/files/dea/history/deahistfo_{year}.zip"
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "data", "cot.json")
-WEEKS_TO_KEEP = 52  # 保留最近 52 周
 
 
-def fetch_zip(url: str) -> bytes:
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0 gold-dashboard/1.0"})
+def fetch_api(limit: int = 52) -> list[dict]:
+    params = urlencode({
+        "cftc_contract_market_code": GOLD_CODE,
+        "$order": "report_date_as_yyyy_mm_dd DESC",
+        "$limit": limit,
+    })
+    url = f"{API_URL}?{params}"
+    req = Request(url, headers={
+        "User-Agent": "gold-dashboard/1.0",
+        "Accept": "application/json",
+    })
     with urlopen(req, timeout=30) as resp:
-        return resp.read()
+        return json.loads(resp.read().decode("utf-8"))
 
 
-def parse_cot_csv(raw: bytes) -> list[dict]:
-    """解析 deahistfo.txt，返回黄金期货的所有行（按日期升序）。"""
-    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-        name = next(n for n in zf.namelist() if n.lower().endswith(".txt"))
-        content = zf.read(name).decode("utf-8", errors="replace")
+def parse_row(row: dict) -> dict | None:
+    date = row.get("report_date_as_yyyy_mm_dd", "")
+    if not date:
+        return None
+    # 日期字段有时带时间戳，截取前10位
+    date = date[:10]
 
-    rows = []
-    reader = csv.DictReader(io.StringIO(content))
-    for row in reader:
-        code = row.get("CFTC_Contract_Market_Code", "").strip()
-        if code != GOLD_CODE:
-            continue
-        date_str = row.get("Report_Date_as_YYYY-MM-DD", "").strip()
-        if not date_str:
-            continue
-        try:
-            mm_long  = int(row["M_Money_Positions_Long_All"])
-            mm_short = int(row["M_Money_Positions_Short_All"])
-            cm_long  = int(row["Comm_Positions_Long_All"])
-            cm_short = int(row["Comm_Positions_Short_All"])
-        except (KeyError, ValueError):
-            continue
-        rows.append({
-            "date":    date_str,
-            "mf_net":  mm_long - mm_short,
-            "comm_net": cm_long - cm_short,
-        })
+    def i(key: str) -> int:
+        return int(float(row.get(key) or 0))
 
-    rows.sort(key=lambda r: r["date"])
-    return rows
+    mf_long  = i("m_money_positions_long_all")
+    mf_short = i("m_money_positions_short_all")
+
+    # 注意：API 实际字段名无 _all 后缀
+    prod_long  = i("prod_merc_positions_long")
+    prod_short = i("prod_merc_positions_short")
+    swap_long  = i("swap_positions_long_all")
+    # 注意：CFTC 字段名 swap 后有两个下划线
+    swap_short = i("swap__positions_short_all")
+
+    return {
+        "date":     date,
+        "mf_net":   mf_long - mf_short,
+        "comm_net": (prod_long - prod_short) + (swap_long - swap_short),
+        "open_interest": i("open_interest_all"),
+    }
 
 
-def load_existing() -> list[dict]:
-    if os.path.exists(OUTPUT_PATH):
-        with open(OUTPUT_PATH, encoding="utf-8") as f:
-            data = json.load(f)
-            return data.get("weekly", [])
-    return []
-
-
-def merge(existing: list[dict], new_rows: list[dict]) -> list[dict]:
-    """以 date 为键合并，新数据覆盖旧数据，保留最近 WEEKS_TO_KEEP 条。"""
-    by_date = {r["date"]: r for r in existing}
-    for r in new_rows:
-        by_date[r["date"]] = r
-    merged = sorted(by_date.values(), key=lambda r: r["date"])
-    return merged[-WEEKS_TO_KEEP:]
+def cot_index(values: list[int], current: int) -> int:
+    """百分位：(current - min) / (max - min) × 100，结果取整。"""
+    mn, mx = min(values), max(values)
+    if mx == mn:
+        return 50
+    return round((current - mn) / (mx - mn) * 100)
 
 
 def main():
-    print("正在下载当前 COT 数据...")
-    raw = fetch_zip(CURRENT_URL)
-    new_rows = parse_cot_csv(raw)
-    print(f"  解析到 {len(new_rows)} 条黄金期货记录")
+    print("正在请求 CFTC Socrata API...")
+    raw_rows = fetch_api(limit=52)
+    print(f"  获取到 {len(raw_rows)} 条记录")
 
-    # 如果本地数据不足 WEEKS_TO_KEEP 条，补充历史年份
-    existing = load_existing()
-    if len(existing) < WEEKS_TO_KEEP:
-        current_year = datetime.now().year
-        for year in range(current_year - 1, current_year - 4, -1):
-            if len(existing) + len(new_rows) >= WEEKS_TO_KEEP:
-                break
-            hist_url = HISTORY_URL.format(year=year)
-            print(f"  补充历史数据：{hist_url}")
-            try:
-                hist_raw = fetch_zip(hist_url)
-                hist_rows = parse_cot_csv(hist_raw)
-                new_rows = hist_rows + new_rows
-                print(f"    +{len(hist_rows)} 条")
-            except Exception as e:
-                print(f"    跳过 {year}：{e}")
+    weekly = []
+    for row in raw_rows:
+        parsed = parse_row(row)
+        if parsed:
+            weekly.append(parsed)
 
-    weekly = merge(existing, new_rows)
+    # API 返回降序，转为升序
+    weekly.sort(key=lambda r: r["date"])
 
-    latest = weekly[-1] if weekly else {}
+    if not weekly:
+        raise RuntimeError("未解析到任何有效数据，请检查 API 响应")
+
+    # COT Index（用全部52周数据计算）
+    mf_vals   = [r["mf_net"]   for r in weekly]
+    comm_vals = [r["comm_net"] for r in weekly]
+
+    latest = weekly[-1]
     prev   = weekly[-2] if len(weekly) >= 2 else {}
+
+    mf_index   = cot_index(mf_vals,   latest["mf_net"])
+    comm_index = cot_index(comm_vals, latest["comm_net"])
 
     output = {
         "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "latest": {
-            "date":         latest.get("date", ""),
-            "mf_net":       latest.get("mf_net", 0),
-            "comm_net":     latest.get("comm_net", 0),
-            "mf_net_chg":   latest.get("mf_net", 0) - prev.get("mf_net", 0),
-            "comm_net_chg": latest.get("comm_net", 0) - prev.get("comm_net", 0),
+            "date":         latest["date"],
+            "mf_net":       latest["mf_net"],
+            "comm_net":     latest["comm_net"],
+            "open_interest": latest["open_interest"],
+            "mf_net_chg":   latest["mf_net"]   - prev.get("mf_net", 0),
+            "comm_net_chg": latest["comm_net"] - prev.get("comm_net", 0),
+            "mf_index":     mf_index,
+            "comm_index":   comm_index,
         },
         "weekly": weekly,
     }
@@ -119,7 +114,12 @@ def main():
         json.dump(output, f, ensure_ascii=False, indent=2)
 
     print(f"已保存 {len(weekly)} 条数据到 {OUTPUT_PATH}")
-    print(f"最新一期：{latest.get('date')}  管理基金净多={latest.get('mf_net'):+,}  商业套保净={latest.get('comm_net'):+,}")
+    print(
+        f"最新一期：{latest['date']}"
+        f"  管理基金净多={latest['mf_net']:+,}"
+        f"  商业套保净={latest['comm_net']:+,}"
+        f"  COT Index={mf_index}%"
+    )
 
 
 if __name__ == "__main__":

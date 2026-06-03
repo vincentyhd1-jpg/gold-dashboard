@@ -263,9 +263,9 @@ function renderAll(cot) {
   mfChgEl.className     = 'dg-chg ' + (mfUp ? 'up' : 'dn');
   commChgEl.className   = 'dg-chg ' + (commUp ? 'up' : 'dn');
 
-  // COT Index 百分位
-  const mfPct = calcPct(mfD, latest.mf_net);
-  const cmPct = calcPct(cmD, latest.comm_net);
+  // COT Index 百分位：优先使用 JSON 预计算值，模拟数据时 fallback 到前端计算
+  const mfPct = (latest.mf_index != null) ? latest.mf_index : calcPct(mfD, latest.mf_net);
+  const cmPct = (latest.comm_index != null) ? latest.comm_index : calcPct(cmD, latest.comm_net);
 
   document.getElementById('mfPctBar').style.width    = mfPct + '%';
   document.getElementById('mfPctBar').style.background = pctBarColor(mfPct);
