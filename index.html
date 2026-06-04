@@ -293,25 +293,6 @@ function renderAll(cot) {
     z.classList.toggle('active', zoneMap[i] === sig.cls);
   });
 
-  // 图表
-  const chartOpts = (label, color) => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        mode: 'index', intersect: false,
-        backgroundColor: '#1c2128', borderColor: '#30363d', borderWidth: 1,
-        titleColor: '#f0f6fc', bodyColor: '#8b949e',
-        callbacks: { label: ctx => label + ': ' + fmtNum(ctx.parsed.y) }
-      }
-    },
-    scales: {
-      x: { grid: { color: '#21262d' }, ticks: { maxTicksLimit: 10, font: { size: 10 } } },
-      y: { grid: { color: '#21262d' }, ticks: { font: { size: 10 }, callback: v => (v>=0?'+':'')+Math.round(v/1000)+'k' } }
-    }
-  });
-
   // 双轴合并图表
   if (mfChart)   { mfChart.destroy();   mfChart   = null; }
   if (cmChart)   { cmChart.destroy();   cmChart   = null; }
