@@ -35,6 +35,10 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 .signal-badge.neut       {background:rgba(245,200,66,.12);color:#f5c842;border:1.5px solid rgba(245,200,66,.3)}
 .signal-badge.bear       {background:rgba(248,81,73,.10);color:#f85149;border:1.5px solid rgba(248,81,73,.25)}
 .signal-badge.extreme-bear{background:rgba(248,81,73,.18);color:#ff6b6b;border:1.5px solid rgba(248,81,73,.4)}
+.signal-badge.crowd-full  {background:rgba(255,107,53,.18);color:#ff6b35;border:1.5px solid rgba(255,107,53,.4)}
+.signal-badge.clear-full  {background:rgba(82,200,100,.15);color:#52e87a;border:1.5px solid rgba(82,200,100,.35)}
+.signal-badge.bias-crowd,.signal-badge.bias-clear{background:rgba(245,200,66,.12);color:#f5c842;border:1.5px solid rgba(245,200,66,.3)}
+.signal-badge.neutral-dual{background:rgba(110,118,129,.12);color:#8b949e;border:1.5px solid rgba(110,118,129,.3)}
 
 /* COT Index 百分位 */
 .pct-row{display:flex;align-items:center;gap:12px;margin-top:6px}
@@ -74,6 +78,19 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 .iz.bear       {background:rgba(248,81,73,.07);color:#f85149}
 .iz.extreme-bear{background:rgba(248,81,73,.12);color:#ff6b6b}
 
+/* 判断依据表格 */
+.rules-table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px}
+.rules-table th{text-align:left;padding:7px 10px;color:#8b949e;font-weight:600;border-bottom:1px solid #30363d;font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+.rules-table td{padding:8px 10px;border-bottom:1px solid #21262d;line-height:1.45;vertical-align:top}
+.rules-table tr.hit-row td{background:#3a2f1a}
+.rules-table tr.hit-row td.cond{color:#f5c842}
+.rules-table tr.hit-row td.sig{color:#ff6b35;font-weight:700}
+.rules-table tr.hit-row td.risk{color:#f5c842}
+.rt-crowd-full  {color:#ff6b35;font-weight:700}
+.rt-clear-full  {color:#52e87a;font-weight:700}
+.rt-bias        {color:#f5c842}
+.rt-neutral     {color:#8b949e}
+
 footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1px solid #21262d;margin-top:8px}
 @media(max-width:640px){header{padding:14px 16px}main{padding:20px 16px}}
 </style>
@@ -102,7 +119,8 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     <div class="signal-card">
       <div class="sc-label">综合信号判断</div>
       <div class="sc-date" id="signalDate">--</div>
-      <div class="signal-badge neut" id="signalBadge">◆ 加载中</div>
+      <div class="signal-badge neutral-dual" id="signalBadge">◆ 加载中</div>
+      <div id="signalRisk" style="font-size:12px;color:#8b949e;margin-top:6px">--</div>
 
       <div style="margin-top:12px">
         <div style="font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">COT Index 百分位（近52周）</div>
@@ -162,6 +180,38 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
       <span class="iz bull">偏多 60–80%</span>
       <span class="iz extreme-bull">极度多头 80–100%</span>
     </div>
+
+    <!-- 判断依据表格 -->
+    <div style="margin-top:20px">
+      <div style="font-size:12px;color:#8b949e;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">判断依据 — 双指标规则（管理基金 Index + 商业 Index）</div>
+      <table class="rules-table" id="rulesTable">
+        <thead>
+          <tr><th class="cond">条件</th><th class="sig">信号</th><th class="risk">风险提示</th></tr>
+        </thead>
+        <tbody>
+          <tr id="rule-crowd-full">
+            <td class="cond">管理基金 Index ≥ 80 且 商业 Index ≤ 20</td>
+            <td class="sig rt-crowd-full">★ 拥挤·多头满</td>
+            <td class="risk">警惕回调 / 勿追多</td>
+          </tr>
+          <tr id="rule-clear-full">
+            <td class="cond">管理基金 Index ≤ 20 且 商业 Index ≥ 80</td>
+            <td class="sig rt-clear-full">★ 出清·空头满</td>
+            <td class="risk">下跌动能或枯竭</td>
+          </tr>
+          <tr id="rule-bias">
+            <td class="cond">单侧极端（MF ≥80 或 ≤20，或商业 ≥80 或 ≤20，不满足以上组合）</td>
+            <td class="sig rt-bias">偏拥挤 / 偏清淡</td>
+            <td class="risk">关注趋势是否延续</td>
+          </tr>
+          <tr id="rule-neutral">
+            <td class="cond">两侧均在 20–80 之间</td>
+            <td class="sig rt-neutral">中性</td>
+            <td class="risk">无明显极值，跟随趋势</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
 </main>
@@ -201,6 +251,20 @@ function signalFromPct(pct) {
   if (pct >= 40) return { cls:'neut',          text:'中性',         icon:'◆'  };
   if (pct >= 20) return { cls:'bear',          text:'偏空',         icon:'▼'  };
   return              { cls:'extreme-bear',  text:'极度空头',     icon:'▼▼' };
+}
+
+function dualSignal(mfPct, cmPct) {
+  const mfExt = mfPct >= 80 || mfPct <= 20;
+  const cmExt = cmPct >= 80 || cmPct <= 20;
+  if (mfPct >= 80 && cmPct <= 20)
+    return { rule:'crowd-full', cls:'crowd-full',  icon:'★', text:'拥挤·多头满',  risk:'警惕回调 / 勿追多',      reason:'管理基金极度拥挤，商业套保极度对冲，多头已满仓。' };
+  if (mfPct <= 20 && cmPct >= 80)
+    return { rule:'clear-full', cls:'clear-full',  icon:'★', text:'出清·空头满',  risk:'下跌动能或枯竭',         reason:'管理基金极度出清，商业套保极度减空，空头动能衰竭。' };
+  if (mfExt || cmExt) {
+    const side = mfPct >= 80 ? '管理基金偏多拥挤' : mfPct <= 20 ? '管理基金偏空出清' : cmPct >= 80 ? '商业套保极端对冲' : '商业套保极端减空';
+    return { rule:'bias',       cls:'bias-crowd',  icon:'◈', text:'偏拥挤 / 偏清淡', risk:'关注趋势是否延续',      reason:side + '，另一侧尚未确认。' };
+  }
+  return   { rule:'neutral',   cls:'neutral-dual', icon:'◆', text:'中性',           risk:'无明显极值，跟随趋势',  reason:'两侧均处于中性区间，无明显极端信号。' };
 }
 
 function pctBarColor(pct) {
@@ -259,37 +323,38 @@ function renderAll(cot, goldData) {
   const mfPct = (latest.mf_index != null) ? latest.mf_index : calcPct(mfD, latest.mf_net);
   const cmPct = (latest.comm_index != null) ? latest.comm_index : calcPct(cmD, latest.comm_net);
 
-  document.getElementById('mfPctBar').style.width    = mfPct + '%';
-  document.getElementById('mfPctBar').style.background = pctBarColor(mfPct);
-  document.getElementById('mfPctVal').textContent    = mfPct + '%';
-  document.getElementById('mfPctVal').style.color    = pctBarColor(mfPct);
+  document.getElementById('mfPctBar').style.width      = mfPct + '%';
+  document.getElementById('mfPctBar').style.background  = pctBarColor(mfPct);
+  document.getElementById('mfPctVal').textContent       = mfPct + '%';
+  document.getElementById('mfPctVal').style.color       = pctBarColor(mfPct);
 
-  document.getElementById('cmPctBar').style.width    = cmPct + '%';
-  document.getElementById('cmPctBar').style.background = pctBarColor(100 - cmPct);
-  document.getElementById('cmPctVal').textContent    = cmPct + '%';
-  document.getElementById('cmPctVal').style.color    = pctBarColor(100 - cmPct);
+  document.getElementById('cmPctBar').style.width      = cmPct + '%';
+  document.getElementById('cmPctBar').style.background  = pctBarColor(100 - cmPct);
+  document.getElementById('cmPctVal').textContent       = cmPct + '%';
+  document.getElementById('cmPctVal').style.color       = pctBarColor(100 - cmPct);
 
-  // 综合信号（以管理基金百分位为主）
-  const sig = signalFromPct(mfPct);
+  // 双指标综合信号
+  const dualSig = dualSignal(mfPct, cmPct);
   const badge = document.getElementById('signalBadge');
-  badge.textContent = sig.icon + ' ' + sig.text;
-  badge.className   = 'signal-badge ' + sig.cls;
+  badge.textContent = dualSig.icon + ' ' + dualSig.text;
+  badge.className   = 'signal-badge ' + dualSig.cls;
+  document.getElementById('signalRisk').textContent = dualSig.risk;
 
   // 信号依据文字
-  const reasons = [];
-  if (mfPct >= 80) reasons.push('管理基金净多持仓处于近52周 ' + mfPct + '% 高位，多头拥挤风险上升');
-  else if (mfPct <= 20) reasons.push('管理基金净多持仓处于近52周 ' + mfPct + '% 低位，空头情绪极端');
-  else reasons.push('管理基金净多持仓百分位 ' + mfPct + '%，处于历史中性区间');
-  if (mfUp) reasons.push('本周净多持仓增加 ' + fmtNum(latest.mf_net_chg) + ' 手，趋势向多');
-  else reasons.push('本周净多持仓减少 ' + fmtNum(Math.abs(latest.mf_net_chg)) + ' 手，趋势向空');
-  document.getElementById('signalReason').textContent = reasons.join('；') + '。';
+  document.getElementById('signalReason').textContent =
+    '管理基金 Index ' + mfPct + '%，商业 Index ' + cmPct + '%。' + dualSig.reason;
 
-  // COT Index 折线图区间高亮（用 annotation plugin 不可用，改用分段 dataset 模拟背景色块）
+  // 判断依据表格高亮：只有 crowd-full / clear-full 两个强信号行会亮
+  document.getElementById('rule-crowd-full').classList.toggle('hit-row', dualSig.rule === 'crowd-full');
+  document.getElementById('rule-clear-full').classList.toggle('hit-row', dualSig.rule === 'clear-full');
+  document.getElementById('rule-bias').classList.toggle('hit-row',       dualSig.rule === 'bias');
+  document.getElementById('rule-neutral').classList.toggle('hit-row',    dualSig.rule === 'neutral');
+
+  // COT Index 折线图区间标签高亮（沿用旧逻辑，用 mfPct 区间）
   const zones = document.getElementById('indexZones').querySelectorAll('.iz');
   const zoneMap = ['extreme-bear','bear','neut','bull','extreme-bull'];
-  zones.forEach((z,i) => {
-    z.classList.toggle('active', zoneMap[i] === sig.cls);
-  });
+  const mfZone = mfPct >= 80 ? 'extreme-bull' : mfPct >= 60 ? 'bull' : mfPct >= 40 ? 'neut' : mfPct >= 20 ? 'bear' : 'extreme-bear';
+  zones.forEach((z,i) => { z.classList.toggle('active', zoneMap[i] === mfZone); });
 
   // COT Index 折线图
   if (indexChart) { indexChart.destroy(); indexChart = null; }
