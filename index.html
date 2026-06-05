@@ -65,11 +65,6 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 .index-bar-section{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px 28px}
 .index-bar-title{font-size:14px;font-weight:600;color:#f0f6fc;margin-bottom:6px}
 .index-bar-sub{font-size:11px;color:#8b949e;margin-bottom:18px}
-.index-track{position:relative;height:28px;background:#21262d;border-radius:6px;overflow:hidden}
-.index-track-fill{height:100%;border-radius:6px;transition:width .8s ease}
-.index-ticks{display:flex;justify-content:space-between;margin-top:6px;padding:0 2px}
-.index-ticks span{font-size:10px;color:#484f58}
-.index-pointer{position:absolute;top:0;height:100%;width:3px;background:#fff;border-radius:2px;transform:translateX(-50%);transition:left .8s ease;box-shadow:0 0 6px rgba(255,255,255,.5)}
 .index-zones{display:flex;margin-top:14px;gap:8px;flex-wrap:wrap}
 .iz{font-size:11px;padding:3px 10px;border-radius:4px;font-weight:600}
 .iz.active{outline:1.5px solid currentColor}
@@ -155,18 +150,11 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     <div class="chart-wrap" style="height:300px"><canvas id="cotDualChart"></canvas></div>
   </div>
 
-  <!-- COT Index 指示条 -->
+  <!-- COT Index 折线图 -->
   <div class="index-bar-section">
-    <div class="index-bar-title">COT Index — 管理基金净多持仓百分位</div>
-    <div class="index-bar-sub">当前值在近52周历史区间中的位置（0% = 历史最低，100% = 历史最高）</div>
-    <div class="index-track">
-      <!-- 渐变背景：空头→中性→多头 -->
-      <div style="position:absolute;inset:0;background:linear-gradient(to right,#f85149,#f5c842 50%,#3fb950);opacity:.25;border-radius:6px"></div>
-      <div class="index-pointer" id="indexPointer" style="left:50%"></div>
-    </div>
-    <div class="index-ticks">
-      <span>0%<br>极度空头</span><span>25%</span><span>50%<br>中性</span><span>75%</span><span>100%<br>极度多头</span>
-    </div>
+    <div class="index-bar-title">COT Index — 管理基金净多持仓百分位（近52周）</div>
+    <div class="index-bar-sub">每周百分位：0% = 历史最低，100% = 历史最高</div>
+    <div class="chart-wrap" style="height:220px"><canvas id="cotIndexChart"></canvas></div>
     <div class="index-zones" id="indexZones">
       <span class="iz extreme-bear">极度空头 0–20%</span>
       <span class="iz bear">偏空 20–40%</span>
@@ -222,7 +210,7 @@ function pctBarColor(pct) {
   return '#ff6b6b';
 }
 
-let mfChart = null, cmChart = null, dualChart = null;
+let mfChart = null, cmChart = null, dualChart = null, indexChart = null;
 
 function renderAll(cot) {
   const weekly = cot.weekly.slice(-52);
@@ -230,6 +218,11 @@ function renderAll(cot) {
   const W      = weekly.map(r => r.date.slice(5).replace('-','/'));
   const mfD    = weekly.map(r => r.mf_net);
   const cmD    = weekly.map(r => r.comm_net);
+
+  // 计算每周 COT Index（前滚动52周窗口百分位）
+  const mfVals = mfD;
+  const mn = Math.min(...mfVals), mx = Math.max(...mfVals);
+  const cotIdxD = mfVals.map(v => (mx === mn) ? 50 : Math.round((v - mn) / (mx - mn) * 100));
 
   // 时间
   const ts = cot.updated_at
@@ -285,12 +278,107 @@ function renderAll(cot) {
   else reasons.push('本周净多持仓减少 ' + fmtNum(Math.abs(latest.mf_net_chg)) + ' 手，趋势向空');
   document.getElementById('signalReason').textContent = reasons.join('；') + '。';
 
-  // COT Index 指示条
-  document.getElementById('indexPointer').style.left = mfPct + '%';
+  // COT Index 折线图区间高亮（用 annotation plugin 不可用，改用分段 dataset 模拟背景色块）
   const zones = document.getElementById('indexZones').querySelectorAll('.iz');
   const zoneMap = ['extreme-bear','bear','neut','bull','extreme-bull'];
   zones.forEach((z,i) => {
     z.classList.toggle('active', zoneMap[i] === sig.cls);
+  });
+
+  // COT Index 折线图
+  if (indexChart) { indexChart.destroy(); indexChart = null; }
+
+  // 背景色带：用5个填充 dataset 模拟（0-20, 20-40, 40-60, 60-80, 80-100）
+  const bandColors = [
+    'rgba(248,81,73,0.13)',    // 0-20  极度空头
+    'rgba(248,81,73,0.06)',    // 20-40 偏空
+    'rgba(245,200,66,0.08)',   // 40-60 中性
+    'rgba(63,185,80,0.06)',    // 60-80 偏多
+    'rgba(63,185,80,0.13)',    // 80-100 极度多头
+  ];
+  const bandDatasets = [0,20,40,60,80].map((lo, i) => ({
+    label: '_band',
+    data: W.map(() => 20),           // 每段固定高度 20
+    backgroundColor: bandColors[i],
+    borderWidth: 0,
+    pointRadius: 0,
+    fill: '-1',                       // 填充到上一个 dataset
+    yAxisID: 'yIdx',
+    stack: 'bands',
+    tension: 0,
+  }));
+  // 第一个 band 需要 fill: 'origin'
+  bandDatasets[0].fill = 'origin';
+
+  indexChart = new Chart(document.getElementById('cotIndexChart'), {
+    type: 'line',
+    data: {
+      labels: W,
+      datasets: [
+        ...bandDatasets,
+        {
+          label: 'COT Index',
+          data: cotIdxD,
+          borderColor: '#f5c842',
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#f5c842',
+          tension: 0.3,
+          yAxisID: 'yIdx',
+          order: 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1c2128',
+          borderColor: '#30363d',
+          borderWidth: 1,
+          titleColor: '#f0f6fc',
+          bodyColor: '#8b949e',
+          padding: 12,
+          filter: item => item.dataset.label !== '_band',
+          callbacks: {
+            title: items => items[0]?.label ? '报告日期：' + items[0].label : '',
+            label: ctx => {
+              const v = ctx.parsed.y;
+              let zone = '中性';
+              if (v < 20) zone = '极度空头';
+              else if (v < 40) zone = '偏空';
+              else if (v < 60) zone = '中性';
+              else if (v < 80) zone = '偏多';
+              else zone = '极度多头';
+              return '  COT Index：' + v + '%（' + zone + '）';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#21262d' },
+          ticks: { maxTicksLimit: 10, font: { size: 10 }, color: '#6e7681' }
+        },
+        yIdx: {
+          type: 'linear',
+          min: 0,
+          max: 100,
+          grid: { color: '#21262d' },
+          ticks: {
+            stepSize: 10,
+            font: { size: 10 },
+            color: '#6e7681',
+            callback: v => v + '%'
+          }
+        }
+      }
+    }
   });
 
   // 双轴合并图表
