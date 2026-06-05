@@ -1,22 +1,16 @@
 {
-  "updated_at": "2026-06-03T03:20:34Z",
+  "updated_at": "2026-06-05T23:35:28.366Z",
   "latest": {
-    "date": "2026-05-26",
-    "mf_net": 97446,
-    "comm_net": -185766,
-    "open_interest": 353489,
-    "mf_net_chg": 3906,
-    "comm_net_chg": 5863,
-    "mf_index": 10,
-    "comm_index": 100
+    "date": "2026-06-02",
+    "mf_net": 112179,
+    "comm_net": -206345,
+    "open_interest": 326052,
+    "mf_net_chg": 14733,
+    "comm_net_chg": -20579,
+    "mf_index": 30,
+    "comm_index": 82
   },
   "weekly": [
-    {
-      "date": "2025-06-03",
-      "mf_net": 123582,
-      "comm_net": -220826,
-      "open_interest": 415941
-    },
     {
       "date": "2025-06-10",
       "mf_net": 124091,
@@ -322,6 +316,12 @@
       "mf_net": 97446,
       "comm_net": -185766,
       "open_interest": 353489
+    },
+    {
+      "date": "2026-06-02",
+      "mf_net": 112179,
+      "comm_net": -206345,
+      "open_interest": 326052
     }
   ]
 }
