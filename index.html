@@ -146,7 +146,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
   <!-- ── 第二屏：图表 ── -->
   <div class="card" style="grid-column:1/-1">
     <div class="card-title">管理基金 vs 商业套保 净持仓对比</div>
-    <div class="card-sub">Managed Money（左轴，绿）vs Commercial Hedgers（右轴，红）— 近52周（手）</div>
+    <div class="card-sub">Managed Money（左轴，绿）· Commercial Hedgers（右轴，红）· 金价（右轴，金）— 近52周</div>
     <div class="chart-wrap" style="height:300px"><canvas id="cotDualChart"></canvas></div>
   </div>
 
@@ -177,6 +177,11 @@ const MOCK = {
     const mf=[98000,105000,112000,118000,115000,121000,128000,134000,130000,136000,142000,148500,155200,161800,158400,163200,170100,175600,168900,172300,178500,182100,176800,180400,183700,185200,184100,186300,187432,187432,180000,175000,168000,172000,178000,182000,176000,180000,184000,185000,184000,186000,187000,185000,183000,186000,187000,184000,186000,187432];
     const cm=[-88000,-93000,-99000,-104000,-101000,-107000,-113000,-118000,-114000,-120000,-126000,-131000,-137000,-143000,-140000,-145000,-151000,-156000,-150000,-154000,-159000,-163000,-158000,-162000,-165000,-167000,-166000,-168000,-169000,-169000,-162000,-158000,-152000,-155000,-160000,-164000,-159000,-163000,-167000,-168000,-167000,-169000,-170000,-168000,-166000,-169000,-170000,-167000,-169000,-201876];
     return d.map((date,i)=>({date,mf_net:mf[i],comm_net:cm[i]}));
+  })(),
+  goldWeekly: (function(){
+    const d=['2024-06-04','2024-06-11','2024-06-18','2024-06-25','2024-07-02','2024-07-09','2024-07-16','2024-07-23','2024-07-30','2024-08-06','2024-08-13','2024-08-20','2024-08-27','2024-09-03','2024-09-10','2024-09-17','2024-09-24','2024-10-01','2024-10-08','2024-10-15','2024-10-22','2024-10-29','2024-11-05','2024-11-12','2024-11-19','2024-11-26','2024-12-03','2024-12-10','2024-12-17','2024-12-24','2025-01-07','2025-01-14','2025-01-21','2025-01-28','2025-02-04','2025-02-11','2025-02-18','2025-02-25','2025-03-04','2025-03-11','2025-03-18','2025-03-25','2025-04-01','2025-04-08','2025-04-15','2025-04-22','2025-04-29','2025-05-06','2025-05-13','2025-05-20'];
+    const c=[2327.80,2340.10,2332.50,2326.90,2391.20,2410.60,2399.30,2388.70,2444.30,2460.80,2503.20,2488.60,2512.40,2499.10,2517.80,2560.30,2620.70,2631.40,2655.20,2670.40,2748.90,2790.20,2736.50,2722.80,2717.60,2681.30,2648.40,2674.80,2625.30,2625.30,2703.50,2742.60,2770.30,2798.50,2861.40,2882.70,2936.40,2980.20,3003.60,3082.50,3085.40,3084.90,3061.20,3014.80,3232.60,3285.40,3286.90,3241.30,3185.20,3319.40];
+    return d.map((date,i)=>({date,close:c[i]}));
   })()
 };
 
@@ -212,12 +217,17 @@ function pctBarColor(pct) {
 
 let mfChart = null, cmChart = null, dualChart = null, indexChart = null;
 
-function renderAll(cot) {
+function renderAll(cot, goldData) {
   const weekly = cot.weekly.slice(-52);
   const latest = cot.latest;
   const W      = weekly.map(r => r.date.slice(5).replace('-','/'));
   const mfD    = weekly.map(r => r.mf_net);
   const cmD    = weekly.map(r => r.comm_net);
+
+  // 金价：按日期对齐
+  const goldMap = {};
+  (goldData?.weekly || []).forEach(r => { goldMap[r.date] = r.close; });
+  const goldD = weekly.map(r => goldMap[r.date] ?? null);
 
   // 计算每周 COT Index（前滚动52周窗口百分位）
   const mfVals = mfD;
@@ -414,6 +424,20 @@ function renderAll(cot) {
           tension: 0.3,
           fill: true,
           yAxisID: 'yCM',
+        },
+        {
+          label: '金价 XAUUSD',
+          data: goldD,
+          borderColor: '#f5c842',
+          backgroundColor: 'transparent',
+          borderWidth: 3,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#f5c842',
+          tension: 0.3,
+          fill: false,
+          yAxisID: 'yGold',
+          spanGaps: true,
         }
       ]
     },
@@ -436,6 +460,10 @@ function renderAll(cot) {
           callbacks: {
             label: ctx => {
               const v = ctx.parsed.y;
+              if (v === null || v === undefined) return null;
+              if (ctx.dataset.yAxisID === 'yGold') {
+                return '  ' + ctx.dataset.label + ': $' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              }
               return '  ' + ctx.dataset.label + ': ' + (v >= 0 ? '+' : '') + Math.round(v).toLocaleString('zh-CN');
             }
           }
@@ -459,30 +487,43 @@ function renderAll(cot) {
         yCM: {
           type: 'linear',
           position: 'right',
+          offset: true,
           grid: { drawOnChartArea: false },
           ticks: {
             font: { size: 10 }, color: '#f85149',
             callback: v => (v >= 0 ? '+' : '') + Math.round(v / 1000) + 'k'
           },
           title: { display: true, text: '商业套保（手）', color: '#f85149', font: { size: 11 } }
+        },
+        yGold: {
+          type: 'linear',
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: {
+            font: { size: 10 }, color: '#f5c842',
+            callback: v => '$' + Math.round(v).toLocaleString('en-US')
+          },
+          title: { display: true, text: '金价 (USD/oz)', color: '#f5c842', font: { size: 11 } }
         }
       }
     }
   });
 }
 
-// 加载 data/cot.json，失败则用模拟数据
-fetch('data/cot.json?_=' + Date.now())
-  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-  .then(data => {
+// 并行加载 COT 和金价数据，失败则用模拟数据
+Promise.all([
+  fetch('data/cot.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+  fetch('data/gold_price.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+])
+  .then(([cotData, goldData]) => {
     document.getElementById('footerNote').textContent =
-      'COT 数据来源：CFTC · 每周六自动更新 · zhangtongxue.com';
-    renderAll(data);
+      'COT 数据来源：CFTC · 金价来源：stooq.com · 每周六自动更新 · zhangtongxue.com';
+    renderAll(cotData, goldData);
   })
   .catch(() => {
     document.getElementById('footerNote').textContent =
-      '当前显示模拟数据（data/cot.json 未找到）· zhangtongxue.com';
-    renderAll(MOCK);
+      '当前显示模拟数据（数据文件未找到）· zhangtongxue.com';
+    renderAll(MOCK, { weekly: MOCK.goldWeekly });
   });
 </script>
 </body>
