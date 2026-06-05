@@ -344,11 +344,9 @@ function renderAll(cot, goldData) {
   document.getElementById('signalReason').textContent =
     '管理基金 Index ' + mfPct + '%，商业 Index ' + cmPct + '%。' + dualSig.reason;
 
-  // 判断依据表格高亮：只有 crowd-full / clear-full 两个强信号行会亮
+  // 判断依据表格高亮：仅 ★ 强信号行（crowd-full / clear-full）命中时高亮橙色，其他行不高亮
   document.getElementById('rule-crowd-full').classList.toggle('hit-row', dualSig.rule === 'crowd-full');
   document.getElementById('rule-clear-full').classList.toggle('hit-row', dualSig.rule === 'clear-full');
-  document.getElementById('rule-bias').classList.toggle('hit-row',       dualSig.rule === 'bias');
-  document.getElementById('rule-neutral').classList.toggle('hit-row',    dualSig.rule === 'neutral');
 
   // COT Index 折线图区间标签高亮（沿用旧逻辑，用 mfPct 区间）
   const zones = document.getElementById('indexZones').querySelectorAll('.iz');
