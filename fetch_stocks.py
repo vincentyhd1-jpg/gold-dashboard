@@ -32,13 +32,17 @@ HEADERS = {
 
 # ── Downloader ────────────────────────────────────────────────────────────────
 
-def download() -> bytes:
+def download() -> bytes | None:
+    """Returns None on 403 (CME WAF block) instead of raising."""
     req = Request(REPORT_URL, headers=HEADERS)
     try:
         with urlopen(req, timeout=30) as resp:
             return resp.read()
     except HTTPError as e:
         body = e.read(512).decode("utf-8", errors="replace")
+        if e.code == 403:
+            print(f"  ⚠ HTTP 403 被拒绝（CME WAF 封锁此 IP）：{body[:120]}")
+            return None
         raise RuntimeError(f"HTTP {e.code}：{body[:200]}") from e
     except URLError as e:
         raise RuntimeError(f"网络错误：{e.reason}") from e
@@ -217,6 +221,10 @@ def load_existing() -> list[dict]:
 def main():
     print("正在下载 CME COMEX 黄金库存报告...")
     content = download()
+    if content is None:
+        print("  CME WAF 封锁，跳过本次更新（stocks.json 保持不变）")
+        return
+
     print(f"  已下载 {len(content):,} 字节，前20字节：{content[:20]}")
 
     entry = parse(content)

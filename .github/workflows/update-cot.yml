@@ -32,6 +32,7 @@ jobs:
 
       - name: Run fetch_stocks.py
         run: python fetch_stocks.py
+        continue-on-error: true
 
       - name: Commit and push if data changed
         run: |
