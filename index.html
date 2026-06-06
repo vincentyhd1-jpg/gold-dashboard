@@ -204,9 +204,14 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
             <td class="sig rt-clear-full">★ 出清·空头满</td>
             <td class="risk">下跌动能或枯竭</td>
           </tr>
-          <tr id="rule-bias">
-            <td class="cond">单侧极端（MF ≥80 或 ≤20，或商业 ≥80 或 ≤20，不满足以上组合）</td>
-            <td class="sig rt-bias">偏拥挤 / 偏清淡</td>
+          <tr id="rule-bias-crowd">
+            <td class="cond">管理基金 Index ≥ 80 或 商业 Index ≤ 20（不满足前两条）</td>
+            <td class="sig rt-bias">偏拥挤</td>
+            <td class="risk">关注趋势是否延续</td>
+          </tr>
+          <tr id="rule-bias-clear">
+            <td class="cond">管理基金 Index ≤ 20 或 商业 Index ≥ 80（不满足前两条）</td>
+            <td class="sig rt-bias">偏清淡</td>
             <td class="risk">关注趋势是否延续</td>
           </tr>
           <tr id="rule-neutral">
@@ -259,17 +264,23 @@ function signalFromPct(pct) {
 }
 
 function dualSignal(mfPct, cmPct) {
-  const mfExt = mfPct >= 80 || mfPct <= 20;
-  const cmExt = cmPct >= 80 || cmPct <= 20;
   if (mfPct >= 80 && cmPct <= 20)
-    return { rule:'crowd-full', cls:'crowd-full',  icon:'★', text:'拥挤·多头满',  risk:'警惕回调 / 勿追多',      reason:'管理基金极度拥挤，商业套保极度对冲，多头已满仓。' };
+    return { rule:'crowd-full', cls:'crowd-full',  icon:'★', text:'拥挤·多头满', risk:'警惕回调 / 勿追多',     reason:'管理基金极度拥挤，商业套保极度对冲，多头已满仓。' };
   if (mfPct <= 20 && cmPct >= 80)
-    return { rule:'clear-full', cls:'clear-full',  icon:'★', text:'出清·空头满',  risk:'下跌动能或枯竭',         reason:'管理基金极度出清，商业套保极度减空，空头动能衰竭。' };
-  if (mfExt || cmExt) {
-    const side = mfPct >= 80 ? '管理基金偏多拥挤' : mfPct <= 20 ? '管理基金偏空出清' : cmPct >= 80 ? '商业套保极端对冲' : '商业套保极端减空';
-    return { rule:'bias',       cls:'bias-crowd',  icon:'◈', text:'偏拥挤 / 偏清淡', risk:'关注趋势是否延续',      reason:side + '，另一侧尚未确认。' };
+    return { rule:'clear-full', cls:'clear-full',  icon:'★', text:'出清·空头满', risk:'下跌动能或枯竭',        reason:'管理基金极度出清，商业套保极度减空，空头动能衰竭。' };
+  if (mfPct >= 80 || cmPct <= 20) {
+    const parts = [];
+    if (mfPct >= 80) parts.push('管理基金偏多拥挤');
+    if (cmPct <= 20) parts.push('商业套保极端减空');
+    return { rule:'bias-crowd', cls:'bias-crowd', icon:'◈', text:'偏拥挤', risk:'关注趋势是否延续', reason: parts.join('，') + '，另一侧尚未确认。' };
   }
-  return   { rule:'neutral',   cls:'neutral-dual', icon:'◆', text:'中性',           risk:'无明显极值，跟随趋势',  reason:'两侧均处于中性区间，无明显极端信号。' };
+  if (mfPct <= 20 || cmPct >= 80) {
+    const parts = [];
+    if (mfPct <= 20) parts.push('管理基金偏空出清');
+    if (cmPct >= 80) parts.push('商业套保极端对冲');
+    return { rule:'bias-clear', cls:'bias-clear', icon:'◈', text:'偏清淡', risk:'关注趋势是否延续', reason: parts.join('，') + '，另一侧尚未确认。' };
+  }
+  return   { rule:'neutral',   cls:'neutral-dual', icon:'◆', text:'中性',          risk:'无明显极值，跟随趋势', reason:'两侧均处于中性区间，无明显极端信号。' };
 }
 
 function pctBarColor(pct) {
@@ -349,9 +360,11 @@ function renderAll(cot, goldData) {
   document.getElementById('signalReason').textContent =
     '管理基金 Index ' + mfPct + '%，商业 Index ' + cmPct + '%。' + dualSig.reason;
 
-  // 判断依据表格高亮：仅 ★ 强信号行（crowd-full / clear-full）命中时高亮橙色，其他行不高亮
+  // 判断依据表格高亮：★ 强信号行用橙色，bias 行用淡色
   document.getElementById('rule-crowd-full').classList.toggle('hit-row', dualSig.rule === 'crowd-full');
   document.getElementById('rule-clear-full').classList.toggle('hit-row', dualSig.rule === 'clear-full');
+  document.getElementById('rule-bias-crowd').classList.toggle('hit-row', dualSig.rule === 'bias-crowd');
+  document.getElementById('rule-bias-clear').classList.toggle('hit-row', dualSig.rule === 'bias-clear');
 
   // COT Index 折线图区间标签高亮（沿用旧逻辑，用 mfPct 区间）
   const zones = document.getElementById('indexZones').querySelectorAll('.iz');
