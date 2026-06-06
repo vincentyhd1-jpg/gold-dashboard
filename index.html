@@ -96,6 +96,21 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 .rt-bias        {color:#f5c842}
 .rt-neutral     {color:#8b949e}
 
+/* COMEX 库存卡片 */
+.stocks-section{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px 28px}
+.stocks-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.stocks-header-left{}
+.stocks-title{font-size:14px;font-weight:600;color:#f0f6fc;margin-bottom:4px}
+.stocks-sub{font-size:11px;color:#8b949e}
+.stocks-kpis{display:flex;gap:24px;flex-wrap:wrap}
+.sk-item{display:flex;flex-direction:column;gap:3px}
+.sk-label{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.7px}
+.sk-val{font-size:22px;font-weight:700;line-height:1}
+.sk-chg{font-size:12px;font-weight:600}
+.sk-chg.up{color:#3fb950}.sk-chg.dn{color:#f85149}.sk-chg.flat{color:#6e7681}
+.stocks-alert{display:none;margin-top:12px;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;background:rgba(248,81,73,.12);color:#f85149;border:1px solid rgba(248,81,73,.3)}
+.stocks-alert.show{display:block}
+
 footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1px solid #21262d;margin-top:8px}
 @media(max-width:640px){header{padding:14px 16px}main{padding:20px 16px}}
 </style>
@@ -224,6 +239,36 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     </div>
   </div>
 
+
+  <!-- COMEX 黄金库存 -->
+  <div class="stocks-section">
+    <div class="stocks-header">
+      <div class="stocks-header-left">
+        <div class="stocks-title">COMEX 黄金库存</div>
+        <div class="stocks-sub" id="stocksDate">数据日期：-- &middot; 来源：CME Group</div>
+      </div>
+      <div class="stocks-kpis">
+        <div class="sk-item">
+          <span class="sk-label">注册库存 Registered</span>
+          <span class="sk-val" id="stocksReg" style="color:#f5c842">--</span>
+          <span class="sk-chg flat" id="stocksRegChg">--</span>
+        </div>
+        <div class="sk-item">
+          <span class="sk-label">合格库存 Eligible</span>
+          <span class="sk-val" id="stocksEli" style="color:#8b949e">--</span>
+          <span class="sk-chg flat" id="stocksEliChg">--</span>
+        </div>
+        <div class="sk-item">
+          <span class="sk-label">合计 Total</span>
+          <span class="sk-val" id="stocksTotal" style="color:#e6edf3">--</span>
+          <span class="sk-chg flat" id="stocksTotalChg">--</span>
+        </div>
+      </div>
+    </div>
+    <div id="stocksAlert" class="stocks-alert">⚠ 注册库存持续下降，实物趋紧，关注逼仓风险</div>
+    <div class="chart-wrap" style="height:220px"><canvas id="stocksChart"></canvas></div>
+  </div>
+
 </main>
 <footer id="footerNote">COT 数据来源：CFTC &middot; 每周六自动更新 &middot; zhangtongxue.com</footer>
 
@@ -291,9 +336,9 @@ function pctBarColor(pct) {
   return '#ff6b6b';
 }
 
-let mfChart = null, cmChart = null, dualChart = null, indexChart = null;
+let mfChart = null, cmChart = null, dualChart = null, indexChart = null, stocksChart = null;
 
-function renderAll(cot, goldData) {
+function renderAll(cot, goldData, stocksData) {
   const weekly = cot.weekly.slice(-52);
   const latest = cot.latest;
   const W      = weekly.map(r => r.date.slice(5).replace('-','/'));
@@ -472,6 +517,7 @@ function renderAll(cot, goldData) {
   if (mfChart)   { mfChart.destroy();   mfChart   = null; }
   if (cmChart)   { cmChart.destroy();   cmChart   = null; }
   if (dualChart) { dualChart.destroy(); dualChart = null; }
+  if (stocksChart) { stocksChart.destroy(); stocksChart = null; }
 
   dualChart = new Chart(document.getElementById('cotDualChart'), {
     type: 'line',
@@ -585,22 +631,139 @@ function renderAll(cot, goldData) {
       }
     }
   });
+  // ── COMEX 库存图表 ──────────────────────────────────────────────
+  const stocks = Array.isArray(stocksData) ? stocksData.slice(-90) : [];
+  if (stocks.length) {
+    const latest2   = stocks[stocks.length - 1];
+    const prev2     = stocks.length >= 2 ? stocks[stocks.length - 2] : null;
+    const sLabels   = stocks.map(r => r.date.slice(5).replace('-', '/'));
+    const sReg      = stocks.map(r => r.registered);
+    const sEli      = stocks.map(r => r.eligible);
+    const fmtOz     = n => (n / 1e6).toFixed(2) + 'M oz';
+    const chgLabel  = (cur, prev, key) => {
+      if (!prev) return '--';
+      const d = cur[key] - prev[key];
+      return (d >= 0 ? '+' : '') + Math.round(d / 1000) + 'k oz';
+    };
+    const chgCls = (cur, prev, key) => {
+      if (!prev) return 'flat';
+      return cur[key] >= prev[key] ? 'up' : 'dn';
+    };
+
+    document.getElementById('stocksDate').textContent     = '数据日期：' + latest2.date + ' · 来源：CME Group';
+    document.getElementById('stocksReg').textContent      = fmtOz(latest2.registered);
+    document.getElementById('stocksEli').textContent      = fmtOz(latest2.eligible);
+    document.getElementById('stocksTotal').textContent    = fmtOz(latest2.total);
+    const regChgEl   = document.getElementById('stocksRegChg');
+    const eliChgEl   = document.getElementById('stocksEliChg');
+    const totChgEl   = document.getElementById('stocksTotalChg');
+    regChgEl.textContent = '较前日 ' + chgLabel(latest2, prev2, 'registered');
+    eliChgEl.textContent = '较前日 ' + chgLabel(latest2, prev2, 'eligible');
+    totChgEl.textContent = '较前日 ' + chgLabel(latest2, prev2, 'total');
+    regChgEl.className   = 'sk-chg ' + chgCls(latest2, prev2, 'registered');
+    eliChgEl.className   = 'sk-chg ' + chgCls(latest2, prev2, 'eligible');
+    totChgEl.className   = 'sk-chg ' + chgCls(latest2, prev2, 'total');
+
+    // 实物趋紧警告：最近5条注册库存连续下降
+    const alertEl = document.getElementById('stocksAlert');
+    if (stocks.length >= 5) {
+      const tail = sReg.slice(-5);
+      const declining = tail.every((v, i) => i === 0 || v <= tail[i - 1]);
+      alertEl.classList.toggle('show', declining);
+    }
+
+    stocksChart = new Chart(document.getElementById('stocksChart'), {
+      type: 'line',
+      data: {
+        labels: sLabels,
+        datasets: [
+          {
+            label: '注册库存',
+            data: sReg,
+            borderColor: '#f5c842',
+            backgroundColor: 'rgba(245,200,66,0.07)',
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            tension: 0.3,
+            fill: true,
+            yAxisID: 'yStocks',
+          },
+          {
+            label: '合格库存',
+            data: sEli,
+            borderColor: '#58a6ff',
+            backgroundColor: 'rgba(88,166,255,0.05)',
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            tension: 0.3,
+            fill: true,
+            yAxisID: 'yStocks',
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            display: true,
+            labels: { color: '#8b949e', font: { size: 12 }, boxWidth: 14, padding: 16 }
+          },
+          tooltip: {
+            backgroundColor: '#1c2128',
+            borderColor: '#30363d',
+            borderWidth: 1,
+            titleColor: '#f0f6fc',
+            bodyColor: '#8b949e',
+            padding: 12,
+            callbacks: {
+              label: ctx => {
+                const v = ctx.parsed.y;
+                return '  ' + ctx.dataset.label + ': ' + (v / 1e6).toFixed(3) + 'M oz';
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: '#21262d' },
+            ticks: { maxTicksLimit: 10, font: { size: 10 }, color: '#6e7681' }
+          },
+          yStocks: {
+            type: 'linear',
+            position: 'left',
+            grid: { color: '#21262d' },
+            ticks: {
+              font: { size: 10 },
+              color: '#6e7681',
+              callback: v => (v / 1e6).toFixed(1) + 'M'
+            },
+            title: { display: true, text: '库存量 (oz)', color: '#6e7681', font: { size: 11 } }
+          }
+        }
+      }
+    });
+  }
 }
 
-// 并行加载 COT 和金价数据，失败则用模拟数据
+// 并行加载 COT、金价、库存数据，失败则用模拟数据
 Promise.all([
   fetch('data/cot.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
-  fetch('data/gold_price.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  fetch('data/gold_price.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+  fetch('data/stocks.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => [])
 ])
-  .then(([cotData, goldData]) => {
+  .then(([cotData, goldData, stocksData]) => {
     document.getElementById('footerNote').textContent =
-      'COT 数据来源：CFTC · 金价来源：stooq.com · 每周六自动更新 · zhangtongxue.com';
-    renderAll(cotData, goldData);
+      'COT 数据来源：CFTC · 金价来源：Yahoo Finance · 库存来源：CME Group · 每日自动更新 · zhangtongxue.com';
+    renderAll(cotData, goldData, stocksData);
   })
   .catch(() => {
     document.getElementById('footerNote').textContent =
       '当前显示模拟数据（数据文件未找到）· zhangtongxue.com';
-    renderAll(MOCK, []);
+    renderAll(MOCK, [], []);
   });
 </script>
 </body>
