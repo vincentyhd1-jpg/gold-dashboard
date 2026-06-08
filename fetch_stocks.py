@@ -3,24 +3,9 @@
 从 CME 官方每日报告获取 COMEX 黄金库存数据，
 追加到 data/stocks.json（保留近90天）。
 
-使用 requests + session cookie 预热绕过 WAF。
-CME 返回的 .xls 实际上是 HTML 格式，用 html.parser 解析。
-"""
-
-import json
-import os
-import re
-import sys
-from datetime import datetime, timezone
-from html.parser import HTMLParser
-
-#!/usr/bin/env python3
-"""
-从 CME 官方每日报告获取 COMEX 黄金库存数据，
-追加到 data/stocks.json（保留近90天）。
-
 使用 curl_cffi 模拟 Chrome TLS/HTTP2 指纹绕过 Akamai WAF。
-CME 返回的 .xls 实际上是 HTML 格式，用 html.parser 解析。
+文件为真实二进制 XLS（OLE2），用 xlrd 解析。
+总计行结构：TOTAL REGISTERED / TOTAL ELIGIBLE / COMBINED TOTAL（无统一列，直接按行名取 col 7）。
 """
 
 import json
@@ -28,7 +13,6 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
-from html.parser import HTMLParser
 
 GOLD_PAGE  = "https://www.cmegroup.com/markets/metals/precious/gold.html"
 REPORT_URL = "https://www.cmegroup.com/delivery_reports/Gold_Stocks.xls"
@@ -49,7 +33,6 @@ HEADERS = {
 # ── Downloader ────────────────────────────────────────────────────────────────
 
 def download() -> bytes | None:
-    # Try curl_cffi first (Chrome TLS fingerprint impersonation)
     try:
         from curl_cffi import requests as cffi_requests
         print("  使用 curl_cffi (Chrome TLS 指纹)")
@@ -57,7 +40,7 @@ def download() -> bytes | None:
 
         try:
             pre = session.get(GOLD_PAGE, timeout=20)
-            print(f"  预热请求：{pre.status_code}，cookies：{dict(pre.cookies)}")
+            print(f"  预热请求：{pre.status_code}")
         except Exception as e:
             print(f"  预热失败（继续）：{e}")
 
@@ -72,214 +55,93 @@ def download() -> bytes | None:
     except ImportError:
         print("  curl_cffi 未安装，回退到 requests")
 
-    # Fallback: plain requests with session cookie pre-warm
     import requests
     session = requests.Session()
     session.headers.update({
         "User-Agent":      HEADERS["User-Agent"],
         "Accept-Language": HEADERS["Accept-Language"],
     })
-
     try:
-        pre = session.get(
-            GOLD_PAGE,
-            headers={"Accept": "text/html,application/xhtml+xml,*/*"},
-            timeout=20,
-            allow_redirects=True,
-        )
-        print(f"  预热请求：{pre.status_code}，cookies：{dict(session.cookies)}")
+        pre = session.get(GOLD_PAGE, headers={"Accept": "text/html,*/*"}, timeout=20)
+        print(f"  预热请求：{pre.status_code}")
     except Exception as e:
         print(f"  预热失败（继续）：{e}")
 
-    resp = session.get(REPORT_URL, headers=HEADERS, timeout=30, allow_redirects=True)
+    resp = session.get(REPORT_URL, headers=HEADERS, timeout=30)
     print(f"  XLS 请求状态码：{resp.status_code}")
-
     if resp.status_code == 200:
         return resp.content
     print(f"  ⚠ HTTP {resp.status_code}。响应前200字节：{resp.text[:200]}")
     return None
 
 
-# ── HTML parser ───────────────────────────────────────────────────────────────
+# ── Parser ────────────────────────────────────────────────────────────────────
+# The XLS has this structure (no explicit REGISTERED/ELIGIBLE column header row):
+#   Row 7:  ['GOLD', ..., 'Report Date: M/D/YYYY', ...]
+#   Row 8:  ['Troy Ounce', ..., 'Activity Date: M/D/YYYY', ...]
+#   Row 10: ['DEPOSITORY', ..., 'PREV TOTAL', ..., 'TOTAL TODAY', '']   ← headers
+#   ...  individual depository rows (Registered / Eligible / Total per depot)
+#   Row 131: ['TOTAL REGISTERED', '', prevTotal, ..., totalToday, '']
+#   Row 132: ['TOTAL PLEDGED',    '', ...]
+#   Row 133: ['TOTAL ELIGIBLE',   '', prevTotal, ..., totalToday, '']
+#   Row 134: ['COMBINED TOTAL',   '', ...]
+#
+# Col 7 = "TOTAL TODAY" — that's what we want.
 
-class _TableParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.rows: list[list[str]] = []
-        self._row  = None
-        self._cell = None
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "tr":
-            self._row = []
-        elif tag in ("td", "th") and self._row is not None:
-            self._cell = ""
-
-    def handle_endtag(self, tag):
-        if tag == "tr" and self._row is not None:
-            self.rows.append(self._row)
-            self._row = None
-        elif tag in ("td", "th") and self._row is not None and self._cell is not None:
-            self._row.append(self._cell.strip())
-            self._cell = None
-
-    def handle_data(self, data):
-        if self._cell is not None:
-            self._cell += data
-
-    def handle_entityref(self, name):
-        if self._cell is not None:
-            self._cell += " "
-
-    def handle_charref(self, name):
-        if self._cell is not None:
-            self._cell += " "
-
-
-def _clean_num(s: str) -> int:
-    s = re.sub(r"[,\s\xa0]", "", s)
+def _to_float(v) -> float:
     try:
-        return int(float(s))
+        return float(str(v).replace(",", "").strip() or "0")
     except (ValueError, TypeError):
-        return 0
-
-
-def _find_col(rows: list[list[str]], keyword: str) -> int:
-    for row in rows:
-        for i, cell in enumerate(row):
-            if keyword.upper() in cell.upper():
-                return i
-    return -1
-
-
-def _find_date(text: str) -> str:
-    m = re.search(r"\b(\d{1,2}/\d{1,2}/\d{4})\b", text)
-    if m:
-        return datetime.strptime(m.group(1), "%m/%d/%Y").strftime("%Y-%m-%d")
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return 0.0
 
 
 def parse(content: bytes) -> dict:
-    # CME XLS files are usually HTML in disguise
-    if content[:1] in (b"<", b"\xef", b"\xff", b"\xfe"):
-        text = content.decode("utf-8", errors="replace")
-        print(f"  文件类型：HTML（CME 伪 XLS），前80字节：{text[:80]!r}")
-        return _parse_html(text)
+    import xlrd
+    wb = xlrd.open_workbook(file_contents=content)
+    ws = wb.sheet_by_index(0)
 
-    # Try xlrd for real binary XLS
-    try:
-        import xlrd  # type: ignore
-        wb = xlrd.open_workbook(file_contents=content)
-        print("  文件类型：二进制 XLS，使用 xlrd 解析")
-        return _parse_xlrd(wb)
-    except Exception as e:
-        # Last resort: try decoding as text anyway
-        text = content.decode("utf-8", errors="replace")
-        print(f"  xlrd 失败（{e}），尝试文本解析，前80字节：{text[:80]!r}")
-        return _parse_html(text)
-
-
-def _parse_html(text: str) -> dict:
-    report_date = _find_date(text)
-
-    p = _TableParser()
-    p.feed(text)
-
-    reg_col = _find_col(p.rows, "REGISTERED")
-    eli_col = _find_col(p.rows, "ELIGIBLE")
-
-    if reg_col < 0 or eli_col < 0:
-        preview = "\n".join(str(r) for r in p.rows[:10])
-        raise ValueError(f"未找到 REGISTERED/ELIGIBLE 列头。\n前10行：\n{preview}")
-
-    # Find TOTAL row
-    for row in p.rows:
-        if row and "TOTAL" in row[0].upper():
-            if len(row) > max(reg_col, eli_col):
-                registered = _clean_num(row[reg_col])
-                eligible   = _clean_num(row[eli_col])
-                if registered > 0 or eligible > 0:
-                    return {
-                        "date":       report_date,
-                        "registered": registered,
-                        "eligible":   eligible,
-                        "total":      registered + eligible,
-                    }
-
-    # Fallback: any row containing TOTAL anywhere
-    for row in p.rows:
-        if any("TOTAL" in cell.upper() for cell in row):
-            nums = [_clean_num(c) for c in row
-                    if re.search(r"\d{4,}", re.sub(r"[,\s]", "", c))]
-            if len(nums) >= 2:
-                registered, eligible = nums[0], nums[1]
-                return {
-                    "date":       report_date,
-                    "registered": registered,
-                    "eligible":   eligible,
-                    "total":      registered + eligible,
-                }
-
-    preview = "\n".join(str(r) for r in p.rows)
-    raise ValueError(f"未找到 TOTAL 行。全部行：\n{preview}")
-
-
-def _parse_xlrd(wb) -> dict:
-    ws  = wb.sheet_by_index(0)
-
-    # Print all rows for debugging on first failure
+    # Extract date from rows 7/8
     report_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    for ri in range(min(5, ws.nrows)):
+    for ri in range(min(12, ws.nrows)):
         for ci in range(ws.ncols):
-            m = re.search(r"\b(\d{1,2}/\d{1,2}/\d{4})\b", str(ws.cell_value(ri, ci)))
+            cell = str(ws.cell_value(ri, ci))
+            m = re.search(r"(?:Report|Activity)\s+Date:\s*(\d{1,2}/\d{1,2}/\d{4})", cell)
             if m:
                 report_date = datetime.strptime(m.group(1), "%m/%d/%Y").strftime("%Y-%m-%d")
+                break
 
-    # Find the header row that contains BOTH REGISTERED and ELIGIBLE in the same row
-    header_ri = reg_col = eli_col = -1
+    # Find TOTAL TODAY column index from the header row
+    total_col = 7   # default — confirmed from debug dump above
     for ri in range(ws.nrows):
-        row_vals = [str(ws.cell_value(ri, ci)).upper() for ci in range(ws.ncols)]
-        has_reg = any("REGISTERED" in v for v in row_vals)
-        has_eli = any("ELIGIBLE" in v for v in row_vals)
-        if has_reg and has_eli:
-            header_ri = ri
-            reg_col = next(ci for ci, v in enumerate(row_vals) if "REGISTERED" in v)
-            eli_col = next(ci for ci, v in enumerate(row_vals) if "ELIGIBLE" in v)
-            print(f"  XLS 列头行 {ri}：REGISTERED={reg_col}，ELIGIBLE={eli_col}")
+        row = [str(ws.cell_value(ri, ci)).strip().upper() for ci in range(ws.ncols)]
+        if "TOTAL TODAY" in row:
+            total_col = row.index("TOTAL TODAY")
+            print(f"  列头行 {ri}：TOTAL TODAY = col {total_col}")
             break
 
-    if header_ri < 0:
-        # Debug dump
+    registered = eligible = None
+    for ri in range(ws.nrows):
+        label = str(ws.cell_value(ri, 0)).strip().upper()
+        if label == "TOTAL REGISTERED":
+            registered = _to_float(ws.cell_value(ri, total_col))
+            print(f"  行{ri} TOTAL REGISTERED = {registered:,.0f}")
+        elif label == "TOTAL ELIGIBLE":
+            eligible = _to_float(ws.cell_value(ri, total_col))
+            print(f"  行{ri} TOTAL ELIGIBLE = {eligible:,.0f}")
+
+    if registered is None or eligible is None:
+        # debug dump
         for ri in range(ws.nrows):
             row = [str(ws.cell_value(ri, ci)) for ci in range(ws.ncols)]
-            print(f"  XLS 行{ri}: {row}")
-        raise ValueError("XLS：未找到同行含 REGISTERED 和 ELIGIBLE 的列头行")
+            print(f"  行{ri}: {row}")
+        raise ValueError(f"未找到 TOTAL REGISTERED/ELIGIBLE 行（registered={registered}, eligible={eligible}）")
 
-    def to_int(v) -> int:
-        try:
-            return int(float(str(v).replace(",", "").strip() or "0"))
-        except (ValueError, TypeError):
-            return 0
-
-    # Scan rows below the header for a TOTAL row
-    for ri in range(header_ri + 1, ws.nrows):
-        first_cell = str(ws.cell_value(ri, 0)).strip().upper()
-        if "TOTAL" in first_cell:
-            registered = to_int(ws.cell_value(ri, reg_col))
-            eligible   = to_int(ws.cell_value(ri, eli_col))
-            print(f"  XLS TOTAL 行 {ri}：registered={registered:,}，eligible={eligible:,}")
-            return {
-                "date":       report_date,
-                "registered": registered,
-                "eligible":   eligible,
-                "total":      registered + eligible,
-            }
-
-    # Debug dump if TOTAL not found
-    for ri in range(ws.nrows):
-        row = [str(ws.cell_value(ri, ci)) for ci in range(ws.ncols)]
-        print(f"  XLS 行{ri}: {row}")
-    raise ValueError("XLS：未找到 TOTAL 行")
+    return {
+        "date":       report_date,
+        "registered": int(registered),
+        "eligible":   int(eligible),
+        "total":      int(registered + eligible),
+    }
 
 
 # ── Storage ───────────────────────────────────────────────────────────────────
