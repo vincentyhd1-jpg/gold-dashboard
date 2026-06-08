@@ -14,7 +14,21 @@ import sys
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 
-import requests
+#!/usr/bin/env python3
+"""
+从 CME 官方每日报告获取 COMEX 黄金库存数据，
+追加到 data/stocks.json（保留近90天）。
+
+使用 curl_cffi 模拟 Chrome TLS/HTTP2 指纹绕过 Akamai WAF。
+CME 返回的 .xls 实际上是 HTML 格式，用 html.parser 解析。
+"""
+
+import json
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from html.parser import HTMLParser
 
 GOLD_PAGE  = "https://www.cmegroup.com/markets/metals/precious/gold.html"
 REPORT_URL = "https://www.cmegroup.com/delivery_reports/Gold_Stocks.xls"
@@ -35,13 +49,37 @@ HEADERS = {
 # ── Downloader ────────────────────────────────────────────────────────────────
 
 def download() -> bytes | None:
+    # Try curl_cffi first (Chrome TLS fingerprint impersonation)
+    try:
+        from curl_cffi import requests as cffi_requests
+        print("  使用 curl_cffi (Chrome TLS 指纹)")
+        session = cffi_requests.Session(impersonate="chrome124")
+
+        try:
+            pre = session.get(GOLD_PAGE, timeout=20)
+            print(f"  预热请求：{pre.status_code}，cookies：{dict(pre.cookies)}")
+        except Exception as e:
+            print(f"  预热失败（继续）：{e}")
+
+        resp = session.get(REPORT_URL, headers=HEADERS, timeout=30)
+        print(f"  XLS 请求状态码：{resp.status_code}")
+
+        if resp.status_code == 200:
+            return resp.content
+        print(f"  ⚠ HTTP {resp.status_code}。响应前200字节：{resp.text[:200]}")
+        return None
+
+    except ImportError:
+        print("  curl_cffi 未安装，回退到 requests")
+
+    # Fallback: plain requests with session cookie pre-warm
+    import requests
     session = requests.Session()
     session.headers.update({
-        "User-Agent": HEADERS["User-Agent"],
+        "User-Agent":      HEADERS["User-Agent"],
         "Accept-Language": HEADERS["Accept-Language"],
     })
 
-    # Pre-warm: visit the gold page to acquire session cookies
     try:
         pre = session.get(
             GOLD_PAGE,
@@ -51,21 +89,15 @@ def download() -> bytes | None:
         )
         print(f"  预热请求：{pre.status_code}，cookies：{dict(session.cookies)}")
     except Exception as e:
-        print(f"  预热请求失败（继续）：{e}")
+        print(f"  预热失败（继续）：{e}")
 
-    # Now fetch the XLS
     resp = session.get(REPORT_URL, headers=HEADERS, timeout=30, allow_redirects=True)
     print(f"  XLS 请求状态码：{resp.status_code}")
 
-    if resp.status_code == 403:
-        print(f"  ⚠ HTTP 403 被拒绝。响应前200字节：{resp.text[:200]}")
-        return None
-
-    if resp.status_code != 200:
-        print(f"  ⚠ HTTP {resp.status_code}，响应前200字节：{resp.text[:200]}")
-        return None
-
-    return resp.content
+    if resp.status_code == 200:
+        return resp.content
+    print(f"  ⚠ HTTP {resp.status_code}。响应前200字节：{resp.text[:200]}")
+    return None
 
 
 # ── HTML parser ───────────────────────────────────────────────────────────────

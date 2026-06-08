@@ -25,7 +25,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python dependencies
-        run: pip install requests
+        run: pip install requests curl_cffi
 
       - name: Run fetch_cot.py
         run: python fetch_cot.py
