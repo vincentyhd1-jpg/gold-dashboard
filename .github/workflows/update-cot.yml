@@ -24,6 +24,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Python dependencies
+        run: pip install requests
+
       - name: Run fetch_cot.py
         run: python fetch_cot.py
 

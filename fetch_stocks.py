@@ -3,18 +3,20 @@
 从 CME 官方每日报告获取 COMEX 黄金库存数据，
 追加到 data/stocks.json（保留近90天）。
 
-CME 的 XLS 文件实际上是 HTML 伪装，用 stdlib html.parser 解析；
-若为真正二进制 XLS，则 fallback 到 xlrd。
+使用 requests + session cookie 预热绕过 WAF。
+CME 返回的 .xls 实际上是 HTML 格式，用 html.parser 解析。
 """
 
 import json
 import os
 import re
+import sys
 from datetime import datetime, timezone
 from html.parser import HTMLParser
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
 
+import requests
+
+GOLD_PAGE  = "https://www.cmegroup.com/markets/metals/precious/gold.html"
 REPORT_URL = "https://www.cmegroup.com/delivery_reports/Gold_Stocks.xls"
 OUT_PATH   = os.path.join(os.path.dirname(__file__), "data", "stocks.json")
 
@@ -24,28 +26,46 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Referer":         "https://www.cmegroup.com/markets/metals/precious/gold.html",
+    "Accept":          "application/vnd.ms-excel,application/octet-stream,*/*",
     "Accept-Language": "en-US,en;q=0.9",
-    "Referer":         "https://www.cmegroup.com/market-data/deliveries/metals-delivery.html",
 }
 
 
 # ── Downloader ────────────────────────────────────────────────────────────────
 
 def download() -> bytes | None:
-    """Returns None on 403 (CME WAF block) instead of raising."""
-    req = Request(REPORT_URL, headers=HEADERS)
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": HEADERS["User-Agent"],
+        "Accept-Language": HEADERS["Accept-Language"],
+    })
+
+    # Pre-warm: visit the gold page to acquire session cookies
     try:
-        with urlopen(req, timeout=30) as resp:
-            return resp.read()
-    except HTTPError as e:
-        body = e.read(512).decode("utf-8", errors="replace")
-        if e.code == 403:
-            print(f"  ⚠ HTTP 403 被拒绝（CME WAF 封锁此 IP）：{body[:120]}")
-            return None
-        raise RuntimeError(f"HTTP {e.code}：{body[:200]}") from e
-    except URLError as e:
-        raise RuntimeError(f"网络错误：{e.reason}") from e
+        pre = session.get(
+            GOLD_PAGE,
+            headers={"Accept": "text/html,application/xhtml+xml,*/*"},
+            timeout=20,
+            allow_redirects=True,
+        )
+        print(f"  预热请求：{pre.status_code}，cookies：{dict(session.cookies)}")
+    except Exception as e:
+        print(f"  预热请求失败（继续）：{e}")
+
+    # Now fetch the XLS
+    resp = session.get(REPORT_URL, headers=HEADERS, timeout=30, allow_redirects=True)
+    print(f"  XLS 请求状态码：{resp.status_code}")
+
+    if resp.status_code == 403:
+        print(f"  ⚠ HTTP 403 被拒绝。响应前200字节：{resp.text[:200]}")
+        return None
+
+    if resp.status_code != 200:
+        print(f"  ⚠ HTTP {resp.status_code}，响应前200字节：{resp.text[:200]}")
+        return None
+
+    return resp.content
 
 
 # ── HTML parser ───────────────────────────────────────────────────────────────
@@ -101,15 +121,33 @@ def _find_col(rows: list[list[str]], keyword: str) -> int:
 
 
 def _find_date(text: str) -> str:
-    # CME reports embed date as M/D/YYYY or MM/DD/YYYY
     m = re.search(r"\b(\d{1,2}/\d{1,2}/\d{4})\b", text)
     if m:
         return datetime.strptime(m.group(1), "%m/%d/%Y").strftime("%Y-%m-%d")
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def _parse_html(content: bytes) -> dict:
-    text = content.decode("utf-8", errors="replace")
+def parse(content: bytes) -> dict:
+    # CME XLS files are usually HTML in disguise
+    if content[:1] in (b"<", b"\xef", b"\xff", b"\xfe"):
+        text = content.decode("utf-8", errors="replace")
+        print(f"  文件类型：HTML（CME 伪 XLS），前80字节：{text[:80]!r}")
+        return _parse_html(text)
+
+    # Try xlrd for real binary XLS
+    try:
+        import xlrd  # type: ignore
+        wb = xlrd.open_workbook(file_contents=content)
+        print("  文件类型：二进制 XLS，使用 xlrd 解析")
+        return _parse_xlrd(wb)
+    except Exception as e:
+        # Last resort: try decoding as text anyway
+        text = content.decode("utf-8", errors="replace")
+        print(f"  xlrd 失败（{e}），尝试文本解析，前80字节：{text[:80]!r}")
+        return _parse_html(text)
+
+
+def _parse_html(text: str) -> dict:
     report_date = _find_date(text)
 
     p = _TableParser()
@@ -119,29 +157,28 @@ def _parse_html(content: bytes) -> dict:
     eli_col = _find_col(p.rows, "ELIGIBLE")
 
     if reg_col < 0 or eli_col < 0:
-        preview = "\n".join(str(r) for r in p.rows[:8])
-        raise ValueError(
-            f"未找到 REGISTERED/ELIGIBLE 列头。\n前8行：\n{preview}"
-        )
+        preview = "\n".join(str(r) for r in p.rows[:10])
+        raise ValueError(f"未找到 REGISTERED/ELIGIBLE 列头。\n前10行：\n{preview}")
 
+    # Find TOTAL row
     for row in p.rows:
-        if not row:
-            continue
-        if "TOTAL" in row[0].upper():
+        if row and "TOTAL" in row[0].upper():
             if len(row) > max(reg_col, eli_col):
                 registered = _clean_num(row[reg_col])
                 eligible   = _clean_num(row[eli_col])
-                return {
-                    "date":       report_date,
-                    "registered": registered,
-                    "eligible":   eligible,
-                    "total":      registered + eligible,
-                }
+                if registered > 0 or eligible > 0:
+                    return {
+                        "date":       report_date,
+                        "registered": registered,
+                        "eligible":   eligible,
+                        "total":      registered + eligible,
+                    }
 
-    # Fallback: look for total across all rows
+    # Fallback: any row containing TOTAL anywhere
     for row in p.rows:
         if any("TOTAL" in cell.upper() for cell in row):
-            nums = [_clean_num(c) for c in row if re.search(r"\d{4,}", re.sub(r"[,\s]", "", c))]
+            nums = [_clean_num(c) for c in row
+                    if re.search(r"\d{4,}", re.sub(r"[,\s]", "", c))]
             if len(nums) >= 2:
                 registered, eligible = nums[0], nums[1]
                 return {
@@ -155,23 +192,14 @@ def _parse_html(content: bytes) -> dict:
     raise ValueError(f"未找到 TOTAL 行。全部行：\n{preview}")
 
 
-def _parse_xls(content: bytes) -> dict:
-    try:
-        import xlrd  # type: ignore
-    except ImportError:
-        raise RuntimeError("需要 xlrd：pip install xlrd")
-
-    import io
-    wb  = xlrd.open_workbook(file_contents=content)
+def _parse_xlrd(wb) -> dict:
     ws  = wb.sheet_by_index(0)
-
     report_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     for ri in range(min(5, ws.nrows)):
         for ci in range(ws.ncols):
             m = re.search(r"\b(\d{1,2}/\d{1,2}/\d{4})\b", str(ws.cell_value(ri, ci)))
             if m:
                 report_date = datetime.strptime(m.group(1), "%m/%d/%Y").strftime("%Y-%m-%d")
-                break
 
     reg_col = eli_col = -1
     for ri in range(ws.nrows):
@@ -201,14 +229,6 @@ def _parse_xls(content: bytes) -> dict:
     raise ValueError("XLS：未找到 TOTAL 行")
 
 
-def parse(content: bytes) -> dict:
-    if content[:1] in (b"<", b"\xef"):   # HTML or UTF-8 BOM
-        print("  文件类型：HTML（CME 伪 XLS），使用 HTML 解析器")
-        return _parse_html(content)
-    print("  文件类型：二进制 XLS，使用 xlrd 解析")
-    return _parse_xls(content)
-
-
 # ── Storage ───────────────────────────────────────────────────────────────────
 
 def load_existing() -> list[dict]:
@@ -221,11 +241,12 @@ def load_existing() -> list[dict]:
 def main():
     print("正在下载 CME COMEX 黄金库存报告...")
     content = download()
+
     if content is None:
         print("  CME WAF 封锁，跳过本次更新（stocks.json 保持不变）")
-        return
+        sys.exit(0)
 
-    print(f"  已下载 {len(content):,} 字节，前20字节：{content[:20]}")
+    print(f"  已下载 {len(content):,} 字节")
 
     entry = parse(content)
 
@@ -238,7 +259,7 @@ def main():
     existing = {r["date"] for r in records}
 
     if entry["date"] in existing:
-        print(f"  {entry['date']} 已存在，跳过写入（数据未变化）")
+        print(f"  {entry['date']} 已存在，跳过写入")
         return
 
     records.append(entry)
