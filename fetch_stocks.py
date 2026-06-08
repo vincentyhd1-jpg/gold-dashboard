@@ -226,6 +226,8 @@ def _parse_html(text: str) -> dict:
 
 def _parse_xlrd(wb) -> dict:
     ws  = wb.sheet_by_index(0)
+
+    # Print all rows for debugging on first failure
     report_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     for ri in range(min(5, ws.nrows)):
         for ci in range(ws.ncols):
@@ -233,24 +235,39 @@ def _parse_xlrd(wb) -> dict:
             if m:
                 report_date = datetime.strptime(m.group(1), "%m/%d/%Y").strftime("%Y-%m-%d")
 
-    reg_col = eli_col = -1
+    # Find the header row that contains BOTH REGISTERED and ELIGIBLE in the same row
+    header_ri = reg_col = eli_col = -1
     for ri in range(ws.nrows):
-        for ci in range(ws.ncols):
-            v = str(ws.cell_value(ri, ci)).upper()
-            if "REGISTERED" in v and reg_col < 0:
-                reg_col = ci
-            if "ELIGIBLE" in v and eli_col < 0:
-                eli_col = ci
-        if reg_col >= 0 and eli_col >= 0:
+        row_vals = [str(ws.cell_value(ri, ci)).upper() for ci in range(ws.ncols)]
+        has_reg = any("REGISTERED" in v for v in row_vals)
+        has_eli = any("ELIGIBLE" in v for v in row_vals)
+        if has_reg and has_eli:
+            header_ri = ri
+            reg_col = next(ci for ci, v in enumerate(row_vals) if "REGISTERED" in v)
+            eli_col = next(ci for ci, v in enumerate(row_vals) if "ELIGIBLE" in v)
+            print(f"  XLS 列头行 {ri}：REGISTERED={reg_col}，ELIGIBLE={eli_col}")
             break
 
-    if reg_col < 0 or eli_col < 0:
-        raise ValueError("XLS：未找到 REGISTERED/ELIGIBLE 列头")
+    if header_ri < 0:
+        # Debug dump
+        for ri in range(ws.nrows):
+            row = [str(ws.cell_value(ri, ci)) for ci in range(ws.ncols)]
+            print(f"  XLS 行{ri}: {row}")
+        raise ValueError("XLS：未找到同行含 REGISTERED 和 ELIGIBLE 的列头行")
 
-    for ri in range(ws.nrows):
-        if "TOTAL" in str(ws.cell_value(ri, 0)).upper():
-            registered = int(ws.cell_value(ri, reg_col) or 0)
-            eligible   = int(ws.cell_value(ri, eli_col) or 0)
+    def to_int(v) -> int:
+        try:
+            return int(float(str(v).replace(",", "").strip() or "0"))
+        except (ValueError, TypeError):
+            return 0
+
+    # Scan rows below the header for a TOTAL row
+    for ri in range(header_ri + 1, ws.nrows):
+        first_cell = str(ws.cell_value(ri, 0)).strip().upper()
+        if "TOTAL" in first_cell:
+            registered = to_int(ws.cell_value(ri, reg_col))
+            eligible   = to_int(ws.cell_value(ri, eli_col))
+            print(f"  XLS TOTAL 行 {ri}：registered={registered:,}，eligible={eligible:,}")
             return {
                 "date":       report_date,
                 "registered": registered,
@@ -258,6 +275,10 @@ def _parse_xlrd(wb) -> dict:
                 "total":      registered + eligible,
             }
 
+    # Debug dump if TOTAL not found
+    for ri in range(ws.nrows):
+        row = [str(ws.cell_value(ri, ci)) for ci in range(ws.ncols)]
+        print(f"  XLS 行{ri}: {row}")
     raise ValueError("XLS：未找到 TOTAL 行")
 
 
