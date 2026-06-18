@@ -114,33 +114,30 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1px solid #21262d;margin-top:8px}
 @media(max-width:640px){header{padding:14px 16px}main{padding:20px 16px}}
 
-/* ── 仓库明细榜 ── */
+/* ── 仓库总览 ── */
 .depot-section{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px 28px}
 .depot-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .depot-title{font-size:14px;font-weight:600;color:#f0f6fc}
 .depot-sort-btns{display:flex;gap:8px}
 .depot-sort-btn{font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer;transition:all .15s}
 .depot-sort-btn.active{background:#2d333b;border-color:#d4a84b;color:#d4a84b}
-.depot-summary{font-size:12px;color:#8b949e;margin-bottom:16px;line-height:1.5}
-.depot-summary .adj-count{color:#c46a5a;font-weight:600}
-.depot-summary .adj-total{color:#c46a5a;font-weight:600}
+.depot-summary{font-size:12px;color:#8b949e;margin-bottom:14px;line-height:1.5}
+.depot-summary .adj-hi{color:#c46a5a;font-weight:600}
 .depot-list{display:flex;flex-direction:column;gap:6px}
-.depot-row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,3fr) max-content;align-items:center;gap:12px;padding:9px 12px;border-radius:8px;border:1px solid transparent;transition:background .15s}
-.depot-row.has-adj{border-left:3px solid #d4a84b;background:rgba(240,205,114,0.05)}
-.depot-row:not(.has-adj){border-left:3px solid transparent}
+.depot-row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,3fr) max-content;align-items:center;gap:12px;padding:6px 0}
 .depot-name{font-size:11px;color:#8b949e;line-height:1.3;word-break:break-word}
-.depot-bar-wrap{display:flex;flex-direction:column;gap:3px}
-.depot-bar-outer{height:20px;background:#21262d;border-radius:4px;overflow:hidden;position:relative}
+.depot-bar-outer{height:20px;background:#21262d;border-radius:4px;overflow:hidden}
 .depot-bar-inner{display:flex;height:100%;border-radius:4px;overflow:hidden}
-.depot-seg-reg{background:#d4a84b;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;font-size:10px;color:rgba(0,0,0,0.75);font-weight:700;transition:width .4s ease}
-.depot-seg-eli{background:#5a7682;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;font-size:10px;color:rgba(255,255,255,0.7);font-weight:600;transition:width .4s ease}
-.depot-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;min-width:90px}
+.depot-seg-reg{background:#d4a84b;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;font-size:10px;color:rgba(0,0,0,0.75);font-weight:700}
+.depot-seg-eli{background:#5a7682;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;font-size:10px;color:rgba(255,255,255,0.7);font-weight:600}
+.depot-meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:80px}
 .depot-pct{font-size:12px;font-weight:700;color:#e6edf3}
 .depot-oz{font-size:10px;color:#6e7681}
+.depot-row.has-adj{border-left:3px solid #d4a84b !important;background:rgba(240,205,114,0.05)}
 .depot-adj-tag{font-size:10px;color:#c46a5a;font-weight:600;white-space:nowrap}
 .depot-no-data{text-align:center;padding:24px;color:#484f58;font-size:13px}
 @media(max-width:640px){
-  .depot-row{grid-template-columns:1fr;gap:6px}
+  .depot-row{grid-template-columns:1fr;gap:4px}
   .depot-meta{flex-direction:row;align-items:center;gap:10px}
 }
 </style>
@@ -270,13 +267,13 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
   </div>
 
 
-  <!-- 仓库明细榜 -->
+  <!-- 仓库总览 -->
   <div class="depot-section" id="depotSection" style="display:none">
     <div class="depot-header">
-      <div class="depot-title">COMEX 各仓库明细</div>
+      <div class="depot-title">COMEX 各仓库存量</div>
       <div class="depot-sort-btns">
-        <button class="depot-sort-btn active" id="sortByTotal" onclick="sortDepots('total')">按库存占比</button>
-        <button class="depot-sort-btn" id="sortByAdj" onclick="sortDepots('adj')">按异动优先</button>
+        <button class="depot-sort-btn active" id="depotSortTotal" onclick="sortDepots('total')">按库存占比</button>
+        <button class="depot-sort-btn"        id="depotSortAdj"   onclick="sortDepots('adj')">按异动优先</button>
       </div>
     </div>
     <div class="depot-summary" id="depotSummary"></div>
@@ -792,97 +789,85 @@ function renderAll(cot, goldData, stocksData) {
   }
 }
 
-// ── 仓库明细榜 ──────────────────────────────────────────────────────────────
-let _depotData = [];
-let _depotSort = 'total';
+// ── 仓库总览 ──────────────────────────────────────────────────────────────
+let _depotDepots    = [];
+let _depotGrandTotal = 0;
+let _depotSort      = 'total';
 
 function sortDepots(mode) {
   _depotSort = mode;
-  document.getElementById('sortByTotal').classList.toggle('active', mode === 'total');
-  document.getElementById('sortByAdj').classList.toggle('active', mode === 'adj');
-  renderDepotList(_depotData);
+  document.getElementById('depotSortTotal').classList.toggle('active', mode === 'total');
+  document.getElementById('depotSortAdj').classList.toggle('active', mode === 'adj');
+  renderDepotList();
 }
 
 function renderDepots(stocksData) {
-  // Find latest record that has depositories
   const stocks = Array.isArray(stocksData) ? stocksData : [];
   let entry = null;
   for (let i = stocks.length - 1; i >= 0; i--) {
     if (stocks[i].depositories && stocks[i].depositories.length > 0) {
-      entry = stocks[i];
-      break;
+      entry = stocks[i]; break;
     }
   }
 
   const section = document.getElementById('depotSection');
+  section.style.display = '';
+
   if (!entry) {
-    section.style.display = '';
+    document.getElementById('depotSummary').textContent = '';
     document.getElementById('depotList').innerHTML =
       '<div class="depot-no-data">仓库明细数据从 2026-06-17 起可用</div>';
-    document.getElementById('depotSummary').textContent = '';
     return;
   }
 
-  section.style.display = '';
-  _depotData = entry.depositories;
-  const grandTotal = entry.total || entry.depositories.reduce((s, d) => s + d.total, 0);
-  const dateStr = entry.date.slice(5).replace('-', '/');
+  _depotDepots     = entry.depositories;
+  _depotGrandTotal = entry.total || entry.depositories.reduce((s, d) => s + d.total, 0);
 
   // Summary line
+  const dateStr   = entry.date.slice(5).replace('-', '/');
   const adjDepots = entry.depositories.filter(d => d.reg_adj !== 0);
-  const adjTotal  = adjDepots.reduce((s, d) => s + d.reg_adj, 0);
-  const summaryEl = document.getElementById('depotSummary');
+  const sumEl     = document.getElementById('depotSummary');
   if (adjDepots.length > 0) {
-    const sign = adjTotal > 0 ? '+' : '';
-    const dirText = adjTotal < 0 ? '，可交割量边际减少' : '，可交割量边际增加';
-    summaryEl.innerHTML =
-      dateStr + '：<span class="adj-count">' + adjDepots.length + ' 家</span>仓库发生注册→合格调整，' +
-      '合计 <span class="adj-total">' + sign + Math.round(adjTotal).toLocaleString('zh-CN') + ' oz</span>' + dirText;
+    const adjTotal = adjDepots.reduce((s, d) => s + d.reg_adj, 0);
+    const sign     = adjTotal > 0 ? '+' : '−';
+    const absStr   = Math.abs(Math.round(adjTotal)).toLocaleString('zh-CN');
+    const dir      = adjTotal < 0 ? '，可交割量边际减少' : '，可交割量边际增加';
+    sumEl.innerHTML = dateStr + '：<span class="adj-hi">' + adjDepots.length + ' 家</span>仓库发生注册→合格调整，' +
+      '合计 <span class="adj-hi">' + sign + absStr + ' oz</span>' + dir;
   } else {
-    summaryEl.textContent = dateStr + '：各仓库当日无注册→合格调整';
+    sumEl.textContent = dateStr + '：当日无仓库状态调整';
   }
 
-  renderDepotList(_depotData, grandTotal);
+  renderDepotList();
 }
 
-function renderDepotList(depots, grandTotal) {
-  // grandTotal may need recomputing if called from sort without it
-  if (grandTotal == null) {
-    grandTotal = depots.reduce((s, d) => s + d.total, 0);
-  }
-
-  const sorted = [...depots].sort((a, b) => {
+function renderDepotList() {
+  const sorted = [..._depotDepots].sort((a, b) => {
     if (_depotSort === 'adj') {
-      const aHas = a.reg_adj !== 0, bHas = b.reg_adj !== 0;
-      if (aHas !== bHas) return bHas - aHas;
-      if (aHas && bHas) return Math.abs(b.reg_adj) - Math.abs(a.reg_adj);
+      const aA = a.reg_adj !== 0, bA = b.reg_adj !== 0;
+      if (aA !== bA) return bA - aA;
+      if (aA && bA) return Math.abs(b.reg_adj) - Math.abs(a.reg_adj);
     }
     return b.total - a.total;
   });
 
   const listEl = document.getElementById('depotList');
   listEl.innerHTML = sorted.map(d => {
-    const pct     = grandTotal > 0 ? (d.total / grandTotal * 100) : 0;
-    const regPct  = d.total > 0 ? (d.registered / d.total * 100) : 0;
-    const eliPct  = d.total > 0 ? (d.eligible  / d.total * 100) : 0;
-    const hasAdj  = d.reg_adj !== 0;
-
-    const regLabel = regPct > 16 ? Math.round(d.registered / 1000) + 'k' : '';
-    const eliLabel = eliPct > 16 ? Math.round(d.eligible  / 1000) + 'k' : '';
-
-    const adjSign = d.reg_adj > 0 ? '+' : '';
-    const adjTag  = hasAdj
-      ? '<span class="depot-adj-tag">注册→合格 ' + adjSign + Math.round(d.reg_adj).toLocaleString('zh-CN') + '</span>'
+    const pct    = _depotGrandTotal > 0 ? (d.total / _depotGrandTotal * 100) : 0;
+    const regPct = d.total > 0 ? (d.registered / d.total * 100) : 0;
+    const eliPct = d.total > 0 ? (d.eligible   / d.total * 100) : 0;
+    const regLabel = Math.round(d.registered / 1000) + 'k';
+    const eliLabel = Math.round(d.eligible   / 1000) + 'k';
+    const hasAdj   = d.reg_adj !== 0;
+    const adjTag   = hasAdj
+      ? `<span class="depot-adj-tag">注册→合格 ${(d.reg_adj > 0 ? '+' : '−') + Math.abs(Math.round(d.reg_adj)).toLocaleString('zh-CN')}</span>`
       : '';
-
     return `<div class="depot-row${hasAdj ? ' has-adj' : ''}">
   <div class="depot-name">${d.name}</div>
-  <div class="depot-bar-wrap">
-    <div class="depot-bar-outer" style="width:${Math.max(pct, 2).toFixed(1)}%">
-      <div class="depot-bar-inner">
-        <div class="depot-seg-reg" style="width:${regPct.toFixed(1)}%">${regLabel}</div>
-        <div class="depot-seg-eli" style="width:${eliPct.toFixed(1)}%">${eliLabel}</div>
-      </div>
+  <div class="depot-bar-outer" style="width:${Math.max(pct, 2).toFixed(1)}%">
+    <div class="depot-bar-inner">
+      <div class="depot-seg-reg" style="width:${regPct.toFixed(1)}%" data-label="${regLabel}"></div>
+      <div class="depot-seg-eli" style="width:${eliPct.toFixed(1)}%" data-label="${eliLabel}"></div>
     </div>
   </div>
   <div class="depot-meta">
@@ -892,6 +877,11 @@ function renderDepotList(depots, grandTotal) {
   </div>
 </div>`;
   }).join('');
+
+  // Show in-bar labels only when the segment is wide enough to fit the text
+  listEl.querySelectorAll('.depot-seg-reg, .depot-seg-eli').forEach(seg => {
+    if (seg.offsetWidth >= 42) seg.textContent = seg.dataset.label;
+  });
 }
 
 // 并行加载 COT、金价、库存数据，失败则用模拟数据
