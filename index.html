@@ -114,8 +114,9 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1px solid #21262d;margin-top:8px}
 @media(max-width:640px){header{padding:14px 16px}main{padding:20px 16px}}
 
-/* ── 仓库总览 ── */
-.depot-section{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px 28px}
+/* ── 仓库总览（合并卡片内部分隔线） ── */
+.depot-divider{display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:#484f58;font-size:11px;text-transform:uppercase;letter-spacing:.8px}
+.depot-divider::before,.depot-divider::after{content:'';flex:1;height:1px;background:#30363d}
 .depot-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .depot-title{font-size:14px;font-weight:600;color:#f0f6fc}
 .depot-sort-btns{display:flex;gap:8px}
@@ -267,21 +268,8 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
   </div>
 
 
-  <!-- 仓库总览 -->
-  <div class="depot-section" id="depotSection" style="display:none">
-    <div class="depot-header">
-      <div class="depot-title">COMEX 各仓库存量</div>
-      <div class="depot-sort-btns">
-        <button class="depot-sort-btn active" id="depotSortTotal" onclick="sortDepots('total')">按库存占比</button>
-        <button class="depot-sort-btn"        id="depotSortAdj"   onclick="sortDepots('adj')">按异动优先</button>
-      </div>
-    </div>
-    <div class="depot-summary" id="depotSummary"></div>
-    <div class="depot-list" id="depotList"></div>
-  </div>
-
-  <!-- COMEX 黄金库存 -->
-  <div class="stocks-section">
+  <!-- COMEX 黄金库存 + 各仓库明细（合并卡片） -->
+  <div class="stocks-section" id="depotSection">
     <div class="stocks-header">
       <div class="stocks-header-left">
         <div class="stocks-title">COMEX 黄金库存</div>
@@ -307,6 +295,17 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     </div>
     <div id="stocksAlert" class="stocks-alert">⚠ 注册库存持续下降，实物趋紧，关注逼仓风险</div>
     <div class="chart-wrap" style="height:220px"><canvas id="stocksChart"></canvas></div>
+
+    <div class="depot-divider">各仓库明细</div>
+
+    <div class="depot-header">
+      <div style="font-size:12px;color:#8b949e" id="depotSummary"></div>
+      <div class="depot-sort-btns">
+        <button class="depot-sort-btn active" id="depotSortTotal" onclick="sortDepots('total')">按库存占比</button>
+        <button class="depot-sort-btn"        id="depotSortAdj"   onclick="sortDepots('adj')">按异动优先</button>
+      </div>
+    </div>
+    <div class="depot-list" id="depotList"></div>
   </div>
 
 </main>
