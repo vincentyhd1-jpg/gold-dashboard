@@ -263,13 +263,20 @@ def main():
     print(json.dumps(entry.get("depositories", []), ensure_ascii=False, indent=4))
 
     records = load_existing()
-    existing = {r["date"] for r in records}
+    existing_dates = {r["date"] for r in records}
 
-    if entry["date"] in existing:
-        print(f"  {entry['date']} 已存在，跳过写入")
-        return
-
-    records.append(entry)
+    if entry["date"] in existing_dates:
+        # Update existing record if it's missing depositories
+        for r in records:
+            if r["date"] == entry["date"] and "depositories" not in r:
+                r["depositories"] = entry["depositories"]
+                print(f"  {entry['date']} 已存在但缺少明细，已补写 depositories")
+                break
+        else:
+            print(f"  {entry['date']} 已存在且有明细，跳过写入")
+            return
+    else:
+        records.append(entry)
     records = sorted(records, key=lambda r: r["date"])[-90:]
 
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
