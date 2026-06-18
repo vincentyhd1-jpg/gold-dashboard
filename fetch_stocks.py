@@ -5,7 +5,8 @@
 
 使用 curl_cffi 模拟 Chrome TLS/HTTP2 指纹绕过 Akamai WAF。
 文件为真实二进制 XLS（OLE2），用 xlrd 解析。
-总计行结构：TOTAL REGISTERED / TOTAL ELIGIBLE / COMBINED TOTAL（无统一列，直接按行名取 col 7）。
+总计行结构：TOTAL REGISTERED / TOTAL ELIGIBLE / COMBINED TOTAL（直接按行名取 TOTAL TODAY 列）。
+depositories：各仓库明细，ENHANCED 子库并入主库累加。
 """
 
 import json
@@ -76,17 +77,35 @@ def download() -> bytes | None:
 
 
 # ── Parser ────────────────────────────────────────────────────────────────────
-# The XLS has this structure (no explicit REGISTERED/ELIGIBLE column header row):
+# XLS structure (confirmed from debug dump):
 #   Row 7:  ['GOLD', ..., 'Report Date: M/D/YYYY', ...]
 #   Row 8:  ['Troy Ounce', ..., 'Activity Date: M/D/YYYY', ...]
-#   Row 10: ['DEPOSITORY', ..., 'PREV TOTAL', ..., 'TOTAL TODAY', '']   ← headers
-#   ...  individual depository rows (Registered / Eligible / Total per depot)
-#   Row 131: ['TOTAL REGISTERED', '', prevTotal, ..., totalToday, '']
-#   Row 132: ['TOTAL PLEDGED',    '', ...]
-#   Row 133: ['TOTAL ELIGIBLE',   '', prevTotal, ..., totalToday, '']
-#   Row 134: ['COMBINED TOTAL',   '', ...]
+#   Row 10: ['DEPOSITORY', ..., 'ADJUSTMENT', 'PREV TOTAL', ..., 'TOTAL TODAY', '']  ← col header
+#           col 6 = ADJUSTMENT, col 7 = TOTAL TODAY
 #
-# Col 7 = "TOTAL TODAY" — that's what we want.
+#   Depot block pattern (col 0 indented with leading spaces):
+#     '  Brink's Inc'          ← depot name row (no numeric data)
+#     '    Registered'         ← registered row
+#     '    Eligible'           ← eligible row
+#     '    Total'              ← total row  (we skip, compute ourselves)
+#     '  Brink's Inc - ENHANCED'  ← optional sub-depot (merge into parent)
+#     ...
+#
+#   Grand totals (col 0, NO leading spaces):
+#     'TOTAL REGISTERED'
+#     'TOTAL PLEDGED'
+#     'TOTAL ELIGIBLE'
+#     'COMBINED TOTAL'
+#
+# Col 6 = ADJUSTMENT, Col 7 = TOTAL TODAY (both confirmed).
+
+# Normalise a depot name: strip leading/trailing space, collapse internal
+# whitespace, remove " - ENHANCED" suffix so it merges into the parent.
+_ENHANCED = re.compile(r"\s*-\s*ENHANCED\b.*$", re.IGNORECASE)
+
+def _norm_depot(raw: str) -> str:
+    return _ENHANCED.sub("", raw.strip()).strip()
+
 
 def _to_float(v) -> float:
     try:
@@ -100,7 +119,7 @@ def parse(content: bytes) -> dict:
     wb = xlrd.open_workbook(file_contents=content)
     ws = wb.sheet_by_index(0)
 
-    # Extract date from rows 7/8
+    # ── date ──────────────────────────────────────────────────────────────────
     report_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     for ri in range(min(12, ws.nrows)):
         for ci in range(ws.ncols):
@@ -110,15 +129,22 @@ def parse(content: bytes) -> dict:
                 report_date = datetime.strptime(m.group(1), "%m/%d/%Y").strftime("%Y-%m-%d")
                 break
 
-    # Find TOTAL TODAY column index from the header row
-    total_col = 7   # default — confirmed from debug dump above
+    # ── locate ADJUSTMENT and TOTAL TODAY columns from header row ─────────────
+    adj_col   = 6   # default
+    total_col = 7   # default
     for ri in range(ws.nrows):
         row = [str(ws.cell_value(ri, ci)).strip().upper() for ci in range(ws.ncols)]
         if "TOTAL TODAY" in row:
             total_col = row.index("TOTAL TODAY")
-            print(f"  列头行 {ri}：TOTAL TODAY = col {total_col}")
+            # ADJUSTMENT is typically one column to the left of TOTAL TODAY
+            if "ADJUSTMENT" in row:
+                adj_col = row.index("ADJUSTMENT")
+            else:
+                adj_col = total_col - 1
+            print(f"  列头行 {ri}：ADJUSTMENT=col{adj_col}, TOTAL TODAY=col{total_col}")
             break
 
+    # ── grand totals ──────────────────────────────────────────────────────────
     registered = eligible = None
     for ri in range(ws.nrows):
         label = str(ws.cell_value(ri, 0)).strip().upper()
@@ -130,17 +156,81 @@ def parse(content: bytes) -> dict:
             print(f"  行{ri} TOTAL ELIGIBLE = {eligible:,.0f}")
 
     if registered is None or eligible is None:
-        # debug dump
         for ri in range(ws.nrows):
-            row = [str(ws.cell_value(ri, ci)) for ci in range(ws.ncols)]
-            print(f"  行{ri}: {row}")
-        raise ValueError(f"未找到 TOTAL REGISTERED/ELIGIBLE 行（registered={registered}, eligible={eligible}）")
+            print(f"  行{ri}: {[str(ws.cell_value(ri, ci)) for ci in range(ws.ncols)]}")
+        raise ValueError(
+            f"未找到 TOTAL REGISTERED/ELIGIBLE 行（registered={registered}, eligible={eligible}）"
+        )
+
+    # ── per-depot detail ──────────────────────────────────────────────────────
+    # Walk rows between the header row (~10) and the grand-total block.
+    # A depot NAME row has leading spaces in col 0 and no numeric value in total_col.
+    # Its sub-rows ('    Registered', '    Eligible') are indented further.
+    #
+    # We accumulate into a dict keyed by normalised depot name so ENHANCED
+    # sub-depots fold into their parent automatically.
+
+    depots: dict[str, dict] = {}   # name -> {registered, eligible, reg_adj}
+    current_depot: str | None = None
+
+    for ri in range(ws.nrows):
+        raw_label = str(ws.cell_value(ri, 0))
+        label_stripped = raw_label.strip()
+        label_upper    = label_stripped.upper()
+
+        # Stop at grand-total block
+        if label_upper in ("TOTAL REGISTERED", "TOTAL ELIGIBLE", "COMBINED TOTAL",
+                           "TOTAL PLEDGED"):
+            break
+
+        # Skip header rows and blank rows
+        if not label_stripped or label_upper in ("DEPOSITORY", "GOLD", "TROY OUNCE"):
+            continue
+
+        total_val = _to_float(ws.cell_value(ri, total_col))
+        adj_val   = _to_float(ws.cell_value(ri, adj_col))
+
+        # Depot name rows: indented once (e.g. '  Brink\'s Inc')
+        # Sub-rows: indented twice (e.g. '    Registered')
+        leading = len(raw_label) - len(raw_label.lstrip(" "))
+
+        if leading <= 2 and label_upper not in ("REGISTERED", "ELIGIBLE", "TOTAL",
+                                                 "PLEDGED", "NET CHANGE"):
+            # This is a depot name (or ENHANCED variant)
+            current_depot = _norm_depot(label_stripped)
+            if current_depot not in depots:
+                depots[current_depot] = {"registered": 0, "eligible": 0, "reg_adj": 0}
+
+        elif current_depot is not None:
+            if label_upper == "REGISTERED":
+                depots[current_depot]["registered"] += int(total_val)
+                depots[current_depot]["reg_adj"]    += int(adj_val)
+            elif label_upper == "ELIGIBLE":
+                depots[current_depot]["eligible"]   += int(total_val)
+
+    # Build output list, skip any depot with all zeros (artefact rows)
+    depositories = []
+    for name, vals in depots.items():
+        reg = vals["registered"]
+        eli = vals["eligible"]
+        if reg == 0 and eli == 0:
+            continue
+        depositories.append({
+            "name":       name,
+            "registered": reg,
+            "eligible":   eli,
+            "total":      reg + eli,
+            "reg_adj":    vals["reg_adj"],
+        })
+
+    print(f"  解析到 {len(depositories)} 个仓库")
 
     return {
-        "date":       report_date,
-        "registered": int(registered),
-        "eligible":   int(eligible),
-        "total":      int(registered + eligible),
+        "date":         report_date,
+        "registered":   int(registered),
+        "eligible":     int(eligible),
+        "total":        int(registered + eligible),
+        "depositories": depositories,
     }
 
 
@@ -169,6 +259,8 @@ def main():
     print(f"  注册库存（Registered）：{entry['registered']:>12,} oz")
     print(f"  合格库存（Eligible）  ：{entry['eligible']:>12,} oz")
     print(f"  合计（Total）         ：{entry['total']:>12,} oz")
+    print("  各仓库明细（depositories）：")
+    print(json.dumps(entry.get("depositories", []), ensure_ascii=False, indent=4))
 
     records = load_existing()
     existing = {r["date"] for r in records}
