@@ -830,9 +830,10 @@ function renderDepots(stocksData) {
     const adjTotal = adjDepots.reduce((s, d) => s + d.reg_adj, 0);
     const sign     = adjTotal > 0 ? '+' : '−';
     const absStr   = Math.abs(Math.round(adjTotal)).toLocaleString('zh-CN');
-    const dir      = adjTotal < 0 ? '，可交割量边际减少' : '，可交割量边际增加';
-    sumEl.innerHTML = dateStr + '：<span class="adj-hi">' + adjDepots.length + ' 家</span>仓库发生注册→合格调整，' +
-      '合计 <span class="adj-hi">' + sign + absStr + ' oz</span>' + dir;
+    const direction = adjTotal > 0 ? '合格→注册' : '注册→合格';
+    const impact    = adjTotal > 0 ? '，可交割量边际增加' : '，可交割量边际减少';
+    sumEl.innerHTML = dateStr + '：<span class="adj-hi">' + adjDepots.length + ' 家</span>仓库发生' + direction + '调整，' +
+      '合计 <span class="adj-hi">' + sign + absStr + ' oz</span>' + impact;
   } else {
     sumEl.textContent = dateStr + '：当日无仓库状态调整';
   }
@@ -858,8 +859,9 @@ function renderDepotList() {
     const regLabel = Math.round(d.registered / 1000) + 'k';
     const eliLabel = Math.round(d.eligible   / 1000) + 'k';
     const hasAdj   = d.reg_adj !== 0;
+    const adjDirection = d.reg_adj > 0 ? '合格→注册' : '注册→合格';
     const adjTag   = hasAdj
-      ? `<span class="depot-adj-tag">注册→合格 ${(d.reg_adj > 0 ? '+' : '−') + Math.abs(Math.round(d.reg_adj)).toLocaleString('zh-CN')}</span>`
+      ? `<span class="depot-adj-tag">${adjDirection} ${(d.reg_adj > 0 ? '+' : '−') + Math.abs(Math.round(d.reg_adj)).toLocaleString('zh-CN')}</span>`
       : '';
     return `<div class="depot-row${hasAdj ? ' has-adj' : ''}">
   <div class="depot-name">${d.name}</div>
