@@ -678,6 +678,7 @@ function renderAll(cot, goldData, stocksData) {
     const sLabels   = stocks.map(r => r.date.slice(5).replace('-', '/'));
     const sReg      = stocks.map(r => r.registered);
     const sEli      = stocks.map(r => r.eligible);
+    const sTotal    = stocks.map(r => r.total);
     const fmtOz     = n => (n / 1e6).toFixed(2) + 'M oz';
     const chgLabel  = (cur, prev, key) => {
       if (!prev) return '--';
@@ -739,6 +740,19 @@ function renderAll(cot, goldData, stocksData) {
             tension: 0.3,
             fill: true,
             yAxisID: 'yStocks',
+          },
+          {
+            label: '合计 Total',
+            data: sTotal,
+            borderColor: '#8b949e',
+            backgroundColor: 'transparent',
+            borderWidth: 2.5,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: '#8b949e',
+            tension: 0.3,
+            fill: false,
+            yAxisID: 'yTotal',
           }
         ]
       },
@@ -780,7 +794,18 @@ function renderAll(cot, goldData, stocksData) {
               color: '#6e7681',
               callback: v => (v / 1e6).toFixed(1) + 'M'
             },
-            title: { display: true, text: '库存量 (oz)', color: '#6e7681', font: { size: 11 } }
+            title: { display: true, text: '注册/合格 (oz)', color: '#6e7681', font: { size: 11 } }
+          },
+          yTotal: {
+            type: 'linear',
+            position: 'right',
+            grid: { drawOnChartArea: false },
+            ticks: {
+              font: { size: 10 },
+              color: '#8b949e',
+              callback: v => (v / 1e6).toFixed(1) + 'M'
+            },
+            title: { display: true, text: '合计 (oz)', color: '#8b949e', font: { size: 11 } }
           }
         }
       }
