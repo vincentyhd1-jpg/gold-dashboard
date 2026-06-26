@@ -306,6 +306,9 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
       </div>
     </div>
     <div class="depot-list" id="depotList"></div>
+
+    <div class="depot-divider" style="margin-top:24px">各仓库历史趋势</div>
+    <div class="chart-wrap" style="height:280px"><canvas id="depotTrendChart"></canvas></div>
   </div>
 
 </main>
@@ -910,6 +913,103 @@ function renderDepotList() {
   });
 }
 
+// ── 各仓库历史趋势图 ─────────────────────────────────────────────────────────
+let _depotTrendChart = null;
+
+const DEPOT_COLORS = [
+  '#f5c842','#58a6ff','#3fb950','#f78166','#d2a8ff',
+  '#ffa657','#79c0ff','#56d364','#ff7b72','#bc8cff'
+];
+
+function renderDepotTrend(stocksData) {
+  const records = (Array.isArray(stocksData) ? stocksData : [])
+    .filter(r => r.depositories && r.depositories.length > 0);
+
+  if (!records.length) return;
+
+  // Collect ordered depot names from the most recent record
+  const latestDepotNames = records[records.length - 1].depositories.map(d => d.name);
+
+  // Build a date-keyed lookup for all records
+  const byDate = {};
+  records.forEach(r => {
+    byDate[r.date] = {};
+    r.depositories.forEach(d => { byDate[r.date][d.name] = d.registered; });
+  });
+
+  const labels = records.map(r => r.date.slice(5).replace('-', '/'));
+
+  const datasets = latestDepotNames.map((name, i) => ({
+    label: name,
+    data: records.map(r => byDate[r.date][name] ?? null),
+    borderColor: DEPOT_COLORS[i % DEPOT_COLORS.length],
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    pointRadius: records.length <= 5 ? 3 : 0,
+    pointHoverRadius: 5,
+    pointHoverBackgroundColor: DEPOT_COLORS[i % DEPOT_COLORS.length],
+    tension: 0.3,
+    fill: false,
+    spanGaps: true,
+  }));
+
+  const canvas = document.getElementById('depotTrendChart');
+  if (!canvas) return;
+
+  if (_depotTrendChart) { _depotTrendChart.destroy(); _depotTrendChart = null; }
+
+  _depotTrendChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            font: { size: 10 },
+            color: '#8b949e',
+            boxWidth: 12,
+            padding: 10,
+            usePointStyle: true,
+          }
+        },
+        tooltip: {
+          callbacks: {
+            title: ctx => ctx[0].label,
+            label: ctx => {
+              if (ctx.parsed.y === null) return null;
+              return ctx.dataset.label.split(' ')[0] + ': ' +
+                Math.round(ctx.parsed.y).toLocaleString('en-US') + ' oz';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { font: { size: 10 }, color: '#6e7681', maxTicksLimit: 10 },
+          grid: { color: '#21262d' }
+        },
+        y: {
+          type: 'logarithmic',
+          position: 'left',
+          ticks: {
+            font: { size: 10 }, color: '#6e7681',
+            callback: v => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M'
+                       : v >= 1e3 ? Math.round(v / 1e3) + 'k'
+                       : v
+          },
+          grid: { color: '#21262d' },
+          title: { display: true, text: '注册库存 (oz，对数)', color: '#6e7681', font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
 // 并行加载 COT、金价、库存数据，失败则用模拟数据
 Promise.all([
   fetch('data/cot.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
@@ -921,12 +1021,14 @@ Promise.all([
       'COT 数据来源：CFTC · 金价来源：Yahoo Finance · 库存来源：CME Group · 每日自动更新 · zhangtongxue.com';
     renderAll(cotData, goldData, stocksData);
     renderDepots(stocksData);
+    renderDepotTrend(stocksData);
   })
   .catch(() => {
     document.getElementById('footerNote').textContent =
       '当前显示模拟数据（数据文件未找到）· zhangtongxue.com';
     renderAll(MOCK, [], []);
     renderDepots([]);
+    renderDepotTrend([]);
   });
 </script>
 </body>
