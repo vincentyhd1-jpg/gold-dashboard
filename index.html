@@ -1015,16 +1015,14 @@ function renderDepotTrend(stocksData) {
           grid: { color: '#21262d' }
         },
         y: {
-          type: 'logarithmic',
+          type: 'linear',
           position: 'left',
           ticks: {
             font: { size: 10 }, color: '#6e7681',
-            callback: v => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M'
-                       : v >= 1e3 ? Math.round(v / 1e3) + 'k'
-                       : v
+            callback: v => (v / 1e6).toFixed(1) + 'M'
           },
           grid: { color: '#21262d' },
-          title: { display: true, text: '注册库存 (oz，对数)', color: '#6e7681', font: { size: 11 } }
+          title: { display: true, text: '注册库存 (oz)', color: '#6e7681', font: { size: 11 } }
         }
       }
     }
