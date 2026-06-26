@@ -927,8 +927,11 @@ function renderDepotTrend(stocksData) {
 
   if (!records.length) return;
 
-  // Collect ordered depot names from the most recent record
-  const latestDepotNames = records[records.length - 1].depositories.map(d => d.name);
+  // Top 5 depots by total in the most recent record
+  const latestDepotNames = [...records[records.length - 1].depositories]
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5)
+    .map(d => d.name);
 
   // Build a date-keyed lookup for all records
   const byDate = {};
@@ -994,16 +997,14 @@ function renderDepotTrend(stocksData) {
           grid: { color: '#21262d' }
         },
         y: {
-          type: 'logarithmic',
+          type: 'linear',
           position: 'left',
           ticks: {
             font: { size: 10 }, color: '#6e7681',
-            callback: v => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M'
-                       : v >= 1e3 ? Math.round(v / 1e3) + 'k'
-                       : v
+            callback: v => (v / 1e6).toFixed(1) + 'M'
           },
           grid: { color: '#21262d' },
-          title: { display: true, text: '注册库存 (oz，对数)', color: '#6e7681', font: { size: 11 } }
+          title: { display: true, text: '注册库存 (oz)', color: '#6e7681', font: { size: 11 } }
         }
       }
     }
