@@ -773,7 +773,7 @@ function renderAll(cot, goldData, stocksData) {
             pointHoverBackgroundColor: '#8b949e',
             tension: 0.3,
             fill: false,
-            yAxisID: 'yTotal',
+            yAxisID: 'yStocks',
           }
         ]
       },
@@ -815,18 +815,7 @@ function renderAll(cot, goldData, stocksData) {
               color: '#6e7681',
               callback: v => (v / 1e6).toFixed(1) + 'M'
             },
-            title: { display: true, text: '注册/合格 (oz)', color: '#6e7681', font: { size: 11 } }
-          },
-          yTotal: {
-            type: 'linear',
-            position: 'right',
-            grid: { drawOnChartArea: false },
-            ticks: {
-              font: { size: 10 },
-              color: '#8b949e',
-              callback: v => (v / 1e6).toFixed(1) + 'M'
-            },
-            title: { display: true, text: '合计 (oz)', color: '#8b949e', font: { size: 11 } }
+            title: { display: true, text: '库存 (oz)', color: '#6e7681', font: { size: 11 } }
           }
         }
       }
