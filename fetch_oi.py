@@ -89,8 +89,13 @@ def parse(content: bytes) -> dict:
     date_str = None
     month_rows: list[dict] = []
 
+    in_gc = False
+    done  = False
+
     with pdfplumber.open(io.BytesIO(content)) as pdf:
         for page_num, page in enumerate(pdf.pages, 1):
+            if done:
+                break
             text  = page.extract_text(x_tolerance=3, y_tolerance=3) or ""
             lines = text.splitlines()
 
@@ -103,8 +108,7 @@ def parse(content: bytes) -> dict:
                         f"{m.group(1)} {m.group(2)} {m.group(3)}", "%b %d %Y"
                     ).strftime("%Y-%m-%d")
 
-            # 只从包含各月明细的页面提取（通常 page 2）
-            in_gc = False
+            # in_gc 跨页保持，捕获跨页的远月行
             for line in lines:
                 upper = line.upper()
                 if not in_gc:
@@ -113,8 +117,10 @@ def parse(content: bytes) -> dict:
                         in_gc = True
                     continue
                 if re.search(r'(SILVER|COPPER|PLATINUM|PALLADIUM|MINI|MGC|ALUMINUM|ZINC)\s+(FUTURES|OPTIONS)', upper):
+                    done = True
                     break
                 if re.search(r'TOTAL\s+\S+\s+FUT', upper):
+                    done = True
                     break
                 row = _parse_month_row(line.strip())
                 if row and row not in month_rows:
