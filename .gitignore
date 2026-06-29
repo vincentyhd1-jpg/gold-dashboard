@@ -1,3 +1,5 @@
 node_modules/
 package-lock.json
 package.json
+data/section62_sample.pdf
+parse_oi_test.py
