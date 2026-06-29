@@ -1055,7 +1055,14 @@ function renderOI(oiData) {
   const latest = [...records].reverse().find(r => Array.isArray(r.months) && r.months.length);
   if (!latest) return;
 
-  const months = latest.months;
+  // 只显示约一年窗口：取 months[0] 的年份+1 作为截止年份，月份相同
+  const allMonths = latest.months;
+  const nearM = allMonths[0];
+  const [nearMon, nearYr] = [nearM.month.slice(0, 3), parseInt(nearM.month.slice(3))];
+  const cutoffLabel = nearMon + (nearYr + 1);  // e.g. JUN27
+  const cutIdx = allMonths.findIndex(r => r.month === cutoffLabel);
+  const months = cutIdx >= 0 ? allMonths.slice(0, cutIdx + 1) : allMonths;
+
   const totalOI = months.reduce((s, r) => s + r.oi, 0);
   const front   = months.reduce((a, b) => b.oi > a.oi ? b : a, months[0]);
   const near    = months[0];
