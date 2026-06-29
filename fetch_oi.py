@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
 """
-从 CME Section 62 PDF 提取 COMEX GC 标准黄金期货总持仓（Open Interest），
+从 CME Section 62 PDF 提取 COMEX GC 各交割月明细：月份、结算价、持仓，
 追加到 data/oi.json（保留近90天）。
 
-PDF 地址每日固定：
-  https://www.cmegroup.com/daily_bulletin/current/Section62_Metals_Futures_Products.pdf
-
-目标行：TOTAL GC FUT  132978  2969  362192 + 1632
-  - 最大正整数(>10000) = 总持仓 OI
-  - 符号后跟的数字（"+ 1632" 或 "- 500"）= 较前日变化
+oi.json 格式（每天一条）：
+[{"date":"2026-06-26","months":[{"month":"AUG26","settle":4096.30,"oi":272518},...]},...]
 """
 
-import json
-import os
-import re
-import sys
+import io, json, os, re, sys
 from datetime import datetime
 
 PDF_URL  = "https://www.cmegroup.com/daily_bulletin/current/Section62_Metals_Futures_Products.pdf"
@@ -23,107 +16,117 @@ OUT_PATH = os.path.join(os.path.dirname(__file__), "data", "oi.json")
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
     "Referer": "https://www.cmegroup.com/",
-    "Accept":  "application/pdf,*/*",
+    "Accept": "application/pdf,*/*",
 }
+
+MONTH_RE = re.compile(r'^([A-Z]{3}\d{2})\b')
 
 
 def download() -> bytes | None:
-    # 优先使用 curl_cffi（绕过 WAF）
     try:
-        from curl_cffi import requests as cffi_requests
-        print("  使用 curl_cffi (Chrome TLS 指纹)")
-        session = cffi_requests.Session(impersonate="chrome124")
-        resp = session.get(PDF_URL, headers=HEADERS, timeout=30)
-        print(f"  状态码：{resp.status_code}")
-        if resp.status_code == 200:
-            return resp.content
-        print(f"  ⚠ HTTP {resp.status_code}")
-        return None
+        from curl_cffi import requests as cffi
+        print("  curl_cffi (Chrome TLS 指纹)")
+        r = cffi.Session(impersonate="chrome124").get(PDF_URL, headers=HEADERS, timeout=30)
+        print(f"  HTTP {r.status_code}  {len(r.content):,} bytes")
+        return r.content if r.status_code == 200 else None
     except ImportError:
         pass
-
     import urllib.request
-    print("  回退到 urllib")
+    print("  urllib 回退")
     req = urllib.request.Request(PDF_URL, headers=HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             data = r.read()
-        print(f"  状态码：200，{len(data):,} 字节")
+        print(f"  HTTP 200  {len(data):,} bytes")
         return data
     except Exception as e:
         print(f"  下载失败：{e}")
         return None
 
 
+def _parse_month_row(line: str) -> dict | None:
+    """
+    PDF 行格式（空格分隔）：
+      MONTH [OPEN HIGH /LOW] SETTLE + CHG  VOLUME VOL_CHG  OI (+/-/UNCH) OI_CHG
+    返回 {"month":str, "settle":float, "oi":int} 或 None
+    """
+    tokens = line.split()
+    if not tokens or not MONTH_RE.match(tokens[0]):
+        return None
+    month = tokens[0]
+
+    # 结算价 = 第一个 +/- 号之前的最后一个含小数点的 token
+    settle = None
+    first_sign = next((i for i, t in enumerate(tokens) if t in ('+', '-')), None)
+    if first_sign and first_sign > 0:
+        clean = re.sub(r'[A-Za-z/]', '', tokens[first_sign - 1])
+        if '.' in clean:
+            try:
+                settle = float(clean)
+            except ValueError:
+                pass
+
+    # 持仓 = 最后一个 +/-/UNCH 号之前的纯整数 token
+    oi = None
+    for i in range(len(tokens) - 1, -1, -1):
+        if tokens[i] in ('+', '-', 'UNCH') and i > 0:
+            prev = tokens[i - 1].replace(',', '')
+            if prev.isdigit():
+                oi = int(prev)
+            break
+
+    if settle is None or oi is None:
+        return None
+    return {"month": month, "settle": settle, "oi": oi}
+
+
 def parse(content: bytes) -> dict:
-    import pdfplumber, io
+    import pdfplumber
 
     date_str = None
-    oi_total = None
-    oi_chg   = None
+    month_rows: list[dict] = []
 
     with pdfplumber.open(io.BytesIO(content)) as pdf:
         for page_num, page in enumerate(pdf.pages, 1):
-            text = page.extract_text(x_tolerance=3, y_tolerance=3) or ""
+            text  = page.extract_text(x_tolerance=3, y_tolerance=3) or ""
+            lines = text.splitlines()
 
-            # 公告日期："Fri, Jun 26, 2026"
             if date_str is None:
                 m = re.search(
-                    r'\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+'
-                    r'(\w{3})\s+(\d{1,2}),\s+(\d{4})\b',
-                    text
-                )
+                    r'\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+(\w{3})\s+(\d{1,2}),\s+(\d{4})\b',
+                    text)
                 if m:
                     date_str = datetime.strptime(
                         f"{m.group(1)} {m.group(2)} {m.group(3)}", "%b %d %Y"
                     ).strftime("%Y-%m-%d")
 
-            for line in text.splitlines():
+            # 只从包含各月明细的页面提取（通常 page 2）
+            in_gc = False
+            for line in lines:
                 upper = line.upper()
-                if "TOTAL" not in upper or not re.search(r'\bGC\b', upper):
+                if not in_gc:
+                    if (re.search(r'GOLD\s+FUTURES', upper)
+                            and not re.search(r'\b(MGC|MINI|1OZ|QO)\b', upper)):
+                        in_gc = True
                     continue
-                if re.search(r'\b(MGC|QO|1OZ)\b', upper):
-                    continue  # 跳过微型/衍生合约
-
-                parts = line.split()
-                # 总持仓 = 最大正整数 > 10000
-                positives = [int(p.replace(',', '')) for p in parts
-                             if p.replace(',', '').isdigit()
-                             and int(p.replace(',', '')) > 10000]
-                if positives:
-                    oi_total = max(positives)
-
-                # 变化：空格分隔的 "+ 1632" 或连写的 "+1632" / "-500"
-                for j, tok in enumerate(parts):
-                    if tok in ('+', '-') and j + 1 < len(parts):
-                        num = parts[j + 1].replace(',', '')
-                        if num.isdigit():
-                            oi_chg = int(num) * (1 if tok == '+' else -1)
-                            break
-                    elif re.match(r'^[+-]\d', tok):
-                        num = tok[1:].replace(',', '')
-                        if num.isdigit():
-                            oi_chg = int(num) * (1 if tok[0] == '+' else -1)
-                            break
-
-                if oi_total is not None:
-                    print(f"  [p{page_num}] TOTAL GC FUT: OI={oi_total:,}  chg={oi_chg:+,}" if oi_chg is not None
-                          else f"  [p{page_num}] TOTAL GC FUT: OI={oi_total:,}  chg=N/A")
+                if re.search(r'(SILVER|COPPER|PLATINUM|PALLADIUM|MINI|MGC|ALUMINUM|ZINC)\s+(FUTURES|OPTIONS)', upper):
                     break
-            if oi_total is not None:
-                break
+                if re.search(r'TOTAL\s+\S+\s+FUT', upper):
+                    break
+                row = _parse_month_row(line.strip())
+                if row and row not in month_rows:
+                    month_rows.append(row)
 
-    if oi_total is None:
-        raise ValueError("未找到 TOTAL GC FUT 行")
+    if not month_rows:
+        raise ValueError("未找到 GC 各月明细行")
     if date_str is None:
         date_str = datetime.utcnow().strftime("%Y-%m-%d")
         print(f"  ⚠ 未解析到日期，使用今日 UTC：{date_str}")
 
-    return {"date": date_str, "oi": oi_total, "chg": oi_chg}
+    return {"date": date_str, "months": month_rows}
 
 
 def load_existing() -> list[dict]:
@@ -139,23 +142,27 @@ def main():
     if content is None:
         print("  下载失败，跳过更新")
         sys.exit(0)
-    print(f"  已下载 {len(content):,} 字节")
 
     print("解析中...")
     entry = parse(content)
-    print(f"  日期：{entry['date']}  OI：{entry['oi']:,}  变化：{entry['chg']:+,}" if entry['chg'] is not None
-          else f"  日期：{entry['date']}  OI：{entry['oi']:,}  变化：N/A")
+    months = entry["months"]
+    total_oi = sum(r["oi"] for r in months)
+    front    = max(months, key=lambda r: r["oi"])
+    print(f"  日期：{entry['date']}  共 {len(months)} 个交割月  总持仓：{total_oi:,}")
+    print(f"  主力月：{front['month']}  结算价：{front['settle']:.2f}  持仓：{front['oi']:,}")
+    for r in months:
+        print(f"    {r['month']:<6}  settle={r['settle']:>9.2f}  oi={r['oi']:>8,}")
 
     records = load_existing()
     existing = {r["date"]: i for i, r in enumerate(records)}
 
     if entry["date"] in existing:
         idx = existing[entry["date"]]
-        if records[idx].get("oi"):
+        if records[idx].get("months"):
             print(f"  {entry['date']} 已存在，跳过写入")
             return
         records[idx] = entry
-        print(f"  {entry['date']} 已存在但缺 OI，已更新")
+        print(f"  {entry['date']} 已存在但无明细，已更新")
     else:
         records.append(entry)
 

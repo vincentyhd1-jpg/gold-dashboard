@@ -1,7 +1,47 @@
 [
   {
     "date": "2026-06-26",
-    "oi": 362192,
-    "chg": 1632
+    "months": [
+      {
+        "month": "JUN26",
+        "settle": 4078.7,
+        "oi": 7
+      },
+      {
+        "month": "JUL26",
+        "settle": 4079.5,
+        "oi": 7595
+      },
+      {
+        "month": "AUG26",
+        "settle": 4096.3,
+        "oi": 272518
+      },
+      {
+        "month": "SEP26",
+        "settle": 4110.9,
+        "oi": 897
+      },
+      {
+        "month": "OCT26",
+        "settle": 4125.3,
+        "oi": 21095
+      },
+      {
+        "month": "NOV26",
+        "settle": 4141.6,
+        "oi": 251
+      },
+      {
+        "month": "DEC26",
+        "settle": 4156.9,
+        "oi": 48082
+      },
+      {
+        "month": "JAN27",
+        "settle": 4174.7,
+        "oi": 231
+      }
+    ]
   }
 ]

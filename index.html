@@ -311,22 +311,32 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     <div class="chart-wrap" style="height:280px"><canvas id="depotTrendChart"></canvas></div>
   </div>
 
-  <!-- COMEX GC 总持仓 Open Interest -->
+  <!-- COMEX GC 期限结构 Term Structure -->
   <div class="stocks-section" id="oiSection" style="margin-top:16px">
     <div class="stocks-header">
       <div class="stocks-header-left">
-        <div class="stocks-title">COMEX GC 总持仓 Open Interest</div>
+        <div class="stocks-title">COMEX GC 期限结构 Term Structure</div>
         <div class="stocks-sub" id="oiDate">数据日期：-- &middot; 来源：CME Group</div>
       </div>
       <div class="stocks-kpis">
         <div class="sk-item">
-          <span class="sk-label">总持仓 OI</span>
+          <span class="sk-label">主力月结算价</span>
+          <span class="sk-val" id="oiFrontPrice" style="color:#58a6ff">--</span>
+          <span class="sk-chg flat" id="oiFrontMonth">--</span>
+        </div>
+        <div class="sk-item">
+          <span class="sk-label">近远月价差 Contango</span>
+          <span class="sk-val" id="oiContango" style="color:#3fb950">--</span>
+          <span class="sk-chg flat" id="oiContangoLabel">远月 − 近月</span>
+        </div>
+        <div class="sk-item">
+          <span class="sk-label">窗口总持仓</span>
           <span class="sk-val" id="oiVal" style="color:#a78bfa">--</span>
-          <span class="sk-chg flat" id="oiChg">--</span>
+          <span class="sk-chg flat" id="oiChg">手</span>
         </div>
       </div>
     </div>
-    <div class="chart-wrap" style="height:200px"><canvas id="oiChart"></canvas></div>
+    <div class="chart-wrap" style="height:220px"><canvas id="oiChart"></canvas></div>
   </div>
 
 </main>
@@ -1036,54 +1046,82 @@ function renderDepotTrend(stocksData) {
   });
 }
 
-// ── COMEX GC 总持仓趋势图 ──────────────────────────────────────────────────
+// ── COMEX GC 期限结构图 ──────────────────────────────────────────────────────
 let _oiChart = null;
 
 function renderOI(oiData) {
-  const records = (Array.isArray(oiData) ? oiData : [])
-    .filter(r => r.oi != null)
-    .slice(-90);
+  const records = Array.isArray(oiData) ? oiData : [];
+  // 取最新一天且含 months 的记录
+  const latest = [...records].reverse().find(r => Array.isArray(r.months) && r.months.length);
+  if (!latest) return;
 
-  if (!records.length) return;
+  const months = latest.months;
+  const totalOI = months.reduce((s, r) => s + r.oi, 0);
+  const front   = months.reduce((a, b) => b.oi > a.oi ? b : a, months[0]);
+  const near    = months[0];
+  const far     = months[months.length - 1];
+  const contango = far.settle - near.settle;
 
-  const latest = records[records.length - 1];
   document.getElementById('oiDate').textContent =
     '数据日期：' + latest.date.slice(5).replace('-', '/') + ' · 来源：CME Group';
+
+  document.getElementById('oiFrontPrice').textContent =
+    front.settle.toFixed(2);
+  document.getElementById('oiFrontMonth').textContent =
+    front.month + ' · 成交量最大月';
+
+  const ctgEl = document.getElementById('oiContango');
+  ctgEl.textContent = (contango >= 0 ? '+' : '') + contango.toFixed(2);
+  ctgEl.style.color = contango >= 0 ? '#3fb950' : '#f85149';
+  document.getElementById('oiContangoLabel').textContent =
+    far.month + ' − ' + near.month;
+
   document.getElementById('oiVal').textContent =
-    Math.round(latest.oi).toLocaleString('en-US');
-
-  const chgEl = document.getElementById('oiChg');
-  const chg = latest.chg;
-  if (chg != null) {
-    chgEl.textContent = (chg >= 0 ? '+' : '') + Math.round(chg).toLocaleString('en-US');
-    chgEl.className = 'sk-chg ' + (chg > 0 ? 'up' : chg < 0 ? 'dn' : 'flat');
-  } else {
-    chgEl.textContent = '--';
-    chgEl.className = 'sk-chg flat';
-  }
-
-  const labels = records.map(r => r.date.slice(5).replace('-', '/'));
-  const values = records.map(r => r.oi);
+    totalOI.toLocaleString('en-US');
 
   const canvas = document.getElementById('oiChart');
   if (!canvas) return;
   if (_oiChart) { _oiChart.destroy(); _oiChart = null; }
 
+  const labels    = months.map(r => r.month);
+  const prices    = months.map(r => r.settle);
+  const oiValues  = months.map(r => r.oi);
+  const maxOI     = Math.max(...oiValues);
+
   _oiChart = new Chart(canvas, {
-    type: 'line',
     data: {
       labels,
-      datasets: [{
-        label: '总持仓 OI',
-        data: values,
-        borderColor: '#a78bfa',
-        backgroundColor: 'rgba(167,139,250,0.08)',
-        borderWidth: 2,
-        pointRadius: records.length <= 5 ? 3 : 0,
-        pointHoverRadius: 5,
-        tension: 0.3,
-        fill: true,
-      }]
+      datasets: [
+        {
+          type: 'bar',
+          label: '持仓 OI',
+          data: oiValues,
+          backgroundColor: months.map(r =>
+            r.month === front.month ? 'rgba(63,185,80,0.55)' : 'rgba(63,185,80,0.25)'
+          ),
+          borderColor: months.map(r =>
+            r.month === front.month ? '#3fb950' : 'rgba(63,185,80,0.5)'
+          ),
+          borderWidth: 1,
+          borderRadius: 3,
+          yAxisID: 'yOI',
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: '结算价',
+          data: prices,
+          borderColor: '#58a6ff',
+          backgroundColor: 'rgba(88,166,255,0.08)',
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#58a6ff',
+          tension: 0.3,
+          yAxisID: 'yPrice',
+          order: 1,
+        }
+      ]
     },
     options: {
       responsive: true,
@@ -1093,21 +1131,33 @@ function renderOI(oiData) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => '  总持仓: ' + Math.round(ctx.parsed.y).toLocaleString('en-US')
+            label: ctx => {
+              if (ctx.dataset.label === '结算价')
+                return '  结算价: $' + ctx.parsed.y.toFixed(2);
+              return '  持仓 OI: ' + ctx.parsed.y.toLocaleString('en-US');
+            }
           }
         }
       },
       scales: {
         x: {
-          ticks: { font: { size: 10 }, color: '#6e7681', maxTicksLimit: 10 },
+          ticks: { font: { size: 11 }, color: '#8b949e' },
           grid: { color: '#21262d' }
         },
-        y: {
-          ticks: {
-            font: { size: 10 }, color: '#6e7681',
-            callback: v => Math.round(v / 1000) + 'k'
-          },
-          grid: { color: '#21262d' }
+        yPrice: {
+          position: 'left',
+          ticks: { font: { size: 10 }, color: '#58a6ff',
+            callback: v => '$' + v.toFixed(0) },
+          grid: { color: '#21262d' },
+          title: { display: true, text: '结算价 (USD)', color: '#58a6ff', font: { size: 10 } }
+        },
+        yOI: {
+          position: 'right',
+          ticks: { font: { size: 10 }, color: '#3fb950',
+            callback: v => v >= 1000 ? Math.round(v / 1000) + 'k' : v },
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: '持仓 (手)', color: '#3fb950', font: { size: 10 } },
+          max: maxOI * 1.25,
         }
       }
     }
