@@ -25,7 +25,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Python dependencies
-        run: pip install requests curl_cffi xlrd
+        run: pip install requests curl_cffi xlrd pdfplumber
 
       - name: Run fetch_cot.py
         run: python fetch_cot.py
@@ -37,12 +37,17 @@ jobs:
         run: python fetch_stocks.py
         continue-on-error: true
 
+      - name: Run fetch_oi.py
+        run: python fetch_oi.py
+        continue-on-error: true
+
       - name: Commit and push if data changed
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/cot.json data/gold_price.json
           git add data/stocks.json 2>/dev/null || true
+          git add data/oi.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

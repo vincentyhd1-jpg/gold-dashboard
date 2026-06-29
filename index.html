@@ -311,6 +311,24 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     <div class="chart-wrap" style="height:280px"><canvas id="depotTrendChart"></canvas></div>
   </div>
 
+  <!-- COMEX GC 总持仓 Open Interest -->
+  <div class="stocks-section" id="oiSection" style="margin-top:16px">
+    <div class="stocks-header">
+      <div class="stocks-header-left">
+        <div class="stocks-title">COMEX GC 总持仓 Open Interest</div>
+        <div class="stocks-sub" id="oiDate">数据日期：-- &middot; 来源：CME Group</div>
+      </div>
+      <div class="stocks-kpis">
+        <div class="sk-item">
+          <span class="sk-label">总持仓 OI</span>
+          <span class="sk-val" id="oiVal" style="color:#a78bfa">--</span>
+          <span class="sk-chg flat" id="oiChg">--</span>
+        </div>
+      </div>
+    </div>
+    <div class="chart-wrap" style="height:200px"><canvas id="oiChart"></canvas></div>
+  </div>
+
 </main>
 <footer id="footerNote">COT 数据来源：CFTC &middot; 每周六自动更新 &middot; zhangtongxue.com</footer>
 
@@ -1018,18 +1036,98 @@ function renderDepotTrend(stocksData) {
   });
 }
 
-// 并行加载 COT、金价、库存数据，失败则用模拟数据
+// ── COMEX GC 总持仓趋势图 ──────────────────────────────────────────────────
+let _oiChart = null;
+
+function renderOI(oiData) {
+  const records = (Array.isArray(oiData) ? oiData : [])
+    .filter(r => r.oi != null)
+    .slice(-90);
+
+  if (!records.length) return;
+
+  const latest = records[records.length - 1];
+  document.getElementById('oiDate').textContent =
+    '数据日期：' + latest.date.slice(5).replace('-', '/') + ' · 来源：CME Group';
+  document.getElementById('oiVal').textContent =
+    Math.round(latest.oi).toLocaleString('en-US');
+
+  const chgEl = document.getElementById('oiChg');
+  const chg = latest.chg;
+  if (chg != null) {
+    chgEl.textContent = (chg >= 0 ? '+' : '') + Math.round(chg).toLocaleString('en-US');
+    chgEl.className = 'sk-chg ' + (chg > 0 ? 'up' : chg < 0 ? 'dn' : 'flat');
+  } else {
+    chgEl.textContent = '--';
+    chgEl.className = 'sk-chg flat';
+  }
+
+  const labels = records.map(r => r.date.slice(5).replace('-', '/'));
+  const values = records.map(r => r.oi);
+
+  const canvas = document.getElementById('oiChart');
+  if (!canvas) return;
+  if (_oiChart) { _oiChart.destroy(); _oiChart = null; }
+
+  _oiChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: '总持仓 OI',
+        data: values,
+        borderColor: '#a78bfa',
+        backgroundColor: 'rgba(167,139,250,0.08)',
+        borderWidth: 2,
+        pointRadius: records.length <= 5 ? 3 : 0,
+        pointHoverRadius: 5,
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => '  总持仓: ' + Math.round(ctx.parsed.y).toLocaleString('en-US')
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { font: { size: 10 }, color: '#6e7681', maxTicksLimit: 10 },
+          grid: { color: '#21262d' }
+        },
+        y: {
+          ticks: {
+            font: { size: 10 }, color: '#6e7681',
+            callback: v => Math.round(v / 1000) + 'k'
+          },
+          grid: { color: '#21262d' }
+        }
+      }
+    }
+  });
+}
+
+// 并行加载 COT、金价、库存、OI 数据，失败则用模拟数据
 Promise.all([
   fetch('data/cot.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
   fetch('data/gold_price.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
-  fetch('data/stocks.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => [])
+  fetch('data/stocks.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => []),
+  fetch('data/oi.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => [])
 ])
-  .then(([cotData, goldData, stocksData]) => {
+  .then(([cotData, goldData, stocksData, oiData]) => {
     document.getElementById('footerNote').textContent =
       'COT 数据来源：CFTC · 金价来源：Yahoo Finance · 库存来源：CME Group · 每日自动更新 · zhangtongxue.com';
     renderAll(cotData, goldData, stocksData);
     renderDepots(stocksData);
     renderDepotTrend(stocksData);
+    renderOI(oiData);
   })
   .catch(() => {
     document.getElementById('footerNote').textContent =
@@ -1037,6 +1135,7 @@ Promise.all([
     renderAll(MOCK, [], []);
     renderDepots([]);
     renderDepotTrend([]);
+    renderOI([]);
   });
 </script>
 </body>
