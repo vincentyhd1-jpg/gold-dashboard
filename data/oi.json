@@ -143,5 +143,145 @@
         "oi": 13
       }
     ]
+  },
+  {
+    "date": "2026-06-29",
+    "months": [
+      {
+        "month": "JUL26",
+        "settle": 4022.3,
+        "oi": 7493
+      },
+      {
+        "month": "AUG26",
+        "settle": 4038.9,
+        "oi": 274589
+      },
+      {
+        "month": "SEP26",
+        "settle": 4053.2,
+        "oi": 996
+      },
+      {
+        "month": "OCT26",
+        "settle": 4067.6,
+        "oi": 21073
+      },
+      {
+        "month": "NOV26",
+        "settle": 4083.8,
+        "oi": 251
+      },
+      {
+        "month": "DEC26",
+        "settle": 4098.8,
+        "oi": 48797
+      },
+      {
+        "month": "JAN27",
+        "settle": 4116.1,
+        "oi": 230
+      },
+      {
+        "month": "FEB27",
+        "settle": 4130.9,
+        "oi": 7215
+      },
+      {
+        "month": "MAR27",
+        "settle": 4144.3,
+        "oi": 27
+      },
+      {
+        "month": "APR27",
+        "settle": 4162.0,
+        "oi": 2936
+      },
+      {
+        "month": "MAY27",
+        "settle": 4179.2,
+        "oi": 14
+      },
+      {
+        "month": "JUN27",
+        "settle": 4194.2,
+        "oi": 638
+      },
+      {
+        "month": "JUL27",
+        "settle": 4211.3,
+        "oi": 5
+      },
+      {
+        "month": "AUG27",
+        "settle": 4227.1,
+        "oi": 149
+      },
+      {
+        "month": "SEP27",
+        "settle": 4242.9,
+        "oi": 5
+      },
+      {
+        "month": "OCT27",
+        "settle": 4259.2,
+        "oi": 51
+      },
+      {
+        "month": "NOV27",
+        "settle": 4275.1,
+        "oi": 8
+      },
+      {
+        "month": "DEC27",
+        "settle": 4292.1,
+        "oi": 352
+      },
+      {
+        "month": "JAN28",
+        "settle": 4308.0,
+        "oi": 6
+      },
+      {
+        "month": "FEB28",
+        "settle": 4325.1,
+        "oi": 49
+      },
+      {
+        "month": "MAR28",
+        "settle": 4340.4,
+        "oi": 4
+      },
+      {
+        "month": "APR28",
+        "settle": 4357.5,
+        "oi": 93
+      },
+      {
+        "month": "MAY28",
+        "settle": 4373.9,
+        "oi": 1
+      },
+      {
+        "month": "JUN28",
+        "settle": 4389.2,
+        "oi": 96
+      },
+      {
+        "month": "DEC28",
+        "settle": 4485.1,
+        "oi": 126
+      },
+      {
+        "month": "JUN29",
+        "settle": 4581.0,
+        "oi": 50
+      },
+      {
+        "month": "DEC29",
+        "settle": 4679.4,
+        "oi": 13
+      }
+    ]
   }
 ]
