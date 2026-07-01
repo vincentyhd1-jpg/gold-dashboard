@@ -1199,18 +1199,28 @@ function renderOIHist(oiData) {
   const labels = _buildHistLabels(records);
   const n = records.length;
 
-  // 颜色：最新最亮(#58a6ff)，越早越淡
+  // 颜色渐变：旧→冷蓝灰，新→亮蓝，最新单独高亮
+  // 用 HSL：旧曲线 hue=210(冷蓝灰)，新曲线 hue=210，亮度从 35% 渐升到 60%，最新 75%
+  // opacity 旧曲线最低 0.55，保证看得清
+  function lineColor(i, isLatest) {
+    if (isLatest) return '#58a6ff';
+    if (n <= 1) return 'rgba(88,166,255,0.55)';
+    const t = i / (n - 1);            // 0=最旧, 趋近1=次新
+    const light = Math.round(30 + t * 28);  // 30%~58%
+    const alpha = (0.55 + t * 0.30).toFixed(2);  // 0.55~0.85
+    return `hsla(210,60%,${light}%,${alpha})`;
+  }
+
   const datasets = records.map((rec, i) => {
-    const alpha = n === 1 ? 1 : 0.15 + 0.85 * (i / (n - 1));
     const isLatest = i === n - 1;
     const priceMap = Object.fromEntries(rec.months.map(m => [m.month, m.settle]));
     return {
-      label: rec.date,
+      label: rec.date.slice(5).replace('-', '/'),  // "MM/DD" for legend
       data: labels.map(lbl => priceMap[lbl] ?? null),
-      borderColor: isLatest ? '#58a6ff' : `rgba(88,166,255,${alpha.toFixed(2)})`,
-      borderWidth: isLatest ? 2 : 1,
-      pointRadius: isLatest ? 3 : 0,
-      pointHoverRadius: 4,
+      borderColor: lineColor(i, isLatest),
+      borderWidth: isLatest ? 2.5 : 1.5,
+      pointRadius: isLatest ? 4 : 0,
+      pointHoverRadius: 5,
       tension: 0.3,
       fill: false,
       spanGaps: true,
@@ -1229,7 +1239,27 @@ function renderOIHist(oiData) {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            font: { size: 10 },
+            color: '#8b949e',
+            boxWidth: 20,
+            boxHeight: 2,
+            padding: 10,
+            // 最多显示 10 条图例，太多则只显示首/末几条
+            filter: (item, data) => {
+              const total = data.datasets.length;
+              if (total <= 10) return true;
+              // 始终显示最新（最后一条）和最旧（第一条）
+              if (item.datasetIndex === 0 || item.datasetIndex === total - 1) return true;
+              // 中间均匀抽 8 条
+              const step = (total - 2) / 8;
+              return (item.datasetIndex - 1) % Math.round(step) === 0;
+            }
+          }
+        },
         tooltip: {
           filter: item => item.parsed.y !== null,
           callbacks: {
