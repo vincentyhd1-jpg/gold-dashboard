@@ -315,7 +315,9 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
   <div class="stocks-section" id="oiSection" style="margin-top:16px">
     <div class="stocks-header">
       <div class="stocks-header-left">
-        <div class="stocks-title">COMEX GC 期限结构 Term Structure</div>
+        <div class="stocks-title">COMEX GC 期限结构 Term Structure
+          <button id="oiViewToggle" onclick="toggleOIView()" style="font-size:11px;color:#8b949e;background:none;border:1px solid #30363d;border-radius:4px;padding:2px 8px;cursor:pointer;margin-left:10px;vertical-align:middle">历史叠加</button>
+        </div>
         <div class="stocks-sub" id="oiDate">数据日期：-- &middot; 来源：CME Group</div>
       </div>
       <div class="stocks-kpis">
@@ -337,6 +339,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
       </div>
     </div>
     <div class="chart-wrap" style="height:220px"><canvas id="oiChart"></canvas></div>
+    <div class="chart-wrap" style="height:220px;display:none"><canvas id="oiHistChart"></canvas></div>
   </div>
 
 </main>
@@ -1171,7 +1174,112 @@ function renderOI(oiData) {
   });
 }
 
-// 并行加载 COT、金价、库存、OI 数据，失败则用模拟数据
+// ── 期限结构历史叠加图 ─────────────────────────────────────────────────────────
+let _oiHistChart = null;
+let _oiHistData  = [];  // 缓存，供切换时复用
+
+function _buildHistLabels(records) {
+  // 取所有记录中出现过的交割月标签，统一用第一条记录的月份轴
+  // 用最新记录的一年窗口作为 x 轴基准
+  const latest = [...records].reverse().find(r => Array.isArray(r.months) && r.months.length);
+  if (!latest) return [];
+  const allM = latest.months;
+  const nearM = allM[0];
+  const cutoff = nearM.month.slice(0, 3) + (parseInt(nearM.month.slice(3)) + 1);
+  const cutIdx = allM.findIndex(r => r.month === cutoff);
+  return (cutIdx >= 0 ? allM.slice(0, cutIdx + 1) : allM).map(r => r.month);
+}
+
+function renderOIHist(oiData) {
+  const records = (Array.isArray(oiData) ? oiData : [])
+    .filter(r => Array.isArray(r.months) && r.months.length);
+  _oiHistData = records;
+  if (!records.length) return;
+
+  const labels = _buildHistLabels(records);
+  const n = records.length;
+
+  // 颜色：最新最亮(#58a6ff)，越早越淡
+  const datasets = records.map((rec, i) => {
+    const alpha = n === 1 ? 1 : 0.15 + 0.85 * (i / (n - 1));
+    const isLatest = i === n - 1;
+    const priceMap = Object.fromEntries(rec.months.map(m => [m.month, m.settle]));
+    return {
+      label: rec.date,
+      data: labels.map(lbl => priceMap[lbl] ?? null),
+      borderColor: isLatest ? '#58a6ff' : `rgba(88,166,255,${alpha.toFixed(2)})`,
+      borderWidth: isLatest ? 2 : 1,
+      pointRadius: isLatest ? 3 : 0,
+      pointHoverRadius: 4,
+      tension: 0.3,
+      fill: false,
+      spanGaps: true,
+    };
+  });
+
+  const canvas = document.getElementById('oiHistChart');
+  if (!canvas) return;
+  if (_oiHistChart) { _oiHistChart.destroy(); _oiHistChart = null; }
+
+  _oiHistChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: item => item.parsed.y !== null,
+          callbacks: {
+            title: items => items[0]?.label || '',
+            label: ctx => '  ' + ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(2),
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { font: { size: 11 }, color: '#8b949e' },
+          grid:  { color: '#21262d' }
+        },
+        y: {
+          ticks: {
+            font: { size: 10 }, color: '#8b949e',
+            callback: v => '$' + v.toFixed(0)
+          },
+          grid: { color: '#21262d' },
+          title: { display: true, text: '结算价 (USD)', color: '#8b949e', font: { size: 10 } }
+        }
+      }
+    }
+  });
+}
+
+let _oiViewMode = 'snapshot'; // 'snapshot' | 'history'
+
+function toggleOIView() {
+  const snapshotWrap = document.getElementById('oiChart').parentElement;
+  const histWrap     = document.getElementById('oiHistChart').parentElement;
+  const btn          = document.getElementById('oiViewToggle');
+  if (_oiViewMode === 'snapshot') {
+    _oiViewMode = 'history';
+    snapshotWrap.style.display = 'none';
+    histWrap.style.display     = '';
+    btn.textContent = '当日快照';
+    btn.style.color = '#58a6ff';
+    btn.style.borderColor = '#58a6ff';
+  } else {
+    _oiViewMode = 'snapshot';
+    snapshotWrap.style.display = '';
+    histWrap.style.display     = 'none';
+    btn.textContent = '历史叠加';
+    btn.style.color = '#8b949e';
+    btn.style.borderColor = '#30363d';
+  }
+}
+
+
 Promise.all([
   fetch('data/cot.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
   fetch('data/gold_price.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
@@ -1185,6 +1293,7 @@ Promise.all([
     renderDepots(stocksData);
     renderDepotTrend(stocksData);
     renderOI(oiData);
+    renderOIHist(oiData);
   })
   .catch(() => {
     document.getElementById('footerNote').textContent =
@@ -1193,6 +1302,7 @@ Promise.all([
     renderDepots([]);
     renderDepotTrend([]);
     renderOI([]);
+    renderOIHist([]);
   });
 </script>
 </body>
