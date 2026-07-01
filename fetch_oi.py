@@ -172,7 +172,7 @@ def main():
     else:
         records.append(entry)
 
-    records = sorted(records, key=lambda r: r["date"])[-90:]
+    records = sorted(records, key=lambda r: r["date"])[-730:]
 
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w", encoding="utf-8") as f:
