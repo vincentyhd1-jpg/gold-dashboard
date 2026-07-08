@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>GC 期限结构曲面 3D</title>
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box }
+body {
+  background:#0d1117;
+  color:#e6edf3;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+header {
+  background:#161b22;
+  border-bottom:1px solid #30363d;
+  padding:14px 24px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.h-left { display:flex; align-items:center; gap:10px }
+.gi {
+  width:32px; height:32px;
+  background:linear-gradient(135deg,#f5c842,#d4a017);
+  border-radius:7px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; flex-shrink:0;
+}
+.h-title { font-size:16px; font-weight:700; color:#f0f6fc }
+.h-sub   { font-size:11px; color:#8b949e; margin-top:2px }
+.h-back  {
+  font-size:12px; color:#8b949e;
+  text-decoration:none;
+  border:1px solid #30363d;
+  border-radius:4px;
+  padding:4px 10px;
+  transition:color .15s, border-color .15s;
+}
+.h-back:hover { color:#e6edf3; border-color:#58a6ff }
+
+#plot-wrap {
+  flex:1;
+  min-height:0;
+  position:relative;
+}
+#plot {
+  width:100%;
+  height:100%;
+  min-height:420px;
+}
+
+#status {
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  color:#8b949e;
+  font-size:13px;
+  pointer-events:none;
+}
+
+footer {
+  background:#161b22;
+  border-top:1px solid #30363d;
+  padding:8px 24px;
+  font-size:11px;
+  color:#6e7681;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:6px;
+}
+#footer-stats { color:#8b949e }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-left">
+    <div class="gi">🥇</div>
+    <div>
+      <div class="h-title">COMEX GC 期限结构曲面</div>
+      <div class="h-sub" id="headerSub">加载中…</div>
+    </div>
+  </div>
+  <a class="h-back" href="index.html">← 返回仪表盘</a>
+</header>
+
+<div id="plot-wrap">
+  <div id="plot"></div>
+  <div id="status">数据加载中…</div>
+</div>
+
+<footer>
+  <span>数据来源：CME Group · Section 62 每日公告 · 每日自动更新</span>
+  <span id="footer-stats"></span>
+</footer>
+
+<script>
+// ── 颜色比例尺：蓝（低价）→ 黄 → 橙红（高价）────────────────────────────────
+// 深色背景下可辨、无彩虹；类似 plasma，去掉最暗端，保持可见
+const COLORSCALE = [
+  [0.0,  '#1c5cab'],
+  [0.2,  '#2a78d6'],
+  [0.4,  '#3987e5'],
+  [0.55, '#86b6ef'],
+  [0.7,  '#eda100'],
+  [0.85, '#eb6834'],
+  [1.0,  '#e34948'],
+];
+
+// ── 约一年的交割月窗口（与2D图一致）────────────────────────────────────────────
+function windowMonths(months) {
+  if (!months || !months.length) return [];
+  const near = months[0];
+  const cutoff = near.month.slice(0, 3) + (parseInt(near.month.slice(3)) + 1);
+  const idx = months.findIndex(m => m.month === cutoff);
+  return idx >= 0 ? months.slice(0, idx + 1) : months;
+}
+
+// ── 月份标签排序工具 ───────────────────────────────────────────────────────────
+const MON_ORDER = { JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,
+                    JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12 };
+
+function monthIndex(label) {
+  const mon = label.slice(0, 3);
+  const yr  = parseInt(label.slice(3));
+  return yr * 12 + (MON_ORDER[mon] || 0);
+}
+
+function sortedUnionLabels(records) {
+  const set = new Set();
+  for (const r of records) {
+    for (const m of windowMonths(r.months)) set.add(m.month);
+  }
+  return [...set].sort((a, b) => monthIndex(a) - monthIndex(b));
+}
+
+// ── 主渲染 ────────────────────────────────────────────────────────────────────
+function render(allRecords) {
+  const records = allRecords
+    .filter(r => Array.isArray(r.months) && r.months.length)
+    .sort((a, b) => a.date < b.date ? -1 : 1);
+
+  if (!records.length) {
+    document.getElementById('status').textContent = '暂无数据';
+    return;
+  }
+  document.getElementById('status').style.display = 'none';
+
+  // X 轴：月份并集，限一年窗口
+  const xLabels = sortedUnionLabels(records);
+  // Y 轴：日期
+  const yLabels = records.map(r => r.date.slice(5).replace('-', '/'));  // "MM/DD"
+  // Z 矩阵：rows = 日期，cols = 交割月
+  const z = records.map(r => {
+    const map = Object.fromEntries(r.months.map(m => [m.month, m.settle]));
+    return xLabels.map(lbl => map[lbl] ?? null);
+  });
+
+  // 价格范围
+  const allZ = z.flat().filter(v => v !== null);
+  const zMin = Math.min(...allZ);
+  const zMax = Math.max(...allZ);
+
+  const surface = {
+    type: 'surface',
+    x: xLabels,
+    y: yLabels,
+    z: z,
+    colorscale: COLORSCALE,
+    cmin: zMin,
+    cmax: zMax,
+    colorbar: {
+      title: { text: '结算价 USD', side: 'right', font: { size: 11, color: '#8b949e' } },
+      tickfont: { size: 10, color: '#8b949e' },
+      len: 0.65,
+      thickness: 14,
+      bgcolor: 'rgba(0,0,0,0)',
+      bordercolor: '#30363d',
+    },
+    hovertemplate:
+      '交割月: %{x}<br>日期: %{y}<br>价格: $%{z:.2f}<extra></extra>',
+    // 如果只有1天数据（无法构成真正的面），也能显示为线/薄片
+    connectgaps: false,
+    lighting: {
+      ambient: 0.7,
+      diffuse: 0.5,
+      roughness: 0.5,
+      fresnel: 0.2,
+    },
+    lightposition: { x: 100, y: 200, z: 500 },
+  };
+
+  const layout = {
+    paper_bgcolor: '#0d1117',
+    plot_bgcolor:  '#0d1117',
+    margin: { l: 0, r: 0, t: 10, b: 0 },
+    scene: {
+      bgcolor: '#0d1117',
+      xaxis: {
+        title: { text: '交割月', font: { size: 11, color: '#8b949e' } },
+        tickfont: { size: 10, color: '#8b949e' },
+        gridcolor: '#21262d',
+        linecolor: '#30363d',
+        tickangle: -35,
+        showbackground: true,
+        backgroundcolor: '#161b22',
+      },
+      yaxis: {
+        title: { text: '日期', font: { size: 11, color: '#8b949e' } },
+        tickfont: { size: 10, color: '#8b949e' },
+        gridcolor: '#21262d',
+        linecolor: '#30363d',
+        showbackground: true,
+        backgroundcolor: '#161b22',
+      },
+      zaxis: {
+        title: { text: '结算价 (USD)', font: { size: 11, color: '#8b949e' } },
+        tickfont: { size: 10, color: '#8b949e' },
+        tickprefix: '$',
+        gridcolor: '#21262d',
+        linecolor: '#30363d',
+        showbackground: true,
+        backgroundcolor: '#161b22',
+      },
+      camera: {
+        eye: { x: 1.5, y: -1.8, z: 0.8 },
+        center: { x: 0, y: 0, z: -0.1 },
+      },
+      aspectmode: 'manual',
+      aspectratio: { x: 1.6, y: 1.0, z: 0.7 },
+    },
+    font: { family: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" },
+  };
+
+  const config = {
+    responsive: true,
+    displayModeBar: true,
+    modeBarButtonsToRemove: ['toImage', 'sendDataToCloud'],
+    displaylogo: false,
+  };
+
+  Plotly.newPlot('plot', [surface], layout, config);
+
+  // 页头 & 页脚
+  const latest = records[records.length - 1];
+  document.getElementById('headerSub').textContent =
+    `最新数据：${latest.date} · 共 ${records.length} 天快照 · 交割月 ${xLabels[0]} – ${xLabels[xLabels.length - 1]}`;
+  document.getElementById('footer-stats').textContent =
+    `价格区间 $${zMin.toFixed(0)} – $${zMax.toFixed(0)} · ${records.length} 天 × ${xLabels.length} 个交割月`;
+}
+
+// ── 加载数据 ──────────────────────────────────────────────────────────────────
+fetch('data/oi.json?_=' + Date.now())
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(data => render(data))
+  .catch(err => {
+    document.getElementById('status').textContent = '数据加载失败：' + err.message;
+  });
+</script>
+</body>
+</html>
