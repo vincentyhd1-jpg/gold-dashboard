@@ -106,8 +106,8 @@ footer {
 </footer>
 
 <script>
-// ── 颜色比例尺：蓝（低价）→ 黄 → 橙红（高价）────────────────────────────────
-// 深色背景下可辨、无彩虹；类似 plasma，去掉最暗端，保持可见
+// ── 颜色比例尺：冷蓝（低持仓）→ 暖橙红（高持仓）──────────────────────────────
+// Z=价格（曲面高度），surfacecolor=持仓（颜色），两个维度独立编码
 const COLORSCALE = [
   [0.0,  '#1c5cab'],
   [0.2,  '#2a78d6'],
@@ -161,36 +161,46 @@ function render(allRecords) {
   const xLabels = sortedUnionLabels(records);
   // Y 轴：日期
   const yLabels = records.map(r => r.date.slice(5).replace('-', '/'));  // "MM/DD"
-  // Z 矩阵：rows = 日期，cols = 交割月
+  // Z 矩阵（高度）：结算价
   const z = records.map(r => {
     const map = Object.fromEntries(r.months.map(m => [m.month, m.settle]));
     return xLabels.map(lbl => map[lbl] ?? null);
   });
+  // surfacecolor 矩阵（颜色）：持仓量
+  const surfColor = records.map(r => {
+    const map = Object.fromEntries(r.months.map(m => [m.month, m.oi]));
+    return xLabels.map(lbl => map[lbl] ?? null);
+  });
 
-  // 价格范围
+  // 价格范围（Z 轴刻度用）
   const allZ = z.flat().filter(v => v !== null);
   const zMin = Math.min(...allZ);
   const zMax = Math.max(...allZ);
+  // 持仓范围（颜色条用）
+  const allOI = surfColor.flat().filter(v => v !== null);
+  const oiMin = Math.min(...allOI);
+  const oiMax = Math.max(...allOI);
 
   const surface = {
     type: 'surface',
     x: xLabels,
     y: yLabels,
     z: z,
+    surfacecolor: surfColor,
     colorscale: COLORSCALE,
-    cmin: zMin,
-    cmax: zMax,
+    cmin: oiMin,
+    cmax: oiMax,
     colorbar: {
-      title: { text: '结算价 USD', side: 'right', font: { size: 11, color: '#8b949e' } },
+      title: { text: '持仓量（手）', side: 'right', font: { size: 11, color: '#8b949e' } },
       tickfont: { size: 10, color: '#8b949e' },
+      tickformat: ',d',
       len: 0.65,
       thickness: 14,
       bgcolor: 'rgba(0,0,0,0)',
       bordercolor: '#30363d',
     },
     hovertemplate:
-      '交割月: %{x}<br>日期: %{y}<br>价格: $%{z:.2f}<extra></extra>',
-    // 如果只有1天数据（无法构成真正的面），也能显示为线/薄片
+      '交割月: %{x}<br>日期: %{y}<br>价格: $%{z:.2f}<br>持仓: %{surfacecolor:,d} 手<extra></extra>',
     connectgaps: false,
     lighting: {
       ambient: 0.7,
@@ -257,7 +267,7 @@ function render(allRecords) {
   document.getElementById('headerSub').textContent =
     `最新数据：${latest.date} · 共 ${records.length} 天快照 · 交割月 ${xLabels[0]} – ${xLabels[xLabels.length - 1]}`;
   document.getElementById('footer-stats').textContent =
-    `价格区间 $${zMin.toFixed(0)} – $${zMax.toFixed(0)} · ${records.length} 天 × ${xLabels.length} 个交割月`;
+    `价格区间 $${zMin.toFixed(0)} – $${zMax.toFixed(0)} · 持仓峰值 ${oiMax.toLocaleString('en-US')} 手 · ${records.length} 天 × ${xLabels.length} 个交割月`;
 }
 
 // ── 加载数据 ──────────────────────────────────────────────────────────────────
