@@ -175,11 +175,13 @@ def main():
 
     if entry["date"] in existing:
         idx = existing[entry["date"]]
-        if records[idx].get("months"):
-            print(f"  {entry['date']} 已存在，跳过写入")
+        existing_months = records[idx].get("months") or []
+        has_chg = existing_months and "oi_chg" in existing_months[0]
+        if existing_months and has_chg:
+            print(f"  {entry['date']} 已存在（含变化量），跳过写入")
             return
         records[idx] = entry
-        print(f"  {entry['date']} 已存在但无明细，已更新")
+        print(f"  {entry['date']} 已存在但{'无明细' if not existing_months else '缺变化量'}，已更新")
     else:
         records.append(entry)
 
