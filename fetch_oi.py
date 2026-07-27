@@ -69,18 +69,29 @@ def _parse_month_row(line: str) -> dict | None:
             except ValueError:
                 pass
 
-    # 持仓 = 最后一个 +/-/UNCH 号之前的纯整数 token
+    # 持仓 & 持仓变化 = 最后一个 +/-/UNCH 两侧的整数
     oi = None
+    oi_chg = None
     for i in range(len(tokens) - 1, -1, -1):
         if tokens[i] in ('+', '-', 'UNCH') and i > 0:
             prev = tokens[i - 1].replace(',', '')
             if prev.isdigit():
                 oi = int(prev)
+            if tokens[i] == 'UNCH':
+                oi_chg = 0
+            elif i + 1 < len(tokens):
+                chg_tok = tokens[i + 1].replace(',', '')
+                if chg_tok.isdigit():
+                    oi_chg = int(chg_tok) if tokens[i] == '+' else -int(chg_tok)
+                else:
+                    oi_chg = 0
+            else:
+                oi_chg = 0
             break
 
     if settle is None or oi is None:
         return None
-    return {"month": month, "settle": settle, "oi": oi}
+    return {"month": month, "settle": settle, "oi": oi, "oi_chg": oi_chg or 0}
 
 
 def parse(content: bytes) -> dict:

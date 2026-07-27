@@ -339,6 +339,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
       </div>
     </div>
     <div class="chart-wrap" style="height:220px"><canvas id="oiChart"></canvas></div>
+    <div id="oiDeltaWrap" style="height:90px;margin-top:4px"><canvas id="oiDeltaChart"></canvas></div>
     <div class="chart-wrap" style="height:220px;display:none"><canvas id="oiHistChart"></canvas></div>
   </div>
 
@@ -1051,18 +1052,27 @@ function renderDepotTrend(stocksData) {
 
 // ── COMEX GC 期限结构图 ──────────────────────────────────────────────────────
 let _oiChart = null;
+let _oiDeltaChart = null;
+
+// 持仓量按数值大小映射蓝紫色深浅（深色主题）
+function _oiBarColor(oi, maxOI, isFront) {
+  const t = maxOI > 0 ? oi / maxOI : 0;
+  // 亮度范围：普通柱 20%~55%，主力月额外亮
+  const L = isFront ? 65 : Math.round(20 + t * 35);
+  const alpha = isFront ? 0.90 : (0.35 + t * 0.45).toFixed(2);
+  return `hsla(220,70%,${L}%,${alpha})`;
+}
 
 function renderOI(oiData) {
   const records = Array.isArray(oiData) ? oiData : [];
-  // 取最新一天且含 months 的记录
   const latest = [...records].reverse().find(r => Array.isArray(r.months) && r.months.length);
   if (!latest) return;
 
-  // 只显示约一年窗口：取 months[0] 的年份+1 作为截止年份，月份相同
+  // 约一年窗口
   const allMonths = latest.months;
   const nearM = allMonths[0];
   const [nearMon, nearYr] = [nearM.month.slice(0, 3), parseInt(nearM.month.slice(3))];
-  const cutoffLabel = nearMon + (nearYr + 1);  // e.g. JUN27
+  const cutoffLabel = nearMon + (nearYr + 1);
   const cutIdx = allMonths.findIndex(r => r.month === cutoffLabel);
   const months = cutIdx >= 0 ? allMonths.slice(0, cutIdx + 1) : allMonths;
 
@@ -1074,29 +1084,22 @@ function renderOI(oiData) {
 
   document.getElementById('oiDate').textContent =
     '数据日期：' + latest.date.slice(5).replace('-', '/') + ' · 来源：CME Group';
-
-  document.getElementById('oiFrontPrice').textContent =
-    front.settle.toFixed(2);
-  document.getElementById('oiFrontMonth').textContent =
-    front.month + ' · 成交量最大月';
-
+  document.getElementById('oiFrontPrice').textContent = front.settle.toFixed(2);
+  document.getElementById('oiFrontMonth').textContent = front.month + ' · 成交量最大月';
   const ctgEl = document.getElementById('oiContango');
   ctgEl.textContent = (contango >= 0 ? '+' : '') + contango.toFixed(2);
   ctgEl.style.color = contango >= 0 ? '#3fb950' : '#f85149';
-  document.getElementById('oiContangoLabel').textContent =
-    far.month + ' − ' + near.month;
-
-  document.getElementById('oiVal').textContent =
-    totalOI.toLocaleString('en-US');
+  document.getElementById('oiContangoLabel').textContent = far.month + ' − ' + near.month;
+  document.getElementById('oiVal').textContent = totalOI.toLocaleString('en-US');
 
   const canvas = document.getElementById('oiChart');
   if (!canvas) return;
   if (_oiChart) { _oiChart.destroy(); _oiChart = null; }
 
-  const labels    = months.map(r => r.month);
-  const prices    = months.map(r => r.settle);
-  const oiValues  = months.map(r => r.oi);
-  const maxOI     = Math.max(...oiValues);
+  const labels   = months.map(r => r.month);
+  const prices   = months.map(r => r.settle);
+  const oiValues = months.map(r => r.oi);
+  const maxOI    = Math.max(...oiValues);
 
   _oiChart = new Chart(canvas, {
     data: {
@@ -1106,12 +1109,8 @@ function renderOI(oiData) {
           type: 'bar',
           label: '持仓 OI',
           data: oiValues,
-          backgroundColor: months.map(r =>
-            r.month === front.month ? 'rgba(63,185,80,0.55)' : 'rgba(63,185,80,0.25)'
-          ),
-          borderColor: months.map(r =>
-            r.month === front.month ? '#3fb950' : 'rgba(63,185,80,0.5)'
-          ),
+          backgroundColor: months.map(r => _oiBarColor(r.oi, maxOI, r.month === front.month)),
+          borderColor:     months.map(r => _oiBarColor(r.oi, maxOI, r.month === front.month).replace(/,[^,]+\)$/, ',1)')),
           borderWidth: 1,
           borderRadius: 3,
           yAxisID: 'yOI',
@@ -1142,32 +1141,112 @@ function renderOI(oiData) {
         tooltip: {
           callbacks: {
             label: ctx => {
+              const m = months[ctx.dataIndex];
               if (ctx.dataset.label === '结算价')
                 return '  结算价: $' + ctx.parsed.y.toFixed(2);
-              return '  持仓 OI: ' + ctx.parsed.y.toLocaleString('en-US');
+              const chg = m?.oi_chg;
+              const chgStr = chg == null ? '' : ('  持仓变化: ' + (chg >= 0 ? '+' : '') + chg.toLocaleString('en-US'));
+              return ['  持仓 OI: ' + ctx.parsed.y.toLocaleString('en-US'), chgStr].filter(Boolean);
             }
           }
         }
       },
       scales: {
         x: {
-          ticks: { font: { size: 11 }, color: '#8b949e' },
+          ticks: { font: { size: 11 }, color: '#8b949e', maxRotation: 45 },
           grid: { color: '#21262d' }
         },
         yPrice: {
           position: 'left',
-          ticks: { font: { size: 10 }, color: '#58a6ff',
-            callback: v => '$' + v.toFixed(0) },
+          ticks: { font: { size: 10 }, color: '#58a6ff', callback: v => '$' + v.toFixed(0) },
           grid: { color: '#21262d' },
           title: { display: true, text: '结算价 (USD)', color: '#58a6ff', font: { size: 10 } }
         },
         yOI: {
           position: 'right',
-          ticks: { font: { size: 10 }, color: '#3fb950',
+          ticks: { font: { size: 10 }, color: '#8b949e',
             callback: v => v >= 1000 ? Math.round(v / 1000) + 'k' : v },
           grid: { drawOnChartArea: false },
-          title: { display: true, text: '持仓 (手)', color: '#3fb950', font: { size: 10 } },
+          title: { display: true, text: '持仓 (手)', color: '#8b949e', font: { size: 10 } },
           max: maxOI * 1.25,
+        }
+      }
+    }
+  });
+
+  // ── 持仓变化面板 ────────────────────────────────────────────────────────────
+  const deltaWrap = document.getElementById('oiDeltaWrap');
+  const deltaCanvas = document.getElementById('oiDeltaChart');
+  if (!deltaCanvas) return;
+  if (_oiDeltaChart) { _oiDeltaChart.destroy(); _oiDeltaChart = null; }
+
+  const hasAnyChg = months.some(m => m.oi_chg != null);
+  if (!hasAnyChg) {
+    deltaWrap.style.display = 'none';
+    return;
+  }
+  deltaWrap.style.display = '';
+
+  const deltas = months.map(m => m.oi_chg ?? 0);
+  const absMax = Math.max(...deltas.map(Math.abs), 1);
+  // 绝对值 < 0.5% 峰值的柱子设为透明（避免噪音）
+  const threshold = absMax * 0.005;
+
+  _oiDeltaChart = new Chart(deltaCanvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '持仓变化',
+        data: deltas,
+        backgroundColor: deltas.map(v =>
+          Math.abs(v) < threshold ? 'transparent'
+          : v > 0 ? 'rgba(88,166,255,0.65)' : 'rgba(248,81,73,0.65)'
+        ),
+        borderColor: deltas.map(v =>
+          Math.abs(v) < threshold ? 'transparent'
+          : v > 0 ? '#58a6ff' : '#f85149'
+        ),
+        borderWidth: 1,
+        borderRadius: 2,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => items[0]?.label || '',
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return '  持仓变化: ' + (v >= 0 ? '+' : '') + v.toLocaleString('en-US') + ' 手';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          // X 轴隐藏刻度（主图已有），仍保留 grid 对齐
+          display: false,
+          offset: _oiChart?.options?.scales?.x?.offset ?? true,
+          grid: { color: '#21262d' }
+        },
+        y: {
+          position: 'right',
+          ticks: {
+            font: { size: 9 }, color: '#6e7681',
+            callback: v => v >= 1000 || v <= -1000
+              ? (v / 1000).toFixed(0) + 'k' : v,
+            maxTicksLimit: 3,
+          },
+          grid: { color: '#21262d' },
+          // 对称轴，确保零线居中
+          min: -absMax * 1.3,
+          max:  absMax * 1.3,
         }
       }
     }
