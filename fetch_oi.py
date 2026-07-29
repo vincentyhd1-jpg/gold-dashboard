@@ -40,10 +40,13 @@ QUARANTINE_DIR = os.path.join(os.path.dirname(__file__), "data", "quarantine")
 #   运行 2026-07-25 Sat 19:12 UTC → Trade Date 2026-07-24 Fri
 #   运行 2026-07-03（假日）23:13 UTC → Trade Date 2026-07-02 Thu
 # 若把预期值定为「当天」，工作日会 4/5 误判，每天隔离好数据 —— 比原问题更糟。
-PUBLISH_HOUR_UTC = 14  # ≈ 8am ET，含夏令时波动留出余量
+#
+# 发布时刻只用来放宽下界，不用来收紧上界：早于此刻运行时，"current" 可能
+# 还停在更早一个交易日，也可能已经换新，两者都接受。
+# （取 14:00 UTC = 10am EDT 而非 8am，是为了把夏令时与发布延迟都包进窗口。）
+PUBLISH_HOUR_UTC = 14
 
-# 允许的滞后交易日数。发布时刻本身已由 expected_trade_date 建模，这里再放余量
-# 就是双重宽容，所以默认 0：Trade Date 必须精确等于预期交易日。
+# 允许的滞后交易日数。0 表示不接受任何超出发布窗口的陈旧数据。
 #
 # 代价是 CME 发布延迟或假日表缺项会造成误隔离 —— 但那正是要的行为：显式报错
 # 并指向具体原因，而不是静默让陈旧数据顶上。
@@ -210,23 +213,34 @@ def load_existing() -> list[dict]:
 
 def expected_trade_date(now_utc: datetime | None = None) -> date_cls:
     """
-    "current" 公报应当对应的交易日 —— 即「上一个交易日」，不是当天。
+    "current" 里物理上可能出现的最新 Trade Date —— 即「上一个交易日」。
 
-    CME 在 T+1 早间发布 T 日公报（详见 PUBLISH_HOUR_UTC 处的实测记录）。
-    发布时刻之前运行时还要再往前退一个交易日。
+    CME 在 T+1 早间发布 T 日公报（详见 PUBLISH_HOUR_UTC 处的实测记录），
+    所以当天的数据当天不可能拿到。这是可接受区间的上界。
     """
     now = now_utc or datetime.now(timezone.utc)
     today = now.date()
     if is_trading_day(today):
         # 交易日：当天发布的是上一个交易日的公报
-        expected = prev_trading_day(today)
-    else:
-        # 周末/假日：最近一个交易日的公报已在当天早间发布
-        expected = latest_trading_day_on_or_before(today)
+        return prev_trading_day(today)
+    # 周末/假日：最近一个交易日的公报已在当天早间发布
+    return latest_trading_day_on_or_before(today)
+
+
+def oldest_acceptable_trade_date(now_utc: datetime | None = None) -> date_cls:
+    """
+    可接受区间的下界。
+
+    早于发布时刻运行时（例如手动触发），"current" 可能还停在更早一个交易日，
+    这是正常的，不该判失败。
+    """
+    now = now_utc or datetime.now(timezone.utc)
+    oldest = expected_trade_date(now)
     if now.hour < PUBLISH_HOUR_UTC:
-        # 早于发布时刻（例如手动触发），"current" 还停在更早一个交易日
-        expected = prev_trading_day(expected)
-    return expected
+        oldest = prev_trading_day(oldest)
+    for _ in range(MAX_STALE_TRADING_DAYS):
+        oldest = prev_trading_day(oldest)
+    return oldest
 
 
 def _months_identical(a: list[dict], b: list[dict]) -> bool:
@@ -270,23 +284,26 @@ def validate(entry: dict, records: list[dict],
             f"—— 请在 trading_calendar.py 中补充该年份"
         )
     else:
-        want = expected_trade_date(now_utc)
-        if parsed > want:
-            # 比预期更新：不该发生，说明发布模型或假日表有误
+        # Trade Date 必须落在 [oldest, newest] 区间内。
+        # 上界是物理可能的最新交易日（当天数据当天拿不到）；下界受发布时刻影响，
+        # 早于发布时刻运行时 "current" 可能还没换新。
+        # 注意：数据「比预期新」不算错误 —— 那只说明发布时刻估得保守，是模型
+        # 的问题不是数据的问题。只有超出上界（未来数据）才判失败。
+        newest = expected_trade_date(now_utc)
+        oldest = oldest_acceptable_trade_date(now_utc)
+        if parsed > newest:
             failures.append(
-                f"a) Trade Date {entry['date']} 晚于预期 {want.isoformat()}"
-                f" —— 发布时刻模型或假日表可能需要修正"
+                f"a) Trade Date {entry['date']} 晚于物理可能的最新交易日 "
+                f"{newest.isoformat()} —— 假日表可能缺项，或 PDF 日期解析有误"
             )
-        elif parsed < want:
-            # 比预期旧：滞后若干个交易日，即 CME 'current' 文件未更新
-            lag = trading_days_between(parsed, want) + 1
-            if lag > MAX_STALE_TRADING_DAYS:
-                failures.append(
-                    f"a) Trade Date 陈旧：PDF 为 {entry['date']}，预期 "
-                    f"{want.isoformat()}，滞后 {lag} 个交易日"
-                    f"（容许 {MAX_STALE_TRADING_DAYS}）"
-                    f" —— CME 'current' 文件未更新"
-                )
+        elif parsed < oldest:
+            lag = trading_days_between(parsed, newest) + 1
+            failures.append(
+                f"a) Trade Date 陈旧：PDF 为 {entry['date']}，可接受区间 "
+                f"{oldest.isoformat()}～{newest.isoformat()}，"
+                f"滞后最新交易日 {lag} 个交易日"
+                f" —— CME 'current' 文件未更新"
+            )
 
     # 上一交易日的记录，供 b) c) 比对
     prev_rec = None
@@ -461,10 +478,38 @@ def run_tests():
     check(f"{len(OBSERVED)} 次历史运行全部复现", not mism,
           ("\n        " + "\n        ".join(mism[:6])) if mism else "")
 
-    # 早于发布时刻（手动触发）：在上一交易日基础上再退一个
-    check("周一 12:00 UTC（未到发布时刻）→ 再退一个交易日",
+    # 上界不随发布时刻变化：物理上当天数据当天拿不到，仅此而已
+    check("上界与运行时刻无关（12:00 与 22:00 一致）",
           expected_trade_date(datetime(2026, 7, 27, 12, tzinfo=timezone.utc))
+          == expected_trade_date(datetime(2026, 7, 27, 22, tzinfo=timezone.utc))
+          == date_cls(2026, 7, 24))
+
+    print("\n[oldest_acceptable_trade_date] 下界")
+    # 已过发布时刻：下界 = 上界，要求就是最新那一份
+    check("周一 22:00 UTC（已过发布时刻）→ 下界 = 上界",
+          oldest_acceptable_trade_date(datetime(2026, 7, 27, 22, tzinfo=timezone.utc))
+          == date_cls(2026, 7, 24))
+    # 未到发布时刻：允许还停在更早一个交易日
+    check("周一 12:00 UTC（未到发布时刻）→ 下界再退一个交易日",
+          oldest_acceptable_trade_date(datetime(2026, 7, 27, 12, tzinfo=timezone.utc))
           == date_cls(2026, 7, 23))
+
+    # 会误杀新鲜数据的那个窗口：2026-07-29 Wed 12:00~14:00 UTC。
+    # CME 此时已发布 07-28，旧实现（预期=严格相等且 12:00 时预期为 07-27）
+    # 会把新鲜的 07-28 判为"晚于预期"并隔离。
+    print("\n[区间判定] 发布时刻前后的窗口")
+    for hour in (11, 13, 15, 22):
+        now_w = datetime(2026, 7, 29, hour, tzinfo=timezone.utc)
+        fs = validate({"date": "2026-07-28", "months": [
+            {"month": "AUG26", "settle": 4100.0, "oi": 200000}]}, [], now_w)
+        check(f"2026-07-29 {hour:02d}:00 UTC 拿到 07-28（新鲜）→ 不判失败",
+              not fs, fs)
+    # 未来数据仍必须拦住
+    fs = validate({"date": "2026-07-29", "months": [
+        {"month": "AUG26", "settle": 4100.0, "oi": 200000}]}, [],
+        datetime(2026, 7, 29, 22, tzinfo=timezone.utc))
+    check("2026-07-29 22:00 UTC 拿到 07-29（未来）→ 命中",
+          any("晚于物理可能" in x for x in fs), fs)
 
     # 运行于 2026-07-27 Mon 22:00 UTC（已过发布时刻）→ 预期 Trade Date 为
     # 上一个交易日 07-24 Fri。库里已有的上一份则是 07-23 Thu。
@@ -505,10 +550,10 @@ def run_tests():
     check("a) Trade Date 滞后 1 个交易日 → 命中",
           any("陈旧" in x for x in f), f)
 
-    # a) 比预期更新（不该发生，说明发布模型或假日表有误）
+    # a) 超出上界（未来数据 —— 假日表缺项或日期解析有误）
     f = validate(entry_at("2026-07-27", good_months), records, now)
-    check("a) Trade Date 晚于预期 → 命中",
-          any("晚于预期" in x for x in f), f)
+    check("a) Trade Date 晚于物理可能的最新交易日 → 命中",
+          any("晚于物理可能" in x for x in f), f)
 
     # a) 非交易日
     f = validate(entry_at("2026-07-26", good_months), records, now)  # 周日
