@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -95,6 +95,21 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 .rt-clear-full  {color:#52e87a;font-weight:700}
 .rt-bias        {color:#f5c842}
 .rt-neutral     {color:#8b949e}
+
+/* ── 期限结构回放控件 ── */
+#oiPlaybar{display:flex;align-items:center;gap:10px;padding:8px 0 2px;flex-wrap:wrap}
+#oiPlaybar button{background:none;border:1px solid #30363d;border-radius:5px;color:#8b949e;cursor:pointer;font-size:13px;line-height:1;padding:4px 10px;transition:color .15s,border-color .15s}
+#oiPlaybar button:hover{color:#e6edf3;border-color:#58a6ff}
+#oiPlaySlider{flex:1;min-width:120px;accent-color:#58a6ff;cursor:pointer}
+#oiPlayDate{font-size:12px;color:#58a6ff;font-weight:600;white-space:nowrap;min-width:64px}
+.oi-speed-btns{display:flex;gap:4px}
+.oi-speed-btns button{font-size:11px;padding:3px 7px}
+.oi-speed-btns button.active{color:#58a6ff;border-color:#58a6ff}
+#oiGhostToggle{font-size:11px;padding:3px 8px}
+@media(max-width:600px){
+  #oiPlaybar{padding-bottom:6px}
+  #oiPlaySlider{min-width:80px}
+}
 
 /* COMEX 库存卡片 */
 .stocks-section{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px 28px}
@@ -340,6 +355,18 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     </div>
     <div class="chart-wrap" style="height:220px"><canvas id="oiChart"></canvas></div>
     <div id="oiDeltaWrap" style="height:90px;margin-top:4px;position:relative"><canvas id="oiDeltaChart"></canvas></div>
+    <div id="oiRollWrap" style="height:80px;margin-top:4px;position:relative"><canvas id="oiRollChart"></canvas></div>
+    <div id="oiPlaybar">
+      <button id="oiPlayBtn" title="播放/暂停 (Space)">&#9654;</button>
+      <input id="oiPlaySlider" type="range" min="0" value="0" step="1">
+      <span id="oiPlayDate">--</span>
+      <div class="oi-speed-btns">
+        <button data-speed="0.5">0.5x</button>
+        <button data-speed="1" class="active">1x</button>
+        <button data-speed="2">2x</button>
+      </div>
+      <button id="oiGhostToggle" title="残影">残影 ON</button>
+    </div>
     <div class="chart-wrap" style="height:220px;display:none"><canvas id="oiHistChart"></canvas></div>
   </div>
 
@@ -1050,124 +1077,128 @@ function renderDepotTrend(stocksData) {
   });
 }
 
-// ── COMEX GC 期限结构图 ──────────────────────────────────────────────────────
-let _oiChart = null;
+// ── COMEX GC 期限结构图 + 回放引擎 ──────────────────────────────────────────
+let _oiChart      = null;
 let _oiDeltaChart = null;
+let _oiRollChart  = null;
+
+// 回放状态
+const _play = {
+  series:    null,   // term-structure-series.json payload
+  frameIdx:  0,
+  playing:   false,
+  speed:     1,
+  ghost:     true,
+  timer:     null,
+  reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+};
 
 // 持仓量按数值大小映射蓝紫色深浅（深色主题）
 function _oiBarColor(oi, maxOI, isFront) {
   const t = maxOI > 0 ? oi / maxOI : 0;
-  // 亮度下限 38% 确保小持仓月份（如 SEP26）在深色背景仍可见
+  // 亮度下限 38% 确保小持仓月份在深色背景仍可见
   const L = isFront ? 65 : Math.round(38 + t * 22);
   const alpha = isFront ? 0.90 : (0.55 + t * 0.35).toFixed(2);
   return `hsla(220,70%,${L}%,${alpha})`;
 }
 
-function renderOI(oiData) {
-  const records = Array.isArray(oiData) ? oiData : [];
-  const latest = [...records].reverse().find(r => Array.isArray(r.months) && r.months.length);
-  if (!latest) return;
-
-  // 约一年窗口
-  const allMonths = latest.months;
-  const nearM = allMonths[0];
-  const [nearMon, nearYr] = [nearM.month.slice(0, 3), parseInt(nearM.month.slice(3))];
-  const cutoffLabel = nearMon + (nearYr + 1);
-  const cutIdx = allMonths.findIndex(r => r.month === cutoffLabel);
-  const months = cutIdx >= 0 ? allMonths.slice(0, cutIdx + 1) : allMonths;
-
-  const totalOI = months.reduce((s, r) => s + r.oi, 0);
-  const front   = months.reduce((a, b) => b.oi > a.oi ? b : a, months[0]);
-  const near    = months[0];
-  const far     = months[months.length - 1];
-  const contango = far.settle - near.settle;
-
-  document.getElementById('oiDate').textContent =
-    '数据日期：' + latest.date.slice(5).replace('-', '/') + ' · 来源：CME Group';
-  document.getElementById('oiFrontPrice').textContent = front.settle.toFixed(2);
-  document.getElementById('oiFrontMonth').textContent = front.month + ' · 成交量最大月';
-  const ctgEl = document.getElementById('oiContango');
-  ctgEl.textContent = (contango >= 0 ? '+' : '') + contango.toFixed(2);
-  ctgEl.style.color = contango >= 0 ? '#3fb950' : '#f85149';
-  document.getElementById('oiContangoLabel').textContent = far.month + ' − ' + near.month;
-  document.getElementById('oiVal').textContent = totalOI.toLocaleString('en-US');
-
-  const canvas = document.getElementById('oiChart');
-  if (!canvas) return;
-  if (_oiChart) { _oiChart.destroy(); _oiChart = null; }
-
-  const labels   = months.map(r => r.month);
-  const prices   = months.map(r => r.settle);
-  const oiValues = months.map(r => r.oi);
-  const maxOI    = Math.max(...oiValues);
-
-  _oiChart = new Chart(canvas, {
-    plugins: [{
-      id: '_syncPad',
-      afterLayout(chart) {
-        window._oiChartArea = {
-          left:  Math.round(chart.chartArea.left),
-          right: Math.round(chart.width - chart.chartArea.right)
-        };
-        // 主图 resize 后同步触发 delta 图重新 layout（防止重入）
-        if (_oiDeltaChart && !_oiDeltaChart._syncUpdating) {
-          _oiDeltaChart._syncUpdating = true;
-          _oiDeltaChart.update('none');
-          _oiDeltaChart._syncUpdating = false;
-        }
+// ── X 轴对齐同步（复用现有方案）─────────────────────────────────────────────
+const _syncPadPlugin = {
+  id: '_syncPad',
+  afterLayout(chart) {
+    window._oiChartArea = {
+      left:  Math.round(chart.chartArea.left),
+      right: Math.round(chart.width - chart.chartArea.right)
+    };
+    for (const dep of [_oiDeltaChart, _oiRollChart]) {
+      if (dep && !dep._syncUpdating) {
+        dep._syncUpdating = true;
+        dep.update('none');
+        dep._syncUpdating = false;
       }
-    }],
+    }
+  }
+};
+const _syncPadDepPlugin = {
+  id: '_syncPadDep',
+  beforeLayout(chart) {
+    const ca = window._oiChartArea;
+    if (ca) chart.options.layout.padding.left = ca.left;
+  }
+};
+function _afterFitRight(scale) {
+  const ca = window._oiChartArea;
+  if (ca) scale.width = ca.right;
+}
+
+// ── 图表初始化（只建一次，之后只更新数据）────────────────────────────────────
+function _initCharts(series) {
+  const { contracts, scale } = series;
+  const labels = contracts;
+
+  // 销毁旧图
+  if (_oiChart)      { _oiChart.destroy();      _oiChart = null; }
+  if (_oiDeltaChart) { _oiDeltaChart.destroy(); _oiDeltaChart = null; }
+  if (_oiRollChart)  { _oiRollChart.destroy();  _oiRollChart = null; }
+
+  // ── 主图 ────────────────────────────────────────────────────────────────
+  const mainCanvas = document.getElementById('oiChart');
+  _oiChart = new Chart(mainCanvas, {
+    type: 'bar',
+    plugins: [_syncPadPlugin],
     data: {
       labels,
       datasets: [
-        {
-          type: 'bar',
-          label: '持仓 OI',
-          data: oiValues,
-          backgroundColor: months.map(r => _oiBarColor(r.oi, maxOI, r.month === front.month)),
-          borderColor:     months.map(r => _oiBarColor(r.oi, maxOI, r.month === front.month).replace(/,[^,]+\)$/, ',1)')),
-          borderWidth: 1,
-          borderRadius: 3,
-          yAxisID: 'yOI',
-          order: 2,
-        },
-        {
-          type: 'line',
-          label: '结算价',
-          data: prices,
-          borderColor: '#58a6ff',
-          backgroundColor: 'rgba(88,166,255,0.08)',
-          borderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          pointBackgroundColor: '#58a6ff',
-          tension: 0.3,
-          yAxisID: 'yPrice',
-          order: 1,
-        }
+        // dataset 0–2: ghost bars (前3帧，透明度递减)
+        { type:'bar', label:'ghost2', data: new Array(labels.length).fill(null),
+          backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
+          yAxisID:'yOI', order:5 },
+        { type:'bar', label:'ghost1', data: new Array(labels.length).fill(null),
+          backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
+          yAxisID:'yOI', order:4 },
+        { type:'bar', label:'ghost0', data: new Array(labels.length).fill(null),
+          backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
+          yAxisID:'yOI', order:3 },
+        // dataset 3: current OI bars
+        { type:'bar', label:'持仓 OI', data: new Array(labels.length).fill(null),
+          backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:3,
+          yAxisID:'yOI', order:2 },
+        // dataset 4: price line
+        { type:'line', label:'结算价', data: new Array(labels.length).fill(null),
+          borderColor:'#58a6ff', backgroundColor:'rgba(88,166,255,0.08)',
+          borderWidth:2, pointRadius:4, pointHoverRadius:6,
+          pointBackgroundColor:'#58a6ff', tension:0.3,
+          yAxisID:'yPrice', order:1 },
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
+      animation: { duration: 300, easing: 'easeInOutQuad' },
+      interaction: { mode:'index', intersect:false },
       plugins: {
         legend: { display: false },
         tooltip: {
           confine: true,
           callbacks: {
             label: ctx => {
-              const m = months[ctx.dataIndex];
               if (ctx.dataset.label === '结算价')
                 return '  结算价: $' + ctx.parsed.y.toFixed(2);
-              const chg = m?.oi_chg;
-              const chgStr = chg == null ? '' : ('  持仓变化: ' + (chg >= 0 ? '+' : '') + chg.toLocaleString('en-US'));
-              return ['  持仓 OI: ' + ctx.parsed.y.toLocaleString('en-US'), chgStr].filter(Boolean);
+              if (!ctx.dataset.label.startsWith('持仓')) return null;
+              const fr = series.frames[_play.frameIdx];
+              const ci = ctx.dataIndex;
+              const oi = fr.oi[ci];
+              const chg = fr.oi_chg[ci];
+              const chgStr = chg == null ? '' :
+                ('  持仓变化: ' + (chg >= 0 ? '+' : '') + chg.toLocaleString('en-US'));
+              return ['  持仓 OI: ' + (oi ?? 0).toLocaleString('en-US'), chgStr].filter(Boolean);
             },
             labelColor: ctx => {
               if (ctx.dataset.label !== '持仓 OI') return undefined;
-              const m = months[ctx.dataIndex];
-              const c = _oiBarColor(m.oi, maxOI, m.month === front.month);
+              const c = _oiBarColor(
+                series.frames[_play.frameIdx].oi[ctx.dataIndex] ?? 0,
+                scale.oi_max, false
+              );
               return { borderColor: c, backgroundColor: c };
             }
           }
@@ -1175,81 +1206,48 @@ function renderOI(oiData) {
       },
       scales: {
         x: {
-          ticks: { font: { size: 11 }, color: '#8b949e', maxRotation: 45 },
-          grid: { color: '#21262d' }
+          ticks: { font:{size:11}, color:'#8b949e', maxRotation:45 },
+          grid: { color:'#21262d' }
         },
         yPrice: {
           position: 'left',
-          ticks: { font: { size: 10 }, color: '#58a6ff', callback: v => '$' + v.toFixed(0) },
-          grid: { color: '#21262d' },
-          title: { display: true, text: '结算价 (USD)', color: '#58a6ff', font: { size: 10 } }
+          min: scale.settle_min * 0.995,
+          max: scale.settle_max * 1.005,
+          ticks: { font:{size:10}, color:'#58a6ff', callback: v => '$'+v.toFixed(0) },
+          grid: { color:'#21262d' },
+          title: { display:true, text:'结算价 (USD)', color:'#58a6ff', font:{size:10} }
         },
         yOI: {
           position: 'right',
-          ticks: { font: { size: 10 }, color: '#8b949e',
-            callback: v => v >= 1000 ? Math.round(v / 1000) + 'k' : v },
+          min: 0,
+          max: scale.oi_max * 1.25,
+          ticks: { font:{size:10}, color:'#8b949e',
+            callback: v => v >= 1000 ? Math.round(v/1000)+'k' : v },
           grid: { drawOnChartArea: false },
-          title: { display: true, text: '持仓 (手)', color: '#8b949e', font: { size: 10 } },
-          max: maxOI * 1.25,
+          title: { display:true, text:'持仓 (手)', color:'#8b949e', font:{size:10} }
         }
       }
     }
   });
 
-  // ── 持仓变化面板 ────────────────────────────────────────────────────────────
-  const deltaWrap = document.getElementById('oiDeltaWrap');
+  // ── Delta 面板 ──────────────────────────────────────────────────────────
   const deltaCanvas = document.getElementById('oiDeltaChart');
-  if (!deltaCanvas) return;
-  if (_oiDeltaChart) { _oiDeltaChart.destroy(); _oiDeltaChart = null; }
-
-  const hasAnyChg = months.some(m => m.oi_chg != null);
-  if (!hasAnyChg) {
-    deltaWrap.style.display = 'none';
-    return;
-  }
-  deltaWrap.style.display = '';
-
-  const deltas = months.map(m => m.oi_chg ?? 0);
-  const absMax = Math.max(...deltas.map(Math.abs), 1);
-  // 绝对值 < 0.5% 峰值的柱子设为透明（避免噪音）
-  const threshold = absMax * 0.005;
-
   _oiDeltaChart = new Chart(deltaCanvas, {
     type: 'bar',
+    plugins: [_syncPadDepPlugin],
     data: {
       labels,
-      datasets: [{
-        label: '持仓变化',
-        data: deltas,
-        backgroundColor: deltas.map(v =>
-          Math.abs(v) < threshold ? 'transparent'
-          : v > 0 ? 'rgba(88,166,255,0.65)' : 'rgba(248,81,73,0.65)'
-        ),
-        borderColor: deltas.map(v =>
-          Math.abs(v) < threshold ? 'transparent'
-          : v > 0 ? '#58a6ff' : '#f85149'
-        ),
-        borderWidth: 1,
-        borderRadius: 2,
-        borderSkipped: false,
-      }]
+      datasets: [{ label:'持仓变化', data: new Array(labels.length).fill(0),
+        backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2, borderSkipped:false }]
     },
-    plugins: [{
-      id: '_syncPadDelta',
-      beforeLayout(chart) {
-        const ca = window._oiChartArea;
-        if (!ca) return;
-        // Force identical left padding so plot area left edge matches main chart
-        chart.options.layout.padding.left = ca.left;
-      }
-    }],
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { left: 0, right: 0, top: 0, bottom: 0 } },
-      interaction: { mode: 'index', intersect: false },
+      animation: { duration: 300, easing: 'easeInOutQuad' },
+      layout: { padding: { left:0, right:0, top:0, bottom:0 } },
+      interaction: { mode:'index', intersect:false },
       plugins: {
-        legend: { display: false },
+        legend: { display:false },
         tooltip: {
           confine: true,
           callbacks: {
@@ -1262,33 +1260,326 @@ function renderOI(oiData) {
         }
       },
       scales: {
-        x: {
-          display: false,
-          grid: { color: '#21262d' }
-        },
+        x: { display:false, grid:{ color:'#21262d' } },
         y: {
           position: 'right',
-          ticks: {
-            font: { size: 9 }, color: '#6e7681',
-            callback: v => v >= 1000 || v <= -1000
-              ? (v / 1000).toFixed(0) + 'k' : v,
-            maxTicksLimit: 3,
-          },
-          grid: {
-            color: ctx => ctx.tick.value === 0 ? '#444c56' : '#21262d',
-          },
-          afterFit(scale) {
-            // Force right Y-axis to match main chart's right margin exactly
-            const ca = window._oiChartArea;
-            if (ca) scale.width = ca.right;
-          },
-          min: -absMax * 1.3,
-          max:  absMax * 1.3,
+          min: -(scale.delta_abs_max * 1.3 || 1),
+          max:  (scale.delta_abs_max * 1.3 || 1),
+          ticks: { font:{size:9}, color:'#6e7681', maxTicksLimit:3,
+            callback: v => Math.abs(v) >= 1000 ? (v/1000).toFixed(0)+'k' : v },
+          grid: { color: ctx => ctx.tick.value === 0 ? '#444c56' : '#21262d' },
+          afterFit: _afterFitRight
+        }
+      }
+    }
+  });
+
+  // ── 移仓进度面板 ────────────────────────────────────────────────────────
+  const rollCanvas = document.getElementById('oiRollChart');
+  const rollDates = series.dates.map(d => d.slice(5).replace('-', '/'));
+  _oiRollChart = new Chart(rollCanvas, {
+    type: 'line',
+    plugins: [_syncPadDepPlugin, {
+      id: '_rollCursor',
+      afterDraw(chart) {
+        const idx = _play.frameIdx;
+        const meta = chart.getDatasetMeta(0);
+        if (!meta.data[idx]) return;
+        const x = meta.data[idx].x;
+        const ctx2 = chart.ctx;
+        const { top, bottom } = chart.chartArea;
+        ctx2.save();
+        ctx2.beginPath();
+        ctx2.strokeStyle = '#58a6ff';
+        ctx2.lineWidth = 1.5;
+        ctx2.setLineDash([3, 3]);
+        ctx2.moveTo(x, top);
+        ctx2.lineTo(x, bottom);
+        ctx2.stroke();
+        ctx2.restore();
+      }
+    }],
+    data: {
+      labels: rollDates,
+      datasets: [{
+        label: '移仓进度',
+        data: series.frames.map(f => f.roll_progress),
+        borderColor: '#a78bfa',
+        backgroundColor: 'rgba(167,139,250,0.12)',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.3,
+        fill: true,
+        spanGaps: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { left:0, right:0, top:0, bottom:0 } },
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { display:false },
+        tooltip: {
+          confine: true,
+          callbacks: {
+            title: items => items[0]?.label || '',
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return v == null ? '  移仓进度: --'
+                : '  移仓进度: ' + (v * 100).toFixed(1) + '%';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { display:false },
+        y: {
+          position: 'right',
+          min: 0, max: 1,
+          ticks: { font:{size:9}, color:'#6e7681', maxTicksLimit:3,
+            callback: v => Math.round(v*100)+'%' },
+          grid: { color:'#21262d' },
+          title: { display:true, text:'移仓', color:'#6e7681', font:{size:9} },
+          afterFit: _afterFitRight
         }
       }
     }
   });
 }
+
+// ── 帧渲染（不重建图表）──────────────────────────────────────────────────────
+function _renderFrame(frameIdx, animated) {
+  if (!_play.series) return;
+  const { series } = _play;
+  const { frames, contracts, scale } = series;
+  const fr = frames[frameIdx];
+  const maxOI = scale.oi_max;
+
+  // 找主力月索引
+  const frontIdx = fr.front ? contracts.indexOf(fr.front) : -1;
+
+  // ── 主图：ghost + 当前帧 ──────────────────────────────────────────────
+  const GHOST_ALPHA = [0.08, 0.15, 0.25];  // ghost2 oldest → ghost0 newest
+  for (let g = 0; g < 3; g++) {
+    const ghostFrameIdx = frameIdx - (3 - g);
+    const ds = _oiChart.data.datasets[g];
+    if (!_play.ghost || ghostFrameIdx < 0) {
+      ds.data = new Array(contracts.length).fill(null);
+      ds.backgroundColor = [];
+      ds.borderColor = [];
+    } else {
+      const gf = frames[ghostFrameIdx];
+      const alpha = GHOST_ALPHA[g];
+      ds.data = gf.oi.map(v => v ?? null);
+      ds.backgroundColor = contracts.map((_, ci) => {
+        const oi = gf.oi[ci] ?? 0;
+        return `hsla(220,50%,45%,${alpha})`;
+      });
+      ds.borderColor = contracts.map(() => `hsla(220,50%,60%,${alpha * 1.5})`);
+    }
+  }
+
+  // 当前帧 OI bars (dataset index 3)
+  const mainDs = _oiChart.data.datasets[3];
+  mainDs.data = fr.oi.map(v => v ?? null);
+  mainDs.backgroundColor = contracts.map((_, ci) => {
+    const oi = fr.oi[ci] ?? 0;
+    return _oiBarColor(oi, maxOI, ci === frontIdx);
+  });
+  mainDs.borderColor = mainDs.backgroundColor.map(c => c.replace(/,[^,]+\)$/, ',1)'));
+
+  // price line (dataset index 4)
+  _oiChart.data.datasets[4].data = fr.settle.map(v => v ?? null);
+
+  // ── Delta 面板 ────────────────────────────────────────────────────────
+  const deltaDs = _oiDeltaChart.data.datasets[0];
+  const absMax = scale.delta_abs_max || 1;
+  const threshold = absMax * 0.005;
+  const allNull = fr.oi_chg.every(v => v == null);
+  if (allNull) {
+    deltaDs.data = new Array(contracts.length).fill(0);
+    deltaDs.backgroundColor = new Array(contracts.length).fill('transparent');
+    deltaDs.borderColor     = new Array(contracts.length).fill('transparent');
+  } else {
+    deltaDs.data = fr.oi_chg.map(v => v ?? 0);
+    deltaDs.backgroundColor = fr.oi_chg.map(v => {
+      if (v == null || Math.abs(v) < threshold) return 'transparent';
+      return v > 0 ? 'rgba(88,166,255,0.65)' : 'rgba(248,81,73,0.65)';
+    });
+    deltaDs.borderColor = fr.oi_chg.map(v => {
+      if (v == null || Math.abs(v) < threshold) return 'transparent';
+      return v > 0 ? '#58a6ff' : '#f85149';
+    });
+  }
+
+  // ── 更新所有图表 ────────────────────────────────────────────────────────
+  const mode = animated && !_play.reducedMotion ? undefined : 'none';
+  _oiChart.update(mode);
+  _oiDeltaChart.update(mode);
+  _oiRollChart.update('none');  // roll chart only redraws cursor, no data change
+
+  // ── KPI 区域 ──────────────────────────────────────────────────────────
+  const months = contracts
+    .map((label, ci) => ({ month: label, settle: fr.settle[ci], oi: fr.oi[ci] ?? 0 }))
+    .filter(m => m.settle != null);
+  if (!months.length) return;
+
+  const frontMonth = months.find(m => m.month === fr.front) || months[0];
+  const near = months[0], far = months[months.length - 1];
+  const contango = far.settle - near.settle;
+  const totalOI  = months.reduce((s, m) => s + m.oi, 0);
+
+  document.getElementById('oiDate').textContent =
+    '数据日期：' + fr.date.slice(5).replace('-', '/') + ' · 来源：CME Group';
+  document.getElementById('oiFrontPrice').textContent = frontMonth.settle.toFixed(2);
+  document.getElementById('oiFrontMonth').textContent = frontMonth.month + ' · 主力月';
+  const ctgEl = document.getElementById('oiContango');
+  ctgEl.textContent = (contango >= 0 ? '+' : '') + contango.toFixed(2);
+  ctgEl.style.color = contango >= 0 ? '#3fb950' : '#f85149';
+  document.getElementById('oiContangoLabel').textContent = far.month + ' − ' + near.month;
+  document.getElementById('oiVal').textContent = totalOI.toLocaleString('en-US');
+
+  // 播放条日期
+  document.getElementById('oiPlayDate').textContent = fr.date.slice(5).replace('-', '/');
+}
+
+// ── 播放控制 ──────────────────────────────────────────────────────────────────
+function _playTick() {
+  if (!_play.playing) return;
+  const { series } = _play;
+  if (_play.frameIdx >= series.frames.length - 1) {
+    _play.playing = false;
+    document.getElementById('oiPlayBtn').innerHTML = '&#9654;';
+    return;
+  }
+  _play.frameIdx++;
+  document.getElementById('oiPlaySlider').value = _play.frameIdx;
+  _renderFrame(_play.frameIdx, true);
+  _play.timer = setTimeout(_playTick, 400 / _play.speed);
+}
+
+function _oiPlay() {
+  if (_play.playing) {
+    _play.playing = false;
+    clearTimeout(_play.timer);
+    document.getElementById('oiPlayBtn').innerHTML = '&#9654;';
+  } else {
+    if (_play.frameIdx >= (_play.series?.frames.length ?? 1) - 1) {
+      _play.frameIdx = 0;
+      document.getElementById('oiPlaySlider').value = 0;
+    }
+    _play.playing = true;
+    document.getElementById('oiPlayBtn').innerHTML = '&#9646;&#9646;';
+    _playTick();
+  }
+}
+
+// ── 初始化播放条控件 ────────────────────────────────────────────────────────
+function _initPlaybarControls(series) {
+  const slider = document.getElementById('oiPlaySlider');
+  slider.max = series.frames.length - 1;
+  slider.value = series.frames.length - 1;
+
+  slider.addEventListener('input', () => {
+    clearTimeout(_play.timer);
+    _play.playing = false;
+    document.getElementById('oiPlayBtn').innerHTML = '&#9654;';
+    _play.frameIdx = parseInt(slider.value);
+    _renderFrame(_play.frameIdx, false);
+  });
+
+  document.getElementById('oiPlayBtn').addEventListener('click', _oiPlay);
+
+  document.querySelectorAll('.oi-speed-btns button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _play.speed = parseFloat(btn.dataset.speed);
+      document.querySelectorAll('.oi-speed-btns button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  document.getElementById('oiGhostToggle').addEventListener('click', () => {
+    _play.ghost = !_play.ghost;
+    document.getElementById('oiGhostToggle').textContent = _play.ghost ? '残影 ON' : '残影 OFF';
+    _renderFrame(_play.frameIdx, false);
+  });
+
+  // 键盘左右方向键逐帧步进
+  document.addEventListener('keydown', e => {
+    if (_oiViewMode !== 'snapshot') return;
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      clearTimeout(_play.timer);
+      _play.playing = false;
+      document.getElementById('oiPlayBtn').innerHTML = '&#9654;';
+      const dir = e.key === 'ArrowRight' ? 1 : -1;
+      _play.frameIdx = Math.max(0, Math.min(
+        (_play.series?.frames.length ?? 1) - 1,
+        _play.frameIdx + dir
+      ));
+      slider.value = _play.frameIdx;
+      _renderFrame(_play.frameIdx, false);
+    }
+    if (e.key === ' ') {
+      e.preventDefault();
+      _oiPlay();
+    }
+  });
+
+  // 默认停在最新帧，reduced-motion 禁用自动播放
+  _play.frameIdx = series.frames.length - 1;
+  _renderFrame(_play.frameIdx, false);
+}
+
+// ── 公开入口 ──────────────────────────────────────────────────────────────────
+function initOIPlayback(series) {
+  if (!series || !series.frames || !series.frames.length) return;
+  _play.series = series;
+  _initCharts(series);
+  _initPlaybarControls(series);
+}
+
+// 保留旧 renderOI 作为降级（如果 series 文件 404 则用 oi.json 数据渲染最新帧）
+function renderOI(oiData) {
+  const records = Array.isArray(oiData) ? oiData : [];
+  const latest = [...records].reverse().find(r => Array.isArray(r.months) && r.months.length);
+  if (!latest || _play.series) return;  // series already loaded, skip
+
+  // 构造单帧 series 用于降级渲染
+  const allMonths = latest.months;
+  const nearM = allMonths[0];
+  const [nearMon, nearYr] = [nearM.month.slice(0,3), parseInt(nearM.month.slice(3))];
+  const cutoffLabel = nearMon + (nearYr + 1);
+  const cutIdx = allMonths.findIndex(r => r.month === cutoffLabel);
+  const months = cutIdx >= 0 ? allMonths.slice(0, cutIdx + 1) : allMonths;
+
+  const contracts = months.map(m => m.month);
+  const maxOI = Math.max(...months.map(m => m.oi));
+  const deltaAbsMax = Math.max(...months.map(m => Math.abs(m.oi_chg ?? 0)));
+  const fallbackSeries = {
+    dates: [latest.date],
+    contracts,
+    frames: [{
+      date: latest.date,
+      settle: months.map(m => m.settle),
+      oi: months.map(m => m.oi),
+      oi_chg: months.map(m => m.oi_chg ?? null),
+      front: months.reduce((a,b) => b.oi > a.oi ? b : a, months[0]).month,
+      next: null, roll_progress: null, in_roll_window: false, unreliable_chg: null
+    }],
+    scale: {
+      oi_max: maxOI,
+      delta_abs_max: deltaAbsMax,
+      settle_min: Math.min(...months.map(m => m.settle)),
+      settle_max: Math.max(...months.map(m => m.settle)),
+    }
+  };
+  initOIPlayback(fallbackSeries);
+}
+
 
 // ── 期限结构历史叠加图 ─────────────────────────────────────────────────────────
 let _oiHistChart = null;
@@ -1405,12 +1696,18 @@ function renderOIHist(oiData) {
 let _oiViewMode = 'snapshot'; // 'snapshot' | 'history'
 
 function toggleOIView() {
-  const snapshotWrap = document.getElementById('oiChart').parentElement;
-  const histWrap     = document.getElementById('oiHistChart').parentElement;
-  const btn          = document.getElementById('oiViewToggle');
+  const snapshotWrap  = document.getElementById('oiChart').parentElement;
+  const deltaWrap     = document.getElementById('oiDeltaWrap');
+  const rollWrap      = document.getElementById('oiRollWrap');
+  const playbar       = document.getElementById('oiPlaybar');
+  const histWrap      = document.getElementById('oiHistChart').parentElement;
+  const btn           = document.getElementById('oiViewToggle');
   if (_oiViewMode === 'snapshot') {
     _oiViewMode = 'history';
     snapshotWrap.style.display = 'none';
+    deltaWrap.style.display    = 'none';
+    rollWrap.style.display     = 'none';
+    playbar.style.display      = 'none';
     histWrap.style.display     = '';
     btn.textContent = '当日快照';
     btn.style.color = '#58a6ff';
@@ -1418,6 +1715,9 @@ function toggleOIView() {
   } else {
     _oiViewMode = 'snapshot';
     snapshotWrap.style.display = '';
+    deltaWrap.style.display    = '';
+    rollWrap.style.display     = '';
+    playbar.style.display      = '';
     histWrap.style.display     = 'none';
     btn.textContent = '历史叠加';
     btn.style.color = '#8b949e';
@@ -1430,15 +1730,21 @@ Promise.all([
   fetch('data/cot.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
   fetch('data/gold_price.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
   fetch('data/stocks.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => []),
-  fetch('data/oi.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => [])
+  fetch('data/oi.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => []),
+  fetch('data/derived/term-structure-series.json?_=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => null),
 ])
-  .then(([cotData, goldData, stocksData, oiData]) => {
+  .then(([cotData, goldData, stocksData, oiData, seriesData]) => {
     document.getElementById('footerNote').textContent =
       'COT 数据来源：CFTC · 金价来源：Yahoo Finance · 库存来源：CME Group · 每日自动更新 · zhangtongxue.com';
     renderAll(cotData, goldData, stocksData);
     renderDepots(stocksData);
     renderDepotTrend(stocksData);
-    renderOI(oiData);
+    if (seriesData) {
+      initOIPlayback(seriesData);
+    } else {
+      renderOI(oiData);  // fallback: single-frame from oi.json
+    }
     renderOIHist(oiData);
   })
   .catch(() => {

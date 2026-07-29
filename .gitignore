@@ -3,3 +3,7 @@ package-lock.json
 package.json
 data/section62_sample.pdf
 parse_oi_test.py
+
+# 一次性排查脚本与截图产物（工具留在 tools/）
+screenshots/
+scripts/
