@@ -7,15 +7,20 @@ Key logic:
   because stored values are unreliable for 06-29..07-23.
 - Trading-day continuity is validated; gaps > 1 trading day set oi_chg=null for that frame.
 - roll_progress = next_active_OI / (front_OI + next_active_OI), where "active" = OI > 5% of total.
-- All stored oi_chg all-equal assertions: triggers hard failure (not silent 0).
 - Global scale extremes span the full dataset for locked Y-axes during playback.
+
+陈旧/重复快照的拦截点在采集层（fetch_oi.py 的 validate()），坏数据不会写进
+oi.json。本脚本不再因数据可疑而中断 —— 派生数据可随时从原始数据重算，不该
+让可重算的计算失败连累不可再生的采集数据。可疑之处记入 warnings。
 
 Run:  python derive_term_structure.py
 Test: python derive_term_structure.py --test
 """
 
 import json, os, sys, re
-from datetime import date, timedelta
+from datetime import date
+
+from trading_calendar import trading_days_between
 
 IN_PATH  = os.path.join(os.path.dirname(__file__), "data", "oi.json")
 OUT_DIR  = os.path.join(os.path.dirname(__file__), "data", "derived")
@@ -25,44 +30,7 @@ ACTIVE_OI_THRESHOLD = 0.05  # contract must hold >5% of total OI to be "active"
 ROLL_CANDIDATES = 3          # look at top-N OI contracts to find front/next
 
 
-# ── Trading-day calendar ──────────────────────────────────────────────────────
-
-# US federal + CME holidays that fall on weekdays (extend as needed)
-# Format: "YYYY-MM-DD"
-CME_HOLIDAYS = {
-    # 2026
-    "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03",
-    "2026-05-25", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
-    # 2025
-    "2025-01-01", "2025-01-20", "2025-02-17", "2025-04-18",
-    "2025-05-26", "2025-07-04", "2025-09-01", "2025-11-27", "2025-12-25",
-}
-
-
-def is_trading_day(d: date) -> bool:
-    if d.weekday() >= 5:
-        return False
-    if d.isoformat() in CME_HOLIDAYS:
-        return False
-    return True
-
-
-def next_trading_day(d: date) -> date:
-    d = d + timedelta(days=1)
-    while not is_trading_day(d):
-        d = d + timedelta(days=1)
-    return d
-
-
-def trading_days_between(a: date, b: date) -> int:
-    """Count trading days strictly between a and b (exclusive endpoints)."""
-    count = 0
-    d = a + timedelta(days=1)
-    while d < b:
-        if is_trading_day(d):
-            count += 1
-        d += timedelta(days=1)
-    return count
+# 交易日历统一由 trading_calendar 提供（采集层与派生层共用同一份假日表）
 
 
 # ── Month ordering ────────────────────────────────────────────────────────────
@@ -123,6 +91,11 @@ def check_stored_oi_chg(record: dict) -> list[str]:
     """
     Returns list of warning strings if stored oi_chg values look suspicious.
     An all-same non-null set (e.g., all 0) is flagged as likely parser failure.
+
+    注意：这里只记录警告，不再中断。"全部合约 oi_chg 相同" 的实际含义是
+    原始快照陈旧/重复，属采集层问题 —— 拦截点在 fetch_oi.py 的 validate()，
+    坏数据不会写进 oi.json。派生层不该因可重算的计算而拒绝出数据；
+    stored 值本身也已不参与计算（oi_chg 一律由存量差分得出）。
     """
     months = record.get("months") or []
     chg_vals = [m.get("oi_chg") for m in months if "oi_chg" in m]
@@ -155,22 +128,19 @@ def window_months(months: list[dict]) -> list[dict]:
 
 # ── Main derivation ──────────────────────────────────────────────────────────
 
-def derive(records: list[dict], fail_on_suspicious: bool = True) -> dict:
+def derive(records: list[dict]) -> dict:
     """
     Build term-structure-series from raw oi.json records.
-    Raises ValueError on data integrity failures when fail_on_suspicious=True.
+
+    不再抛异常中断：陈旧/重复快照的拦截点已上移到 fetch_oi.py 的 validate()，
+    坏数据根本不会进入 oi.json。派生数据可从原始数据随时重算，不应让可重算的
+    计算失败连累不可再生的采集数据。可疑之处一律记入 warnings 供排查。
     """
     records = sorted(records, key=lambda r: r["date"])
 
     warnings = []
     for r in records:
-        w = check_stored_oi_chg(r)
-        if w:
-            warnings.extend(w)
-            if fail_on_suspicious:
-                raise ValueError(
-                    "Stored oi_chg integrity check failed:\n" + "\n".join(w)
-                )
+        warnings.extend(check_stored_oi_chg(r))
 
     # Build sorted union of all contract labels across all records (one-year window)
     all_labels: set[str] = set()
@@ -307,7 +277,7 @@ def run_tests(records: list[dict]) -> None:
     """
     print("Running unit tests...")
     errors = []
-    result = derive(records, fail_on_suspicious=False)
+    result = derive(records)
     contract_idx = {c: i for i, c in enumerate(result["contracts"])}
 
     def get_frame(d: str):
@@ -385,7 +355,7 @@ def main():
         run_tests(records)
         return
 
-    result = derive(records, fail_on_suspicious=True)
+    result = derive(records)
 
     if result["warnings"]:
         print("Warnings:")

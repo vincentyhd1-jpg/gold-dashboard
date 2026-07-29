@@ -27,35 +27,105 @@ jobs:
       - name: Install Python dependencies
         run: pip install requests curl_cffi xlrd pdfplumber
 
+      # 校验逻辑自身的单元测试（不联网）。挂在采集之前：校验器坏了就该立刻知道，
+      # 而不是等它误隔离好数据或漏放坏数据。
+      - name: Run validation unit tests
+        id: tests
+        run: |
+          python fetch_oi.py --test
+          python derive_term_structure.py --test
+        continue-on-error: true
+
+      # 每个采集步骤互不连累：任一失败都不能让其余步骤被跳过，
+      # 否则一次 COT 故障会连带丢掉当天的 OI 数据（CME 无历史归档，丢了就没了）。
+      # 失败信息由末尾的统一闸门汇总报出。
       - name: Run fetch_cot.py
+        id: cot
         run: python fetch_cot.py
+        continue-on-error: true
 
       - name: Run fetch_gold.py
+        id: gold
         run: python fetch_gold.py
+        continue-on-error: true
 
       - name: Run fetch_stocks.py
+        id: stocks
         run: python fetch_stocks.py
         continue-on-error: true
 
+      # 采集层校验（Trade Date / 重复比对 / 合约数量 / 主力月持仓）在这一步内。
+      # 校验失败时坏数据进 data/quarantine/，data/oi.json 保持上一份可用数据。
       - name: Run fetch_oi.py
+        id: oi
         run: python fetch_oi.py
         continue-on-error: true
 
+      # 派生数据可从 oi.json 随时重算，失败不阻断提交
       - name: Run derive_term_structure.py
+        id: derive
         run: python derive_term_structure.py
+        continue-on-error: true
 
+      # 原始数据不可再生（CME 无历史归档），无条件落盘：
+      # 上面任何一步失败都不能连累已经拿到的采集数据，隔离区同样要提交。
       - name: Commit and push if data changed
+        id: commit
+        if: always()
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/cot.json data/gold_price.json
-          git add data/stocks.json 2>/dev/null || true
-          git add data/oi.json 2>/dev/null || true
-          git add data/derived/term-structure-series.json 2>/dev/null || true
+
+          # 逐个 add：任一文件缺失（对应采集步骤失败）不影响其余文件入库
+          for f in data/cot.json data/gold_price.json data/stocks.json \
+                   data/oi.json data/derived/term-structure-series.json; do
+            git add "$f" 2>/dev/null || true
+          done
+          # 隔离区必须提交：CME 只提供当日文件，坏数据错过就永久拿不回来
+          git add data/quarantine 2>/dev/null || true
+
           if git diff --cached --quiet; then
             echo "No changes to commit"
-          else
-            DATE=$(python -c "import json; d=json.load(open('data/cot.json')); print(d['latest']['date'])")
-            git commit -m "data: COT+金价+库存数据更新 ${DATE}"
-            git push
+            exit 0
           fi
+
+          DATE=$(python -c "import json;print(json.load(open('data/cot.json'))['latest']['date'])" 2>/dev/null || date -u +%Y-%m-%d)
+          if git diff --cached --name-only | grep -q '^data/quarantine/'; then
+            git commit -m "data: 数据更新 ${DATE}（含隔离数据，见 data/quarantine/）"
+          else
+            git commit -m "data: COT+金价+库存数据更新 ${DATE}"
+          fi
+          git push
+
+      # 统一闸门：数据已落盘后再让 job 变红。
+      # 消息明确指出是哪一层挂了（采集 / 派生 / 提交），红灯时无需翻日志。
+      - name: Report failures
+        if: always()
+        run: |
+          FAILED=0
+
+          fail() {
+            echo "::error title=$1::$2"
+            FAILED=1
+          }
+
+          [ "${{ steps.tests.outcome }}"  = "failure" ] && \
+            fail "校验器自检" "fetch_oi.py --test 或 derive_term_structure.py --test 失败 —— 校验逻辑本身有问题，本次采集的校验结果不可信"
+          [ "${{ steps.cot.outcome }}"    = "failure" ] && \
+            fail "采集层：COT" "fetch_cot.py 失败 —— CFTC 周报未更新，cot.json 保持上一份"
+          [ "${{ steps.gold.outcome }}"   = "failure" ] && \
+            fail "采集层：金价" "fetch_gold.py 失败 —— Yahoo Finance 取数失败，gold_price.json 保持上一份"
+          [ "${{ steps.stocks.outcome }}" = "failure" ] && \
+            fail "采集层：库存" "fetch_stocks.py 失败 —— CME 库存报告未更新，stocks.json 保持上一份"
+          [ "${{ steps.oi.outcome }}"     = "failure" ] && \
+            fail "采集层：期限结构" "fetch_oi.py 失败或未通过 4 项校验 —— 坏数据已隔离到 data/quarantine/，oi.json 保持上一份。详见该步骤日志中的具体校验项"
+          [ "${{ steps.derive.outcome }}" = "failure" ] && \
+            fail "派生层" "derive_term_structure.py 失败 —— term-structure-series.json 保持上一版，页面回放停留在旧数据。原始数据已落盘，修好后重跑即可重算"
+          [ "${{ steps.commit.outcome }}" = "failure" ] && \
+            fail "提交层" "commit/push 失败 —— 本次采集到的数据未能入库，需人工介入"
+
+          if [ "$FAILED" = "1" ]; then
+            echo "::error::本次运行有步骤失败（详见上方 error 注释）。原始采集数据已尽力落盘。"
+            exit 1
+          fi
+          echo "所有步骤正常。"
