@@ -41,6 +41,9 @@ jobs:
         run: python fetch_oi.py
         continue-on-error: true
 
+      - name: Run derive_term_structure.py
+        run: python derive_term_structure.py
+
       - name: Commit and push if data changed
         run: |
           git config user.name  "github-actions[bot]"
@@ -48,6 +51,7 @@ jobs:
           git add data/cot.json data/gold_price.json
           git add data/stocks.json 2>/dev/null || true
           git add data/oi.json 2>/dev/null || true
+          git add data/derived/term-structure-series.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
