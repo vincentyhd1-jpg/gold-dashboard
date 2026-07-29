@@ -1726,6 +1726,23 @@ function toggleOIView() {
 }
 
 
+// 渲染异常不能伪装成"数据文件未找到"：单个模块出错只影响自己，
+// 异常照常打到控制台，其余模块继续渲染。
+// （曾有 Chart.js 配置错误被外层 catch 吞掉，页面静默降级为模拟数据，
+//   控制台一片干净，window.onerror 也捕不到。）
+function _safeRender(name, fn) {
+  try {
+    fn();
+  } catch (err) {
+    console.error('[render] ' + name + ' 渲染失败：', err);
+  }
+}
+
+// 兜底：任何未处理的 promise 异常至少留下痕迹
+window.addEventListener('unhandledrejection', e => {
+  console.error('[unhandled] ', e.reason);
+});
+
 Promise.all([
   fetch('data/cot.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
   fetch('data/gold_price.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
@@ -1737,24 +1754,28 @@ Promise.all([
   .then(([cotData, goldData, stocksData, oiData, seriesData]) => {
     document.getElementById('footerNote').textContent =
       'COT 数据来源：CFTC · 金价来源：Yahoo Finance · 库存来源：CME Group · 每日自动更新 · zhangtongxue.com';
-    renderAll(cotData, goldData, stocksData);
-    renderDepots(stocksData);
-    renderDepotTrend(stocksData);
-    if (seriesData) {
-      initOIPlayback(seriesData);
-    } else {
-      renderOI(oiData);  // fallback: single-frame from oi.json
-    }
-    renderOIHist(oiData);
+    _safeRender('COT/金价', () => renderAll(cotData, goldData, stocksData));
+    _safeRender('仓库明细', () => renderDepots(stocksData));
+    _safeRender('仓库趋势', () => renderDepotTrend(stocksData));
+    _safeRender('期限结构', () => {
+      if (seriesData) {
+        initOIPlayback(seriesData);
+      } else {
+        renderOI(oiData);  // fallback: single-frame from oi.json
+      }
+    });
+    _safeRender('期限结构历史', () => renderOIHist(oiData));
   })
-  .catch(() => {
+  .catch(err => {
+    // 只有必需数据（cot.json / gold_price.json）取不到才会走到这里
+    console.error('[fetch] 必需数据加载失败：', err);
     document.getElementById('footerNote').textContent =
       '当前显示模拟数据（数据文件未找到）· zhangtongxue.com';
-    renderAll(MOCK, [], []);
-    renderDepots([]);
-    renderDepotTrend([]);
-    renderOI([]);
-    renderOIHist([]);
+    _safeRender('COT/金价(mock)', () => renderAll(MOCK, [], []));
+    _safeRender('仓库明细(mock)', () => renderDepots([]));
+    _safeRender('仓库趋势(mock)', () => renderDepotTrend([]));
+    _safeRender('期限结构(mock)', () => renderOI([]));
+    _safeRender('期限结构历史(mock)', () => renderOIHist([]));
   });
 </script>
 </body>
