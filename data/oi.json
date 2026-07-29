@@ -3200,5 +3200,172 @@
         "oi_chg": 0
       }
     ]
+  },
+  {
+    "date": "2026-07-28",
+    "months": [
+      {
+        "month": "JUL26",
+        "settle": 4036.3,
+        "oi": 253,
+        "oi_chg": 247
+      },
+      {
+        "month": "AUG26",
+        "settle": 4038.7,
+        "oi": 71430,
+        "oi_chg": -38256
+      },
+      {
+        "month": "SEP26",
+        "settle": 4052.7,
+        "oi": 3475,
+        "oi_chg": 200
+      },
+      {
+        "month": "OCT26",
+        "settle": 4067.4,
+        "oi": 43448,
+        "oi_chg": 7168
+      },
+      {
+        "month": "NOV26",
+        "settle": 4083.6,
+        "oi": 277,
+        "oi_chg": -3
+      },
+      {
+        "month": "DEC26",
+        "settle": 4098.6,
+        "oi": 241826,
+        "oi_chg": 38760
+      },
+      {
+        "month": "JAN27",
+        "settle": 4116.5,
+        "oi": 249,
+        "oi_chg": -1
+      },
+      {
+        "month": "FEB27",
+        "settle": 4131.3,
+        "oi": 14647,
+        "oi_chg": 375
+      },
+      {
+        "month": "MAR27",
+        "settle": 4146.4,
+        "oi": 24,
+        "oi_chg": 0
+      },
+      {
+        "month": "APR27",
+        "settle": 4163.0,
+        "oi": 6138,
+        "oi_chg": 439
+      },
+      {
+        "month": "MAY27",
+        "settle": 4180.4,
+        "oi": 13,
+        "oi_chg": 0
+      },
+      {
+        "month": "JUN27",
+        "settle": 4195.7,
+        "oi": 971,
+        "oi_chg": 31
+      },
+      {
+        "month": "JUL27",
+        "settle": 4212.1,
+        "oi": 6,
+        "oi_chg": 0
+      },
+      {
+        "month": "AUG27",
+        "settle": 4228.7,
+        "oi": 679,
+        "oi_chg": 66
+      },
+      {
+        "month": "SEP27",
+        "settle": 4244.7,
+        "oi": 6,
+        "oi_chg": 0
+      },
+      {
+        "month": "OCT27",
+        "settle": 4261.5,
+        "oi": 266,
+        "oi_chg": 177
+      },
+      {
+        "month": "NOV27",
+        "settle": 4276.7,
+        "oi": 8,
+        "oi_chg": -1
+      },
+      {
+        "month": "DEC27",
+        "settle": 4294.5,
+        "oi": 423,
+        "oi_chg": 40
+      },
+      {
+        "month": "JAN28",
+        "settle": 4310.1,
+        "oi": 6,
+        "oi_chg": 0
+      },
+      {
+        "month": "FEB28",
+        "settle": 4327.5,
+        "oi": 50,
+        "oi_chg": 3
+      },
+      {
+        "month": "MAR28",
+        "settle": 4342.8,
+        "oi": 4,
+        "oi_chg": 0
+      },
+      {
+        "month": "APR28",
+        "settle": 4359.9,
+        "oi": 105,
+        "oi_chg": 0
+      },
+      {
+        "month": "MAY28",
+        "settle": 4376.1,
+        "oi": 3,
+        "oi_chg": 0
+      },
+      {
+        "month": "JUN28",
+        "settle": 4391.4,
+        "oi": 103,
+        "oi_chg": 0
+      },
+      {
+        "month": "DEC28",
+        "settle": 4487.5,
+        "oi": 131,
+        "oi_chg": 0
+      },
+      {
+        "month": "JUN29",
+        "settle": 4583.4,
+        "oi": 34,
+        "oi_chg": 0
+      },
+      {
+        "month": "DEC29",
+        "settle": 4681.8,
+        "oi": 28,
+        "oi_chg": 0
+      }
+    ]
   }
 ]
