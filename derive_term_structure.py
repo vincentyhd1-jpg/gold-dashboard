@@ -27,7 +27,9 @@ OUT_DIR  = os.path.join(os.path.dirname(__file__), "data", "derived")
 OUT_PATH = os.path.join(OUT_DIR, "term-structure-series.json")
 
 ACTIVE_OI_THRESHOLD = 0.05  # contract must hold >5% of total OI to be "active"
-ROLL_CANDIDATES = 3          # look at top-N OI contracts to find front/next
+
+# 主力月持仓跌破自身峰值的这个比例 → 判定为正在移仓
+ROLL_WINDOW_OI_RATIO = 0.5
 
 
 # 交易日历统一由 trading_calendar 提供（采集层与派生层共用同一份假日表）
@@ -232,11 +234,13 @@ def derive(records: list[dict]) -> dict:
         front, nxt = find_front_next(wm)
         rp = roll_progress(wm, front, nxt) if (front and nxt) else None
 
-        # roll_window: 5 trading days before expiry of front month
-        # (simple heuristic: front month OI < 20% of its recent peak → in roll window)
+        # in_roll_window: 主力月持仓已从自身峰值跌破一半 → 正在移仓
+        # 用持仓相对峰值的比例判定，不用到期日 —— oi.json 里没有到期日字段，
+        # 而持仓塌落本身就是移仓正在发生的直接证据。
         front_oi = oi_map.get(front, 0) if front else 0
         front_oi_max = max((oi_maps[j].get(front, 0) for j in range(idx + 1)), default=0)
-        in_roll_window = bool(front_oi_max > 0 and front_oi / front_oi_max < 0.5)
+        in_roll_window = bool(front_oi_max > 0
+                              and front_oi / front_oi_max < ROLL_WINDOW_OI_RATIO)
 
         frames.append({
             "date":           r["date"],
