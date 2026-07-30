@@ -84,7 +84,7 @@ await page.waitForTimeout(400);
 const top = await page.locator('#oiChart').boundingBox();
 const bot = await page.locator('#oiPlaybar').boundingBox();
 await page.screenshot({
-  path: path.join(__dirname, 'live-playback.png'),
+  path: path.join(__dirname, '..', 'screenshots', 'live-playback.png'),
   clip: { x: 100, y: top.y - 70, width: 1200, height: (bot.y + bot.height) - (top.y - 70) + 16 },
 });
 console.log('\nscreenshot -> screenshots/live-playback.png');
