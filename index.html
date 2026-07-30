@@ -98,14 +98,22 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 
 /* ── 期限结构回放控件 ── */
 #oiPlaybar{display:flex;align-items:center;gap:10px;padding:8px 0 2px;flex-wrap:wrap}
-#oiPlaybar button{background:none;border:1px solid #30363d;border-radius:5px;color:#8b949e;cursor:pointer;font-size:13px;line-height:1;padding:4px 10px;transition:color .15s,border-color .15s}
+#oiPlaybar button{background:none;border:1px solid #30363d;border-radius:5px;color:#8b949e;cursor:pointer;font-size:13px;line-height:1;padding:4px 10px;transition:color .15s,border-color .15s,background-color .15s}
 #oiPlaybar button:hover{color:#e6edf3;border-color:#58a6ff}
+#oiPlaybar button:focus-visible{outline:2px solid #58a6ff;outline-offset:1px}
 #oiPlaySlider{flex:1;min-width:120px;accent-color:#58a6ff;cursor:pointer}
 #oiPlayDate{font-size:12px;color:#58a6ff;font-weight:600;white-space:nowrap;min-width:64px}
+/* 移仓面板横轴是日期而非交割月，用分隔线+小标题与上方两图隔开 */
+#oiRollWrap{margin-top:10px}
+.oi-panel-sep{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.oi-panel-sep::before,.oi-panel-sep::after{content:"";flex:1;height:1px;background:#21262d}
+.oi-panel-sep span{font-size:10px;color:#6e7681;white-space:nowrap}
 .oi-speed-btns{display:flex;gap:4px}
 .oi-speed-btns button{font-size:11px;padding:3px 7px}
-.oi-speed-btns button.active{color:#58a6ff;border-color:#58a6ff}
 #oiGhostToggle{font-size:11px;padding:3px 8px}
+/* 倍速与残影共用同一种按下态：背景填充表示选中，不靠文字区分 */
+#oiPlaybar button[aria-pressed="true"]{background:rgba(88,166,255,0.16);border-color:#58a6ff;color:#58a6ff;font-weight:600}
+#oiPlaybar button[aria-pressed="true"]:hover{background:rgba(88,166,255,0.24)}
 @media(max-width:600px){
   #oiPlaybar{padding-bottom:6px}
   #oiPlaySlider{min-width:80px}
@@ -355,17 +363,20 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     </div>
     <div class="chart-wrap" style="height:220px"><canvas id="oiChart"></canvas></div>
     <div id="oiDeltaWrap" style="height:90px;margin-top:4px;position:relative"><canvas id="oiDeltaChart"></canvas></div>
-    <div id="oiRollWrap" style="height:80px;margin-top:4px;position:relative"><canvas id="oiRollChart"></canvas></div>
+    <div id="oiRollWrap">
+      <div class="oi-panel-sep"><span>移仓进度 · 横轴为日期</span></div>
+      <div style="height:80px;position:relative"><canvas id="oiRollChart"></canvas></div>
+    </div>
     <div id="oiPlaybar">
       <button id="oiPlayBtn" title="播放/暂停 (Space)">&#9654;</button>
       <input id="oiPlaySlider" type="range" min="0" value="0" step="1">
       <span id="oiPlayDate">--</span>
-      <div class="oi-speed-btns">
-        <button data-speed="0.5">0.5x</button>
-        <button data-speed="1" class="active">1x</button>
-        <button data-speed="2">2x</button>
+      <div class="oi-speed-btns" role="group" aria-label="播放速度">
+        <button data-speed="0.5" aria-pressed="false">0.5x</button>
+        <button data-speed="1" aria-pressed="true">1x</button>
+        <button data-speed="2" aria-pressed="false">2x</button>
       </div>
-      <button id="oiGhostToggle" title="残影">残影 ON</button>
+      <button id="oiGhostToggle" title="残影：显示前 3 帧轮廓" aria-pressed="true">残影</button>
     </div>
     <div class="chart-wrap" style="height:220px;display:none"><canvas id="oiHistChart"></canvas></div>
   </div>
@@ -1150,19 +1161,22 @@ function _initCharts(series) {
       labels,
       datasets: [
         // dataset 0–2: ghost bars (前3帧，透明度递减)
+        // grouped:false —— 4 个 bar dataset 必须重叠在 band 中心，不能并排摊开。
+        // 并排时每个变窄（50→13px）且整体左移 21px，与下方 delta 面板错位；
+        // 残影开关 OFF 只是把数据置 null，dataset 仍在数组里，band 空间照样被分配。
         { type:'bar', label:'ghost2', data: new Array(labels.length).fill(null),
           backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
-          yAxisID:'yOI', order:5 },
+          yAxisID:'yOI', order:5, grouped:false },
         { type:'bar', label:'ghost1', data: new Array(labels.length).fill(null),
           backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
-          yAxisID:'yOI', order:4 },
+          yAxisID:'yOI', order:4, grouped:false },
         { type:'bar', label:'ghost0', data: new Array(labels.length).fill(null),
           backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
-          yAxisID:'yOI', order:3 },
+          yAxisID:'yOI', order:3, grouped:false },
         // dataset 3: current OI bars
         { type:'bar', label:'持仓 OI', data: new Array(labels.length).fill(null),
           backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:3,
-          yAxisID:'yOI', order:2 },
+          yAxisID:'yOI', order:2, grouped:false },
         // dataset 4: price line
         { type:'line', label:'结算价', data: new Array(labels.length).fill(null),
           borderColor:'#58a6ff', backgroundColor:'rgba(88,166,255,0.08)',
@@ -1334,7 +1348,15 @@ function _initCharts(series) {
         }
       },
       scales: {
-        x: { display:false },
+        // 这个面板横轴是日期，上面两个是交割月 —— 必须显示刻度，
+        // 否则会被误读为与主图共享同一条横轴
+        x: {
+          display: true,
+          ticks: { font:{size:9}, color:'#6e7681', maxTicksLimit:8,
+            maxRotation:0, autoSkipPadding:12 },
+          grid: { color:'#1b2027' },
+          border: { color:'#30363d' }
+        },
         y: {
           position: 'right',
           min: 0, max: 1,
@@ -1492,17 +1514,18 @@ function _initPlaybarControls(series) {
 
   document.getElementById('oiPlayBtn').addEventListener('click', _oiPlay);
 
-  document.querySelectorAll('.oi-speed-btns button').forEach(btn => {
+  const speedBtns = document.querySelectorAll('.oi-speed-btns button');
+  speedBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       _play.speed = parseFloat(btn.dataset.speed);
-      document.querySelectorAll('.oi-speed-btns button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      speedBtns.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
     });
   });
 
-  document.getElementById('oiGhostToggle').addEventListener('click', () => {
+  const ghostBtn = document.getElementById('oiGhostToggle');
+  ghostBtn.addEventListener('click', () => {
     _play.ghost = !_play.ghost;
-    document.getElementById('oiGhostToggle').textContent = _play.ghost ? '残影 ON' : '残影 OFF';
+    ghostBtn.setAttribute('aria-pressed', String(_play.ghost));
     _renderFrame(_play.frameIdx, false);
   });
 

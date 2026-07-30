@@ -33,6 +33,11 @@ OUT_PATH = os.path.join(OUT_DIR, "term-structure-series.json")
 # 尚未当过主力月的承接月，用来把它和噪音级的存根月区分开。
 MIN_NEXT_OI_RATIO = 0.01
 
+# 合约月要进入 X 轴，其历史峰值持仓需达到全序列最大持仓的这个比例。
+# 低于此值的月份在锁定的 Y 轴上连一个像素都画不出来，只会挤占横轴。
+# 0.05% 落在噪音层（<=42）与真实薄月（>=272）之间的 6.5x 断层里。
+MIN_VISIBLE_OI_RATIO = 0.0005
+
 # 到期月持仓跌到自身峰值的这个比例以下 → 视为移仓完毕，不再作为 roll_from。
 # 否则窗口滚动后，序列会永远卡在最早那个早已到期的月份上。
 ROLL_DONE_OI_RATIO = 0.02
@@ -221,11 +226,23 @@ def derive(records: list[dict]) -> dict:
         warnings.extend(check_stored_oi_chg(r))
 
     # Build sorted union of all contract labels across all records (one-year window)
-    all_labels: set[str] = set()
+    # 剔除全程持仓都低到画不出来的合约月：它们在图上是空列，随回放天数累积
+    # 会让 X 轴越来越挤。
+    #
+    # 判据用「峰值占全序列 oi_max 的比例」而非「是否为 0」：已到期的残月不会
+    # 正好归零（JUN26 峰值为 7），但在锁定的 Y 轴上连一个像素都占不到。
+    # 实测噪音层 JUN26=7 / JUL27=8 / MAY27=14 / MAR27=42 与真实薄月
+    # JAN27=272 / NOV26=280 之间有 6.5x 断层，阈值落在断层里，判定稳定。
+    label_max_oi: dict[str, int] = {}
     for r in records:
         for m in window_months(r.get("months") or []):
-            all_labels.add(m["month"])
-    contracts = sorted(all_labels, key=month_key)
+            v = m.get("oi") or 0
+            if v > label_max_oi.get(m["month"], 0):
+                label_max_oi[m["month"]] = v
+    series_max_oi = max(label_max_oi.values(), default=0)
+    visible_floor = series_max_oi * MIN_VISIBLE_OI_RATIO
+    contracts = sorted((lbl for lbl, mx in label_max_oi.items() if mx > visible_floor),
+                       key=month_key)
 
     dates = [r["date"] for r in records]
 
