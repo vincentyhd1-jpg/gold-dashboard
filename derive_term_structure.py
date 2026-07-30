@@ -272,37 +272,99 @@ def derive(records: list[dict]) -> dict:
 
 def run_tests(records: list[dict]) -> None:
     """
-    Validates diff-computed oi_chg against CME-stored oi_chg.
+    两部分：
 
-    Test cases:
-    - 2026-06-26: first frame, no predecessor → all oi_chg must be None
-    - 2026-07-24: mid-sequence frame, diff == stored (CME values confirmed good)
-    - 2026-07-27: CME revised prior-day OI → diff ≠ stored; values must be tagged unreliable
+    1. 冻结 fixture —— 手写的三日数据，覆盖差分逻辑的三种情形。不依赖 oi.json，
+       断言恒定有效。
+    2. 真实数据抽查 —— 拿 oi.json 里的已知日期交叉验证。这些日期终会滑出
+       730 条窗口，届时跳过而非报错：那是数据老化，不是代码回归，
+       每天在 CI 里跑的测试不该因此变红。
     """
     print("Running unit tests...")
     errors = []
+
+    # ── 1. 冻结 fixture ──────────────────────────────────────────────────
+    # 2026-01-05/06/07 为连续交易日。三个合约，构造出：
+    #   day1 首帧无前驱          → oi_chg 全 None
+    #   day2 stored == diff      → 正常，unreliable_chg 为空
+    #   day3 FEB26 stored ≠ diff → 该合约进 unreliable_chg
+    FIXTURE = [
+        {"date": "2026-01-05", "months": [
+            {"month": "FEB26", "settle": 4000.0, "oi": 100000, "oi_chg": 500},
+            {"month": "APR26", "settle": 4020.0, "oi": 50000,  "oi_chg": -200},
+            {"month": "JUN26", "settle": 4040.0, "oi": 20000,  "oi_chg": 0},
+        ]},
+        {"date": "2026-01-06", "months": [
+            {"month": "FEB26", "settle": 4010.0, "oi": 101000, "oi_chg": 1000},
+            {"month": "APR26", "settle": 4030.0, "oi": 49000,  "oi_chg": -1000},
+            {"month": "JUN26", "settle": 4050.0, "oi": 20500,  "oi_chg": 500},
+        ]},
+        {"date": "2026-01-07", "months": [
+            # FEB26 实际 diff = +1500，但 CME 报 +1200（盘后修订前一日存量）
+            {"month": "FEB26", "settle": 4015.0, "oi": 102500, "oi_chg": 1200},
+            {"month": "APR26", "settle": 4035.0, "oi": 48000,  "oi_chg": -1000},
+            {"month": "JUN26", "settle": 4055.0, "oi": 21000,  "oi_chg": 500},
+        ]},
+    ]
+    fx = derive(FIXTURE)
+    fx_idx = {c: i for i, c in enumerate(fx["contracts"])}
+    f1, f2, f3 = fx["frames"]
+
+    if any(v is not None for v in f1["oi_chg"]):
+        errors.append(f"FIXTURE day1: 首帧应全 None，得到 {f1['oi_chg']}")
+    else:
+        print("  PASS  fixture day1: 首帧 oi_chg 全 None")
+
+    want2 = {"FEB26": 1000, "APR26": -1000, "JUN26": 500}
+    bad2 = {c: f2["oi_chg"][fx_idx[c]] for c, w in want2.items()
+            if f2["oi_chg"][fx_idx[c]] != w}
+    if bad2 or f2["unreliable_chg"]:
+        errors.append(f"FIXTURE day2: 差分不符 {bad2}，unreliable={f2['unreliable_chg']}")
+    else:
+        print("  PASS  fixture day2: 差分与 CME 值一致，无 unreliable 标记")
+
+    want3 = {"FEB26": 1500, "APR26": -1000, "JUN26": 500}
+    bad3 = {c: f3["oi_chg"][fx_idx[c]] for c, w in want3.items()
+            if f3["oi_chg"][fx_idx[c]] != w}
+    if bad3:
+        errors.append(f"FIXTURE day3: 差分不符 {bad3}（应以 diff 为准，非 CME stored）")
+    elif set(f3["unreliable_chg"] or []) != {"FEB26"}:
+        errors.append(f"FIXTURE day3: unreliable_chg 应为 ['FEB26']，"
+                      f"得到 {f3['unreliable_chg']}")
+    else:
+        print("  PASS  fixture day3: 修订合约取 diff 并标记 unreliable_chg")
+
+    # ── 2. 真实数据抽查 ──────────────────────────────────────────────────
     result = derive(records)
     contract_idx = {c: i for i, c in enumerate(result["contracts"])}
 
     def get_frame(d: str):
         return next((f for f in result["frames"] if f["date"] == d), None)
 
-    # Test 1: first frame → all oi_chg null (no predecessor to diff against)
-    f0 = get_frame("2026-06-26")
+    # 抽查 1：首帧无前驱 → oi_chg 全 None
+    # 注意断言的是「序列首帧」而非某个固定日期，窗口滚动后依然成立
+    f0 = result["frames"][0] if result["frames"] else None
     if f0 is None:
-        errors.append("FAIL 2026-06-26: frame missing")
+        print("  SKIP  真实数据抽查 1：oi.json 为空")
     else:
         non_null = [v for v in f0["oi_chg"] if v is not None]
         if non_null:
-            errors.append(f"FAIL 2026-06-26: expected all None, got {len(non_null)} non-null")
+            errors.append(
+                f"FAIL {f0['date']}: 首帧应全 None，得到 {len(non_null)} 个非 None"
+            )
         else:
-            print("  PASS  2026-06-26: first frame all oi_chg=None")
+            print(f"  PASS  {f0['date']}: 首帧 oi_chg 全 None")
 
-    # Test 2: 2026-07-24 — no CME revision; diff must exactly match stored values
+    # 抽查 2：2026-07-24 —— CME 未修订，diff 必须与 stored 完全一致
+    # 前提是它仍是中段帧：窗口滚动到它成为首帧时无前驱可差分，oi_chg 全 None
+    # 是正确行为，此时比对 stored 会得到一堆假失败。
     f24 = get_frame("2026-07-24")
     r24 = next((r for r in records if r["date"] == "2026-07-24"), None)
+    first_date = result["frames"][0]["date"] if result["frames"] else None
     if f24 is None or r24 is None:
-        errors.append("FAIL 2026-07-24: frame or record missing")
+        print("  SKIP  真实数据抽查 2：2026-07-24 已滑出窗口")
+    elif f24["date"] == first_date:
+        print("  SKIP  真实数据抽查 2：2026-07-24 已成为序列首帧（无前驱）")
     else:
         stored = {m["month"]: m.get("oi_chg") for m in r24.get("months", []) if "oi_chg" in m}
         mismatches = []
@@ -320,22 +382,24 @@ def run_tests(records: list[dict]) -> None:
         else:
             print(f"  PASS  2026-07-24: {len(stored)} oi_chg values match CME stored")
 
-    # Test 3: 2026-07-27 — CME revised prior-day OI; known diverging contracts must be
-    # tagged unreliable=True; their diff values may differ from stored
+    # 抽查 3：2026-07-27 —— CME 盘后修订了前一日存量，这 4 个合约必须被标记
+    # 同抽查 2：它成为首帧时无前驱可差分，unreliable_chg 为空是正确行为
     f27 = get_frame("2026-07-27")
     r27 = next((r for r in records if r["date"] == "2026-07-27"), None)
     if f27 is None or r27 is None:
-        errors.append("FAIL 2026-07-27: frame or record missing")
+        print("  SKIP  真实数据抽查 3：2026-07-27 已滑出窗口")
+    elif f27["date"] == first_date:
+        print("  SKIP  真实数据抽查 3：2026-07-27 已成为序列首帧（无前驱）")
     else:
         known_revised = {"AUG26", "DEC26", "OCT26", "JUL26"}
         unreliable = set(f27.get("unreliable_chg") or [])
         missing = known_revised - unreliable
         if missing:
             errors.append(
-                f"FAIL 2026-07-27: revised contracts not tagged unreliable: {missing}"
+                f"FAIL 2026-07-27: 修订合约未被标记 unreliable: {missing}"
             )
         else:
-            print(f"  PASS  2026-07-27: revised contracts correctly tagged unreliable")
+            print("  PASS  2026-07-27: 修订合约已正确标记 unreliable_chg")
 
     if errors:
         print("\nFAILURES:")
