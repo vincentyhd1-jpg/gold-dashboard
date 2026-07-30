@@ -23,9 +23,14 @@ await page.route('**/term-structure-series.json*', async route => {
   await route.fulfill({ response: res, body: JSON.stringify(s) });
 });
 
-await page.goto('http://localhost:3001', { waitUntil: 'networkidle' });
+// 不用 networkidle：Chart.js 走 CDN，网络不畅时该事件永不触发（实测超时 30s）。
+// 直接等图表实例就绪。
+await page.goto('http://localhost:3001', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForFunction(
+  () => typeof Chart !== 'undefined' && Chart.getChart('oiChart') && Chart.getChart('oiDeltaChart'),
+  { timeout: 60000 });
 await page.waitForSelector('#oiPlaybar', { timeout: 15000 });
-await page.waitForTimeout(1500);
+await page.waitForTimeout(800);
 
 const readAt = async idx => {
   await page.evaluate(i => {

@@ -12,16 +12,20 @@ const errs = [];
 page.on('pageerror', e => errs.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('[console] ' + m.text()); });
 
-await page.goto('http://localhost:3001', { waitUntil: 'networkidle' });
+// 不用 networkidle：Chart.js 走 CDN，网络不畅时该事件永不触发（实测超时 30s）。
+// 直接等图表实例就绪。
+await page.goto('http://localhost:3001', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForFunction(
+  () => typeof Chart !== 'undefined' && Chart.getChart('oiChart'),
+  { timeout: 60000 });
 await page.waitForSelector('#oiPlaybar');
-await page.waitForTimeout(1500);
+await page.waitForTimeout(800);
 
 const read = () => page.evaluate(() => ({
   date: document.getElementById('oiPlayDate').textContent,
   slider: document.getElementById('oiPlaySlider').value,
   max: document.getElementById('oiPlaySlider').max,
   btn: document.getElementById('oiPlayBtn').textContent.trim(),
-  ghost: document.getElementById('oiGhostToggle').textContent,
   front: document.getElementById('oiFrontMonth').textContent,
   oiVal: document.getElementById('oiVal').textContent,
 }));
@@ -64,20 +68,12 @@ await page.waitForTimeout(250);
 console.log('--- after ArrowLeft (frame -1) ---');
 console.log(JSON.stringify(await read()));
 
-// Ghost toggle
-await page.click('#oiGhostToggle');
-await page.waitForTimeout(250);
-console.log('--- after ghost toggle ---');
-console.log(JSON.stringify(await read()));
-await page.click('#oiGhostToggle');
-await page.waitForTimeout(200);
-
-// Speed button
+// Speed button（选中态用 aria-pressed，不是 .active class）
 await page.click('.oi-speed-btns button[data-speed="2"]');
 await page.waitForTimeout(150);
 const speedActive = await page.evaluate(() =>
   [...document.querySelectorAll('.oi-speed-btns button')]
-    .map(b => b.dataset.speed + (b.classList.contains('active') ? '*' : '')).join(' '));
+    .map(b => b.dataset.speed + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')).join(' '));
 console.log('--- speed buttons (2x should be active) ---');
 console.log(speedActive);
 

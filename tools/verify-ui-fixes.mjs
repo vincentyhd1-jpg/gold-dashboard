@@ -11,9 +11,14 @@ const errs = [];
 page.on('pageerror', e => errs.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('[console] ' + m.text()); });
 
-await page.goto('http://localhost:3001', { waitUntil: 'networkidle' });
+// 不用 networkidle：Chart.js 走 CDN，网络不畅时该事件永不触发（实测超时 30s）。
+// 直接等图表实例就绪。
+await page.goto('http://localhost:3001', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForFunction(
+  () => typeof Chart !== 'undefined' && Chart.getChart('oiChart') && Chart.getChart('oiDeltaChart'),
+  { timeout: 60000 });
 await page.waitForSelector('#oiPlaybar');
-await page.waitForTimeout(1500);
+await page.waitForTimeout(800);
 
 let pass = 0, fail = 0;
 const check = (name, ok, detail = '') => {
@@ -51,20 +56,19 @@ check('主图所有柱 offset 为 0', align.rows.every(r => r.mainOff === 0),
 check('主图与 delta 柱宽一致', align.rows.every(r => Math.abs(r.mainW - r.deltaW) <= 1),
       align.rows.filter(r => Math.abs(r.mainW - r.deltaW) > 1).map(r => `${r.label}:${r.mainW}vs${r.deltaW}`));
 
-// ── 2. 按钮选中态 ──────────────────────────────────────────────────────
-console.log('\n[2] 倍速 / 残影按钮选中态');
-const btnState = async () => page.evaluate(() => {
-  const sp = [...document.querySelectorAll('.oi-speed-btns button')].map(b => ({
+// ── 2. 倍速按钮选中态 ──────────────────────────────────────────────────
+console.log('\n[2] 倍速按钮选中态');
+const btnState = async () => page.evaluate(() => ({
+  sp: [...document.querySelectorAll('.oi-speed-btns button')].map(b => ({
     speed: b.dataset.speed,
     pressed: b.getAttribute('aria-pressed'),
     bg: getComputedStyle(b).backgroundColor,
     color: getComputedStyle(b).color,
-  }));
-  const g = document.getElementById('oiGhostToggle');
-  return { sp, ghost: { text: g.textContent.trim(), pressed: g.getAttribute('aria-pressed'), bg: getComputedStyle(g).backgroundColor } };
-});
+  })),
+  ghostGone: !document.getElementById('oiGhostToggle'),
+}));
 let st = await btnState();
-console.log('  初始:', st.sp.map(s => `${s.speed}x[${s.pressed}]`).join(' '), '| 残影', st.ghost.pressed);
+console.log('  初始:', st.sp.map(s => `${s.speed}x[${s.pressed}]`).join(' '));
 check('默认 1x 为 pressed', st.sp.find(s => s.speed === '1').pressed === 'true');
 check('未选中倍速 pressed=false', st.sp.filter(s => s.speed !== '1').every(s => s.pressed === 'false'));
 const active = st.sp.find(s => s.speed === '1'), idle = st.sp.find(s => s.speed === '2');
@@ -76,15 +80,7 @@ st = await btnState();
 console.log('  点 2x 后:', st.sp.map(s => `${s.speed}x[${s.pressed}]`).join(' '));
 check('点击后仅 2x 为 pressed',
       st.sp.filter(s => s.pressed === 'true').map(s => s.speed).join() === '2');
-
-check('残影文字固定为「残影」', st.ghost.text === '残影', st.ghost.text);
-await page.click('#oiGhostToggle');
-await page.waitForTimeout(150);
-st = await btnState();
-console.log('  切残影后:', st.ghost.pressed, st.ghost.text);
-check('残影切换后 pressed=false 且文字不变',
-      st.ghost.pressed === 'false' && st.ghost.text === '残影', st.ghost);
-await page.click('#oiGhostToggle');
+check('残影按钮已移除', st.ghostGone);
 
 // ── 3. roll 面板 X 轴 ──────────────────────────────────────────────────
 console.log('\n[3] roll 面板 X 轴刻度与隔离');

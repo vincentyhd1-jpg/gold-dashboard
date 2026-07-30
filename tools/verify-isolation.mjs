@@ -17,8 +17,16 @@ async function run(label, patch) {
     await route.fulfill({ response, body });
   });
 
-  await page.goto('http://localhost:3001', { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2500);
+  // 不用 networkidle：Chart.js 走 CDN，网络不畅时该事件永不触发（实测超时 30s）。
+  // 这里也不能等某个具体图表实例 —— 本脚本故意注入渲染故障，被打掉的图表
+  // 本就不会出现。改等 footerNote 被改写：它在 .then 与 .catch 的开头都会执行，
+  // 是「渲染流程已跑完」的可靠信号。
+  await page.goto('http://localhost:3001', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForFunction(
+    () => typeof Chart !== 'undefined'
+      && !/每周六自动更新/.test(document.getElementById('footerNote')?.textContent || ''),
+    { timeout: 60000 });
+  await page.waitForTimeout(1200);
 
   const state = await page.evaluate(() => ({
     footer: document.getElementById('footerNote')?.textContent.slice(0, 30),

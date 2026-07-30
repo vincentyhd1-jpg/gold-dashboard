@@ -14,9 +14,14 @@ const errs = [];
 page.on('pageerror', e => errs.push('[pageerror] ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('[console] ' + m.text()); });
 
-await page.goto(URL, { waitUntil: 'networkidle' });
+// 不用 networkidle：Chart.js 走 CDN，网络不畅时该事件永不触发（实测超时 30s）。
+// 直接等图表实例就绪。线上站点放宽超时。
+await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForFunction(
+  () => typeof Chart !== 'undefined' && Chart.getChart('oiChart'),
+  { timeout: 60000 });
 await page.waitForSelector('#oiPlaybar', { timeout: 15000 });
-await page.waitForTimeout(2000);
+await page.waitForTimeout(1200);
 
 const read = () => page.evaluate(() => ({
   date:   document.getElementById('oiPlayDate').textContent,
