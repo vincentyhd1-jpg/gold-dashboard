@@ -119,9 +119,8 @@ function renderOI(oiData) {
       oi: months.map(m => m.oi),
       oi_chg: months.map(m => m.oi_chg ?? null),
       front: months.reduce((a,b) => b.oi > a.oi ? b : a, months[0]).month,
-      // 单帧算不出 roll_progress（需要跨帧的持仓迁移），但价差卡只需要两个
-      // 锚点，可以从单个快照近似：到期月取日历序上第一个持仓过 5% 的月，
-      // 承接月取其后持仓最大的月。
+      // 价差卡只需要两个锚点，可以从单个快照近似：到期月取日历序上第一个
+      // 持仓过 5% 的月，承接月取其后持仓最大的月。
       ...(() => {
         const tot = months.reduce((s,m) => s + (m.oi||0), 0);
         const from = months.find(m => (m.oi||0) >= tot * 0.05) || months[0];
@@ -131,7 +130,8 @@ function renderOI(oiData) {
           ? after.reduce((a,b) => b.oi > a.oi ? b : a) : null;
         return { roll_from: from.month, roll_to: to ? to.month : null };
       })(),
-      roll_progress: null,
+      // 单帧无历史峰值可比，近月剩余与噪音比都算不出来
+      front_remaining: null, roll_noise: null, roll_noise_ma: null,
       in_roll_window: false, unreliable_chg: null
     }],
     scale: {

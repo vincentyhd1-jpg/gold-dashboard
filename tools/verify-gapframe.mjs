@@ -1,4 +1,4 @@
-// 前端对断层帧的处理：oi_chg 全 null + roll_progress null。
+// 前端对断层帧的处理：oi_chg 全 null + 移仓相关字段全 null。
 // derive 已实测会产出这种帧（挖掉交易日时），但 UI 从未收到过。
 import { chromium } from 'playwright';
 
@@ -14,11 +14,13 @@ page.on('console', m => { if (m.type() === 'error') errs.push('[console] ' + m.t
 await page.route('**/term-structure-series.json*', async route => {
   const res = await route.fetch();
   const s = await res.json();
-  // 把第 5 帧改成断层帧：oi_chg 全 null，roll_progress null
+  // 把第 5 帧改成断层帧：oi_chg 全 null，移仓相关字段全 null
   const i = 5;
   s.frames[i].oi_chg = s.frames[i].oi_chg.map(() => null);
-  s.frames[i].roll_progress = null;
-  s.frames[i].next = null;
+  s.frames[i].front_remaining = null;
+  s.frames[i].roll_noise = null;
+  s.frames[i].roll_noise_ma = null;
+  s.frames[i].roll_to = null;
   s.frames[i].unreliable_chg = null;
   await route.fulfill({ response: res, body: JSON.stringify(s) });
 });
@@ -58,7 +60,7 @@ const readAt = async idx => {
 
 console.log('--- 断层帧前 (idx 4) ---');
 console.log(JSON.stringify(await readAt(4)));
-console.log('\n--- 断层帧 (idx 5, oi_chg 全 null / roll_progress null) ---');
+console.log('\n--- 断层帧 (idx 5, oi_chg 全 null / front_remaining null) ---');
 console.log(JSON.stringify(await readAt(5)));
 console.log('\n--- 断层帧后 (idx 6) ---');
 console.log(JSON.stringify(await readAt(6)));

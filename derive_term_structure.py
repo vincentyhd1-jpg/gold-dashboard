@@ -6,7 +6,9 @@ Key logic:
 - oi_chg is computed from OI diffs (oi[t] - oi[t-1] per contract), NOT stored values,
   because stored values are unreliable for 06-29..07-23.
 - Trading-day continuity is validated; gaps > 1 trading day set oi_chg=null for that frame.
-- roll_progress = next_active_OI / (front_OI + next_active_OI), where "active" = OI > 5% of total.
+- front_remaining = 到期月当前 OI / 到期月历史峰值 OI，从 1 降到 0。
+- roll_noise = |到期月 OI 变化| / Σ|全部合约 OI 变化|，另存 3 日均值 roll_noise_ma。
+  暂无阈值：当前数据全在移仓加剧的上升段，无平静期可供定位拐点。
 - Global scale extremes span the full dataset for locked Y-axes during playback.
 
 陈旧/重复快照的拦截点在采集层（fetch_oi.py 的 validate()），坏数据不会写进
@@ -39,6 +41,11 @@ ROLL_DONE_OI_RATIO = 0.02
 
 # 主力月持仓跌破自身峰值的这个比例 → 判定为正在移仓
 ROLL_WINDOW_OI_RATIO = 0.5
+
+# roll_noise 的移动平均窗口（交易日）。
+# 取 3 而非 5：22 帧的序列上 5 日均值平滑过度，把 06-30 的真实低谷
+# （raw 0.0182）抹成 0.1430 且滞后一帧。等数据攒够再调回。
+ROLL_NOISE_MA_DAYS = 3
 
 
 # 交易日历统一由 trading_calendar 提供（采集层与派生层共用同一份假日表）
@@ -145,22 +152,48 @@ def find_roll_pair(months: list[dict], peak_oi: dict[str, int],
     return majors[-2], majors[-1]
 
 
-def roll_progress(months: list[dict],
-                  roll_from: str | None, roll_to: str | None) -> float | None:
+def front_remaining(months: list[dict], roll_from: str | None,
+                    peak_oi: dict[str, int]) -> float | None:
     """
-    roll_to_OI / (roll_from_OI + roll_to_OI)，从 0 爬向 1。
+    近月剩余 = 到期月当前 OI / 到期月历史峰值 OI，从 1 降到 0。
 
-    分母的 roll_from 必须是到期月（见 find_roll_pair），不是展示用的 front，
-    否则数值恒 <= 0.5。
+    直接回答「这个合约还剩多少仓位没走」。分子分母是同一个合约，不受承接月
+    的选取影响 —— 旧的 roll_to/(roll_from+roll_to) 是迁移占比，会随承接月
+    换月而跳变，且方向是 0→1，读起来像进度条但分母含义会变。
+
+    分母用历史峰值而非窗口内首帧：窗口滚动后首帧可能已在移仓中途，
+    用它做分母会让曲线起点低于 1。
     """
-    if not roll_from or not roll_to:
+    if not roll_from:
         return None
     oi_map = {m["month"]: m["oi"] for m in months}
-    f_oi = oi_map.get(roll_from, 0)
-    n_oi = oi_map.get(roll_to, 0)
-    if f_oi + n_oi == 0:
+    cur = oi_map.get(roll_from)
+    pk = peak_oi.get(roll_from, 0)
+    if cur is None or pk <= 0:
         return None
-    return round(n_oi / (f_oi + n_oi), 4)
+    return round(min(cur / pk, 1.0), 4)
+
+
+def roll_noise(oi_chg: list[int | None], front_idx: int | None) -> float | None:
+    """
+    |到期月 OI 变化| / Σ|全部合约 OI 变化|，单帧原始值。
+
+    衡量当日的持仓变动有多少来自移仓而非新增/离场。接近 1 说明当天的变化
+    几乎全是到期月在流出（纯移仓噪音），接近 0 说明变化来自别处。
+
+    暂不设阈值：当前数据全在移仓加剧的上升段，没有平静期可供定位拐点。
+    详见 CLAUDE.md。
+    """
+    if front_idx is None or front_idx < 0 or front_idx >= len(oi_chg):
+        return None
+    vals = [v for v in oi_chg if v is not None]
+    if not vals:
+        return None
+    total = sum(abs(v) for v in vals)
+    fv = oi_chg[front_idx]
+    if total == 0 or fv is None:
+        return None
+    return round(abs(fv) / total, 4)
 
 
 # ── Integrity checks ─────────────────────────────────────────────────────────
@@ -344,7 +377,9 @@ def derive(records: list[dict]) -> dict:
         # 展示用主力月与移仓两端分开取（见 find_roll_pair 的说明）
         front = find_front(wm)
         roll_from, roll_to = find_roll_pair(wm, peak_oi, ever_front)
-        rp = roll_progress(wm, roll_from, roll_to)
+        fr_remaining = front_remaining(wm, roll_from, peak_oi)
+        rn_raw = roll_noise(oi_chg_arr,
+                            contracts.index(roll_from) if roll_from in contracts else None)
 
         # in_roll_window: 到期月持仓已从自身峰值跌破一半 → 移仓正在进行
         # 用持仓相对峰值的比例判定，不用到期日 —— oi.json 里没有到期日字段，
@@ -357,17 +392,26 @@ def derive(records: list[dict]) -> dict:
                               and from_oi / from_peak < ROLL_WINDOW_OI_RATIO)
 
         frames.append({
-            "date":           r["date"],
-            "settle":         settle_arr,
-            "oi":             oi_arr,
-            "oi_chg":         oi_chg_arr,
-            "front":          front,
-            "roll_from":      roll_from,
-            "roll_to":        roll_to,
-            "roll_progress":  rp,
-            "in_roll_window": in_roll_window,
-            "unreliable_chg": unreliable or None,
+            "date":            r["date"],
+            "settle":          settle_arr,
+            "oi":              oi_arr,
+            "oi_chg":          oi_chg_arr,
+            "front":           front,
+            "roll_from":       roll_from,
+            "roll_to":         roll_to,
+            "front_remaining": fr_remaining,
+            "roll_noise":      rn_raw,
+            "in_roll_window":  in_roll_window,
+            "unreliable_chg":  unreliable or None,
         })
+
+    # roll_noise 的移动平均。逐帧算完原始值后统一做，窗口不足时用已有样本。
+    # 只存字段，前端暂不使用 —— 阈值待数据覆盖一个完整移仓周期后再定。
+    for i, f in enumerate(frames):
+        lo = max(0, i - (ROLL_NOISE_MA_DAYS - 1))
+        w = [frames[j]["roll_noise"] for j in range(lo, i + 1)
+             if frames[j]["roll_noise"] is not None]
+        f["roll_noise_ma"] = round(sum(w) / len(w), 4) if w else None
 
     if scale["settle_min"] == float("inf"):
         scale["settle_min"] = 0
@@ -454,8 +498,8 @@ def run_tests(records: list[dict]) -> None:
     # 构造一次完整的 FEB26 -> APR26 移仓：到期月持仓流出、承接月流入，
     # 并让两者在中途交叉（day3 起 APR26 持仓超过 FEB26）。
     #
-    # 交叉点是关键：分母若用「持仓最大的月」（展示用 front），一交叉就换标签，
-    # roll_progress 恒 <= 0.5 且会跌回低位；分母锁在到期月才会单调走向 1。
+    # 交叉点是关键：front_remaining 的分子分母都是到期月自己，交叉时必须
+    # 毫无反应；旧的 roll_to/(roll_from+roll_to) 会在交叉处换标签并跌回低位。
     # 掺入 MAR26 存根月（持仓极薄），验证活跃月判定能跳过它。
     ROLL_FIXTURE = [
         # (date, FEB26, MAR26, APR26)
@@ -474,27 +518,30 @@ def run_tests(records: list[dict]) -> None:
         for d, feb, mar, apr in ROLL_FIXTURE
     ])
 
-    rolls  = [f["roll_progress"] for f in rf["frames"]]
+    rolls  = [f["front_remaining"] for f in rf["frames"]]
     froms  = [f["roll_from"] for f in rf["frames"]]
     tos    = [f["roll_to"] for f in rf["frames"]]
     fronts = [f["front"] for f in rf["frames"]]
 
     if any(v is None for v in rolls):
-        errors.append(f"ROLL fixture: roll_progress 不应有 None，得到 {rolls}")
+        errors.append(f"ROLL fixture: front_remaining 不应有 None，得到 {rolls}")
     elif froms != ["FEB26"] * 5:
         # 分母必须全程锁在到期月，不随持仓交叉切换
         errors.append(f"ROLL fixture: roll_from 应恒为 FEB26，得到 {froms}")
     elif tos != ["APR26"] * 5:
         errors.append(f"ROLL fixture: roll_to 应恒为 APR26（跳过 MAR26 存根月），"
                       f"得到 {tos}")
-    elif rolls != sorted(rolls):
-        errors.append(f"ROLL fixture: roll_progress 应单调递增，得到 {rolls}")
-    elif rolls[-1] <= 0.5:
-        # 这条正是 0.5 天花板 bug 的回归断言
-        errors.append(f"ROLL fixture: 末帧 roll_progress 应 > 0.5（移仓近尾声），"
-                      f"得到 {rolls[-1]} —— 分母可能又用回了 front")
+    elif rolls != sorted(rolls, reverse=True):
+        errors.append(f"ROLL fixture: front_remaining 应单调递减，得到 {rolls}")
+    elif rolls[0] != 1.0:
+        # 首帧移仓未启动，到期月持仓正处峰值 → 剩余必须是满值 1
+        errors.append(f"ROLL fixture: 首帧 front_remaining 应为 1.0，得到 {rolls[0]}")
+    elif rolls[-1] >= 0.1:
+        # 末帧移仓近尾声（10000/200000 = 0.05）
+        errors.append(f"ROLL fixture: 末帧 front_remaining 应 < 0.1（移仓近尾声），"
+                      f"得到 {rolls[-1]}")
     else:
-        print(f"  PASS  roll fixture: {rolls[0]} -> {rolls[-1]} 单调爬升且突破 0.5")
+        print(f"  PASS  roll fixture: front_remaining {rolls[0]} -> {rolls[-1]} 单调递减")
 
     # front 应在交叉点切换到承接月，而 roll_from 不跟着切 —— 两者确实解耦
     if fronts != ["FEB26", "FEB26", "APR26", "APR26", "APR26"]:
@@ -502,22 +549,25 @@ def run_tests(records: list[dict]) -> None:
     else:
         print("  PASS  roll fixture: front 随持仓交叉切换，roll_from 保持不动")
 
-    # 无承接月时 roll_progress 应为 None，而不是 0 或异常
+    # 无承接月：roll_to 为 None，但 front_remaining 仍应算得出来 ——
+    # 它只依赖到期月自身，不需要承接月。这正是换定义带来的好处。
     solo = derive([{"date": "2026-01-05", "months": [
         {"month": "FEB26", "settle": 4000.0, "oi": 100000},
         {"month": "MAR26", "settle": 4010.0, "oi": 200},  # 存根月，低于 1% 下限
     ]}])
     s0 = solo["frames"][0]
-    if s0["roll_progress"] is not None or s0["roll_to"] is not None:
-        errors.append(f"ROLL fixture: 无承接月时应为 None，"
-                      f"得到 roll_to={s0['roll_to']} roll={s0['roll_progress']}")
+    if s0["roll_to"] is not None:
+        errors.append(f"ROLL fixture: 无承接月时 roll_to 应为 None，得到 {s0['roll_to']}")
+    elif s0["front_remaining"] != 1.0:
+        errors.append(f"ROLL fixture: 无承接月时 front_remaining 应为 1.0（单帧即峰值），"
+                      f"得到 {s0['front_remaining']}")
     else:
-        print("  PASS  roll fixture: 无承接月 → roll_progress 为 None")
+        print("  PASS  roll fixture: 无承接月 → roll_to=None 但 front_remaining 仍有值")
 
     # ── 1c. 跨周期趋势鲁棒性 ─────────────────────────────────────────────
     # 窗口保留 730 条（约两年），会跨越多个移仓周期。若主力月判定依赖跨时间的
     # 持仓量级比较，长期趋势会让一端的周期整段失效：
-    #   全局峰值基准 → 持仓涨 5 倍时，最早一个周期的帧全部 roll_progress=null
+    #   全局峰值基准 → 持仓涨 5 倍时，最早一个周期的帧全部 front_remaining=null
     #   局部峰值基准 → 同样失效（半径按合约索引取，密度一变含义就变）
     # 现在改用「曾经当过持仓最大的月」这一序数信号，与量级无关。
     # 这批断言就是防止再退回量级比较。
@@ -549,7 +599,7 @@ def run_tests(records: list[dict]) -> None:
     trend_bad = []
     for label, peaks in TRENDS:
         tf = derive(build_trend(peaks))
-        nulls = [f["date"] for f in tf["frames"] if f["roll_progress"] is None]
+        nulls = [f["date"] for f in tf["frames"] if f["front_remaining"] is None]
         if nulls:
             trend_bad.append(f"{label}: {len(nulls)}/{len(tf['frames'])} 帧失效")
     if trend_bad:

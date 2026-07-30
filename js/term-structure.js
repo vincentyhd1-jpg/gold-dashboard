@@ -228,8 +228,11 @@ function _initCharts(series) {
     data: {
       labels: rollDates,
       datasets: [{
+        // 画「近月剩余」= 到期月当前 OI / 其历史峰值 OI，从满到空（1→0）。
+        // 不画旧的 roll_to/(roll_from+roll_to) —— 那是迁移占比，会随承接月
+        // 换月跳变。这条线只是背景参考，不加交互与标记。
         label: '移仓进度',
-        data: series.frames.map(f => f.roll_progress),
+        data: series.frames.map(f => f.front_remaining),
         borderColor: '#a78bfa',
         backgroundColor: 'rgba(167,139,250,0.12)',
         borderWidth: 1.5,
@@ -253,8 +256,8 @@ function _initCharts(series) {
             title: items => items[0]?.label || '',
             label: ctx => {
               const v = ctx.parsed.y;
-              return v == null ? '  移仓进度: --'
-                : '  移仓进度: ' + (v * 100).toFixed(1) + '%';
+              return v == null ? '  近月剩余: --'
+                : '  近月剩余: ' + (v * 100).toFixed(1) + '%';
             }
           }
         }
