@@ -10,7 +10,9 @@ async function run(label, patch) {
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', e => errors.push('[pageerror] ' + e.message));
 
-  await page.route('http://localhost:3001/', async route => {
+  // 拦 root HTML 与拆出的 js/*.js：被注入的函数可能定义在任一文件里
+  // （initOIPlayback 已移到 js/playback.js，只拦 root 会让注入变成空操作）。
+  await page.route(/^http:\/\/localhost:3001\/(|js\/[\w-]+\.js)$/, async route => {
     const response = await route.fetch();
     let body = await response.text();
     body = patch(body);

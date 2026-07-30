@@ -1,0 +1,21 @@
+/* ── 期限结构回放控件 ── */
+#oiPlaybar{display:flex;align-items:center;gap:10px;padding:8px 0 2px;flex-wrap:wrap}
+#oiPlaybar button{background:none;border:1px solid #30363d;border-radius:5px;color:#8b949e;cursor:pointer;font-size:13px;line-height:1;padding:4px 10px;transition:color .15s,border-color .15s,background-color .15s}
+#oiPlaybar button:hover{color:#e6edf3;border-color:#58a6ff}
+#oiPlaybar button:focus-visible{outline:2px solid #58a6ff;outline-offset:1px}
+#oiPlaySlider{flex:1;min-width:120px;accent-color:#58a6ff;cursor:pointer}
+#oiPlayDate{font-size:12px;color:#58a6ff;font-weight:600;white-space:nowrap;min-width:64px}
+/* 移仓面板横轴是日期而非交割月，用分隔线+小标题与上方两图隔开 */
+#oiRollWrap{margin-top:10px}
+.oi-panel-sep{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.oi-panel-sep::before,.oi-panel-sep::after{content:"";flex:1;height:1px;background:#21262d}
+.oi-panel-sep span{font-size:10px;color:#6e7681;white-space:nowrap}
+.oi-speed-btns{display:flex;gap:4px}
+.oi-speed-btns button{font-size:11px;padding:3px 7px}
+/* 按下态：背景填充表示选中，不靠文字区分 */
+#oiPlaybar button[aria-pressed="true"]{background:rgba(88,166,255,0.16);border-color:#58a6ff;color:#58a6ff;font-weight:600}
+#oiPlaybar button[aria-pressed="true"]:hover{background:rgba(88,166,255,0.24)}
+@media(max-width:600px){
+  #oiPlaybar{padding-bottom:6px}
+  #oiPlaySlider{min-width:80px}
+}
