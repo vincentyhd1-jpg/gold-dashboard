@@ -26,7 +26,16 @@ IN_PATH  = os.path.join(os.path.dirname(__file__), "data", "oi.json")
 OUT_DIR  = os.path.join(os.path.dirname(__file__), "data", "derived")
 OUT_PATH = os.path.join(OUT_DIR, "term-structure-series.json")
 
-ACTIVE_OI_THRESHOLD = 0.05  # contract must hold >5% of total OI to be "active"
+# 序列末端承接月的持仓下限（相对上一个主力月的历史峰值）。
+#
+# 主力月判定本身用「是否曾经当过持仓最大的月」这一序数信号（见 major_months），
+# 不比较跨时间的持仓量级。这个比例只用于补上序列最末端那个还在积累持仓、
+# 尚未当过主力月的承接月，用来把它和噪音级的存根月区分开。
+MIN_NEXT_OI_RATIO = 0.01
+
+# 到期月持仓跌到自身峰值的这个比例以下 → 视为移仓完毕，不再作为 roll_from。
+# 否则窗口滚动后，序列会永远卡在最早那个早已到期的月份上。
+ROLL_DONE_OI_RATIO = 0.02
 
 # 主力月持仓跌破自身峰值的这个比例 → 判定为正在移仓
 ROLL_WINDOW_OI_RATIO = 0.5
@@ -53,35 +62,102 @@ def month_key(label: str) -> int:
 
 # ── Roll-progress helpers ────────────────────────────────────────────────────
 
-def find_front_next(months: list[dict]) -> tuple[str | None, str | None]:
+def find_front(months: list[dict]) -> str | None:
+    """展示用主力月 = 持仓最大的合约月。前端用它高亮柱子、填 KPI。"""
+    if not months:
+        return None
+    return max(months, key=lambda m: m["oi"])["month"]
+
+
+def major_months(peak_oi: dict[str, int], ever_front: set[str]) -> list[str]:
     """
-    Front = highest-OI contract.
-    Next  = highest-OI contract *after* front with OI > ACTIVE_OI_THRESHOLD * total.
-    Uses OI threshold to skip thin stub months (SEP26, NOV26, etc.).
+    主力月集合（移仓周期上的各站），按日历序返回。
+
+    判定用「是否曾经是持仓最大的月」这一纯序数信号，不比较跨时间的持仓量级。
+
+    为什么不用峰值阈值：任何形如「峰值 >= 基准 * 比例」的规则都要跨时间比较
+    量级，会被长期趋势打败 —— 实测持仓在窗口内增长 5 倍时最早一个周期的帧
+    全部失效，下跌到 1/5 时则是最晚一个周期失效。改用全局基准或局部基准都
+    一样，只是失效的位置不同。而「曾经当过主力月」是尺度无关的：存根月无论
+    在哪个价格水平上都不会成为持仓最大的月。
+
+    唯一需要额外处理的是序列末端：最新的承接月还在积累持仓、尚未当过主力月，
+    但正是下一段移仓的目标。取其后峰值最大的那个合约补上（存根月峰值只有
+    噪音级，不会被选中）。
+    """
+    if not peak_oi:
+        return []
+    core = sorted((m for m in ever_front if m in peak_oi), key=month_key)
+    if not core:
+        return []
+
+    last_key = month_key(core[-1])
+    after = [(m, pk) for m, pk in peak_oi.items()
+             if month_key(m) > last_key and pk > 0]
+    if after:
+        cand, cand_pk = max(after, key=lambda kv: kv[1])
+        if cand_pk >= peak_oi[core[-1]] * MIN_NEXT_OI_RATIO:
+            core.append(cand)
+    return core
+
+
+def find_roll_pair(months: list[dict], peak_oi: dict[str, int],
+                   ever_front: set[str]) -> tuple[str | None, str | None]:
+    """
+    移仓的两端：(roll_from, roll_to)。
+
+    roll_from = 主力月中日历序最早的、且尚未移仓完毕的那个月（正在到期、持仓流出）
+    roll_to   = 其后日历序最近的主力月（正在承接流入）
+
+    两个必须分开取，且都不能用「持仓最大的月」（即展示用的 front）：
+
+    1. front 的定义保证 next_oi <= front_oi，于是 roll = next/(front+next) 恒 <= 0.5，
+       永远爬不到 1；两者持仓一交叉还会互换标签，曲线在移仓过半时跌回低位。
+       分母必须锁定在到期月上，它才会随到期单调走向 1。
+    2. 主力月判定不能基于当期持仓占比 —— 到期月持仓趋近 0，会在移仓末段掉出
+       集合，恰好在数值该冲向 1 时丢掉数据。也不能基于跨时间的峰值量级比较
+       （见 major_months）。用「曾经当过主力月」这一序数信号。
+
+    实测（AUG26 -> DEC26 周期，分母全程锁在 AUG26）：
+      06-26  AUG26=272518  DEC26= 48082  ->  0.150
+      07-23  AUG26=173991  DEC26=157027  ->  0.474
+      07-28  AUG26= 71430  DEC26=241826  ->  0.772   （front 已切到 DEC26）
+
+    roll_to 取日历序上的下一个主力月，不再比一次持仓：OCT26 从未当过持仓最大的
+    月（全程横盘 21~43k，未承接移仓），自然不在主力月集合里，AUG26 的下一站
+    直接就是 DEC26。
     """
     if not months:
         return None, None
-    total_oi = sum(m["oi"] for m in months)
-    if total_oi == 0:
-        return None, None
-    threshold = total_oi * ACTIVE_OI_THRESHOLD
-    sorted_m = sorted(months, key=lambda m: m["oi"], reverse=True)
-    front = sorted_m[0]["month"]
-    front_key = month_key(front)
-    next_active = None
-    for m in sorted(months, key=lambda m: month_key(m["month"])):
-        if month_key(m["month"]) > front_key and m["oi"] >= threshold:
-            next_active = m["month"]
-            break
-    return front, next_active
+    oi_map = {m["month"]: m["oi"] for m in months}
+    majors = [m for m in major_months(peak_oi, ever_front) if m in oi_map]
+    if len(majors) < 2:
+        return (majors[0] if majors else None), None
+
+    # 移仓完毕的月份（持仓已跌到自身峰值的极小比例）不再作为 roll_from：
+    # 否则序列会永远卡在最早那个早已到期的月份上。
+    for i, cand in enumerate(majors[:-1]):
+        pk = peak_oi.get(cand, 0)
+        if pk > 0 and oi_map[cand] / pk >= ROLL_DONE_OI_RATIO:
+            return cand, majors[i + 1]
+
+    # 全部主力月都已移仓完毕（只可能出现在序列末尾的边缘情形）
+    return majors[-2], majors[-1]
 
 
-def roll_progress(months: list[dict], front: str, nxt: str) -> float | None:
-    if not front or not nxt:
+def roll_progress(months: list[dict],
+                  roll_from: str | None, roll_to: str | None) -> float | None:
+    """
+    roll_to_OI / (roll_from_OI + roll_to_OI)，从 0 爬向 1。
+
+    分母的 roll_from 必须是到期月（见 find_roll_pair），不是展示用的 front，
+    否则数值恒 <= 0.5。
+    """
+    if not roll_from or not roll_to:
         return None
     oi_map = {m["month"]: m["oi"] for m in months}
-    f_oi = oi_map.get(front, 0)
-    n_oi = oi_map.get(nxt, 0)
+    f_oi = oi_map.get(roll_from, 0)
+    n_oi = oi_map.get(roll_to, 0)
     if f_oi + n_oi == 0:
         return None
     return round(n_oi / (f_oi + n_oi), 4)
@@ -159,6 +235,22 @@ def derive(records: list[dict]) -> dict:
         wm = window_months(r.get("months") or [])
         oi_maps.append({m["month"]: m["oi"] for m in wm})
 
+    # 全序列一次算好，不逐帧累计：到期月的峰值/主力地位都出现在移仓之前，
+    # 逐帧累计会让早期帧看不到后来的信息，导致同一段历史在不同帧里配对不一致。
+    #
+    # peak_oi    —— 每个合约的历史峰值持仓（判定移仓完毕、承接月下限）
+    # ever_front —— 曾经当过持仓最大月的合约集合（判定主力月，见 major_months）
+    peak_oi: dict[str, int] = {}
+    ever_front: set[str] = set()
+    for om in oi_maps:
+        for label, v in om.items():
+            if v is not None and v > peak_oi.get(label, 0):
+                peak_oi[label] = v
+        if om:
+            top = max(om.items(), key=lambda kv: kv[1] or 0)
+            if top[1]:
+                ever_front.add(top[0])
+
     # Build frames
     frames = []
     scale = dict(oi_max=0, delta_abs_max=0, settle_min=float("inf"), settle_max=float("-inf"))
@@ -230,17 +322,20 @@ def derive(records: list[dict]) -> dict:
             if v is not None and abs(v) > scale["delta_abs_max"]:
                 scale["delta_abs_max"] = abs(v)
 
-        # Roll logic
-        front, nxt = find_front_next(wm)
-        rp = roll_progress(wm, front, nxt) if (front and nxt) else None
+        # 展示用主力月与移仓两端分开取（见 find_roll_pair 的说明）
+        front = find_front(wm)
+        roll_from, roll_to = find_roll_pair(wm, peak_oi, ever_front)
+        rp = roll_progress(wm, roll_from, roll_to)
 
-        # in_roll_window: 主力月持仓已从自身峰值跌破一半 → 正在移仓
+        # in_roll_window: 到期月持仓已从自身峰值跌破一半 → 移仓正在进行
         # 用持仓相对峰值的比例判定，不用到期日 —— oi.json 里没有到期日字段，
         # 而持仓塌落本身就是移仓正在发生的直接证据。
-        front_oi = oi_map.get(front, 0) if front else 0
-        front_oi_max = max((oi_maps[j].get(front, 0) for j in range(idx + 1)), default=0)
-        in_roll_window = bool(front_oi_max > 0
-                              and front_oi / front_oi_max < ROLL_WINDOW_OI_RATIO)
+        # 跟踪 roll_from（到期月）而非 front：front 会在移仓过半时切换到承接月，
+        # 一切换其持仓就回到峰值附近，窗口判定会被复位。
+        from_oi = oi_map.get(roll_from, 0) if roll_from else 0
+        from_peak = peak_oi.get(roll_from, 0) if roll_from else 0
+        in_roll_window = bool(from_peak > 0
+                              and from_oi / from_peak < ROLL_WINDOW_OI_RATIO)
 
         frames.append({
             "date":           r["date"],
@@ -248,7 +343,8 @@ def derive(records: list[dict]) -> dict:
             "oi":             oi_arr,
             "oi_chg":         oi_chg_arr,
             "front":          front,
-            "next":           nxt,
+            "roll_from":      roll_from,
+            "roll_to":        roll_to,
             "roll_progress":  rp,
             "in_roll_window": in_roll_window,
             "unreliable_chg": unreliable or None,
@@ -333,6 +429,115 @@ def run_tests(records: list[dict]) -> None:
                       f"得到 {f3['unreliable_chg']}")
     else:
         print("  PASS  fixture day3: 修订合约取 diff 并标记 unreliable_chg")
+
+    # ── 1b. 移仓进度 fixture ─────────────────────────────────────────────
+    # 构造一次完整的 FEB26 -> APR26 移仓：到期月持仓流出、承接月流入，
+    # 并让两者在中途交叉（day3 起 APR26 持仓超过 FEB26）。
+    #
+    # 交叉点是关键：分母若用「持仓最大的月」（展示用 front），一交叉就换标签，
+    # roll_progress 恒 <= 0.5 且会跌回低位；分母锁在到期月才会单调走向 1。
+    # 掺入 MAR26 存根月（持仓极薄），验证活跃月判定能跳过它。
+    ROLL_FIXTURE = [
+        # (date, FEB26, MAR26, APR26)
+        ("2026-01-05", 200000, 300, 20000),   # 移仓未启动
+        ("2026-01-06", 160000, 300, 60000),
+        ("2026-01-07", 100000, 300, 120000),  # 交叉：APR26 超过 FEB26
+        ("2026-01-08",  40000, 300, 190000),
+        ("2026-01-09",  10000, 300, 230000),  # 移仓近尾声
+    ]
+    rf = derive([
+        {"date": d, "months": [
+            {"month": "FEB26", "settle": 4000.0, "oi": feb},
+            {"month": "MAR26", "settle": 4010.0, "oi": mar},
+            {"month": "APR26", "settle": 4020.0, "oi": apr},
+        ]}
+        for d, feb, mar, apr in ROLL_FIXTURE
+    ])
+
+    rolls  = [f["roll_progress"] for f in rf["frames"]]
+    froms  = [f["roll_from"] for f in rf["frames"]]
+    tos    = [f["roll_to"] for f in rf["frames"]]
+    fronts = [f["front"] for f in rf["frames"]]
+
+    if any(v is None for v in rolls):
+        errors.append(f"ROLL fixture: roll_progress 不应有 None，得到 {rolls}")
+    elif froms != ["FEB26"] * 5:
+        # 分母必须全程锁在到期月，不随持仓交叉切换
+        errors.append(f"ROLL fixture: roll_from 应恒为 FEB26，得到 {froms}")
+    elif tos != ["APR26"] * 5:
+        errors.append(f"ROLL fixture: roll_to 应恒为 APR26（跳过 MAR26 存根月），"
+                      f"得到 {tos}")
+    elif rolls != sorted(rolls):
+        errors.append(f"ROLL fixture: roll_progress 应单调递增，得到 {rolls}")
+    elif rolls[-1] <= 0.5:
+        # 这条正是 0.5 天花板 bug 的回归断言
+        errors.append(f"ROLL fixture: 末帧 roll_progress 应 > 0.5（移仓近尾声），"
+                      f"得到 {rolls[-1]} —— 分母可能又用回了 front")
+    else:
+        print(f"  PASS  roll fixture: {rolls[0]} -> {rolls[-1]} 单调爬升且突破 0.5")
+
+    # front 应在交叉点切换到承接月，而 roll_from 不跟着切 —— 两者确实解耦
+    if fronts != ["FEB26", "FEB26", "APR26", "APR26", "APR26"]:
+        errors.append(f"ROLL fixture: front 应在 day3 交叉点切到 APR26，得到 {fronts}")
+    else:
+        print("  PASS  roll fixture: front 随持仓交叉切换，roll_from 保持不动")
+
+    # 无承接月时 roll_progress 应为 None，而不是 0 或异常
+    solo = derive([{"date": "2026-01-05", "months": [
+        {"month": "FEB26", "settle": 4000.0, "oi": 100000},
+        {"month": "MAR26", "settle": 4010.0, "oi": 200},  # 存根月，低于 1% 下限
+    ]}])
+    s0 = solo["frames"][0]
+    if s0["roll_progress"] is not None or s0["roll_to"] is not None:
+        errors.append(f"ROLL fixture: 无承接月时应为 None，"
+                      f"得到 roll_to={s0['roll_to']} roll={s0['roll_progress']}")
+    else:
+        print("  PASS  roll fixture: 无承接月 → roll_progress 为 None")
+
+    # ── 1c. 跨周期趋势鲁棒性 ─────────────────────────────────────────────
+    # 窗口保留 730 条（约两年），会跨越多个移仓周期。若主力月判定依赖跨时间的
+    # 持仓量级比较，长期趋势会让一端的周期整段失效：
+    #   全局峰值基准 → 持仓涨 5 倍时，最早一个周期的帧全部 roll_progress=null
+    #   局部峰值基准 → 同样失效（半径按合约索引取，密度一变含义就变）
+    # 现在改用「曾经当过持仓最大的月」这一序数信号，与量级无关。
+    # 这批断言就是防止再退回量级比较。
+    CYCLES = [("FEB26", "APR26"), ("APR26", "JUN26"),
+              ("JUN26", "AUG26"), ("AUG26", "OCT26")]
+
+    def build_trend(peaks: list[int]) -> list[dict]:
+        recs, d = [], 1
+        for (frm, to), pk in zip(CYCLES, peaks):
+            for step in range(5):
+                frac = step / 4
+                recs.append({"date": f"2026-{1 + d // 28:02d}-{1 + d % 28:02d}",
+                             "months": [
+                                 {"month": frm, "settle": 4000.0,
+                                  "oi": int(pk * (1 - frac)) + 10},
+                                 {"month": to, "settle": 4020.0,
+                                  "oi": int(pk * frac) + 10},
+                             ]})
+                d += 1
+        return recs
+
+    TRENDS = [
+        ("持仓涨 2.6 倍",  [100000, 140000, 190000, 260000]),
+        ("持仓涨 5 倍",    [100000, 200000, 350000, 500000]),
+        ("持仓涨 20 倍",   [100000, 400000, 900000, 2000000]),
+        ("持仓跌到 1/5",   [500000, 350000, 200000, 100000]),
+        ("持仓跌到 1/20",  [1000000, 500000, 200000, 50000]),
+    ]
+    trend_bad = []
+    for label, peaks in TRENDS:
+        tf = derive(build_trend(peaks))
+        nulls = [f["date"] for f in tf["frames"] if f["roll_progress"] is None]
+        if nulls:
+            trend_bad.append(f"{label}: {len(nulls)}/{len(tf['frames'])} 帧失效")
+    if trend_bad:
+        errors.append("TREND fixture: 主力月判定受持仓量级影响 —— "
+                      + "；".join(trend_bad))
+    else:
+        print(f"  PASS  trend fixture: {len(TRENDS)} 种趋势场景（涨 20x ~ 跌 1/20）"
+              f"均无失效帧")
 
     # ── 2. 真实数据抽查 ──────────────────────────────────────────────────
     result = derive(records)

@@ -1568,7 +1568,9 @@ function renderOI(oiData) {
       oi: months.map(m => m.oi),
       oi_chg: months.map(m => m.oi_chg ?? null),
       front: months.reduce((a,b) => b.oi > a.oi ? b : a, months[0]).month,
-      next: null, roll_progress: null, in_roll_window: false, unreliable_chg: null
+      // 单帧无法算移仓进度（需要跨帧的持仓迁移）
+      roll_from: null, roll_to: null, roll_progress: null,
+      in_roll_window: false, unreliable_chg: null
     }],
     scale: {
       oi_max: maxOI,
