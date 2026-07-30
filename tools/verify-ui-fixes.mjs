@@ -102,14 +102,15 @@ check('roll X 轴已显示', roll.xDisplay === true);
 check('roll X 轴有日期刻度', roll.tickCount > 0 && /\d+\/\d+/.test(roll.xLabels[0]), roll.xLabels);
 check('有分隔线小标题', roll.sepVisible && /日期/.test(roll.sepText || ''), roll.sepText);
 
-// ── 4. 空列剔除 ────────────────────────────────────────────────────────
-console.log('\n[4] 空列剔除');
-const cols = await page.evaluate(() => {
-  const c = Chart.getChart('oiChart');
-  return c.data.labels;
-});
+// ── 4. 合约列表按存续过滤 ──────────────────────────────────────────────
+// 只剔除已到期的合约，不按持仓大小。持仓微小的月份保留并渲染成细线 ——
+// 它们仍有结算价，删列会把相邻点间距从 1 个月变成 2 个月，扭曲价格曲线几何。
+console.log('\n[4] 合约列表按存续过滤');
+const cols = await page.evaluate(() => Chart.getChart('oiChart').data.labels);
 console.log('  X 轴合约:', cols.join(' '));
-check('JUN26 等空列已剔除', !cols.includes('JUN26') && !cols.includes('JUL27'), cols);
+check('JUN26（已到期）已剔除', !cols.includes('JUN26'), cols);
+check('MAR27/MAY27/JUL27（持仓微小但仍挂牌）保留',
+      ['MAR27', 'MAY27', 'JUL27'].every(m => cols.includes(m)), cols);
 
 // 回放仍正常
 await page.click('#oiPlayBtn');
@@ -130,7 +131,7 @@ await page.waitForTimeout(400);
 const top = await page.locator('#oiChart').boundingBox();
 const bot = await page.locator('#oiPlaybar').boundingBox();
 await page.screenshot({
-  path: path.join(__dirname, 'ui-fixes.png'),
+  path: path.join(__dirname, '..', 'screenshots', 'ui-fixes.png'),
   clip: { x: 100, y: top.y - 70, width: 1200, height: (bot.y + bot.height) - (top.y - 70) + 16 },
 });
 

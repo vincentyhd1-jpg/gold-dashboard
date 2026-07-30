@@ -349,7 +349,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
           <span class="sk-chg flat" id="oiFrontMonth">--</span>
         </div>
         <div class="sk-item">
-          <span class="sk-label">近远月价差 Contango</span>
+          <span class="sk-label">主力次月价差（年化）</span>
           <span class="sk-val" id="oiContango" style="color:#3fb950">--</span>
           <span class="sk-chg flat" id="oiContangoLabel">远月 − 近月</span>
         </div>
@@ -1101,6 +1101,21 @@ const _play = {
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
 };
 
+// 两个交割月之间的日历天数差。年化价差需要真实天数，不能按「月数 × 30」
+// 估算 —— AUG26→DEC26 是 122 天，按 4×30=120 算会让年化率偏高 1.7%。
+// 以每月 1 日为基准：合约实际到期日在月中，但两端同样偏移，差值不受影响。
+const _MON_NUM = { JAN:1, FEB:2, MAR:3, APR:4, MAY:5, JUN:6,
+                   JUL:7, AUG:8, SEP:9, OCT:10, NOV:11, DEC:12 };
+function _monthGapDays(a, b) {
+  const parse = s => {
+    const m = /^([A-Z]{3})(\d{2})$/.exec(s || '');
+    return m ? Date.UTC(2000 + +m[2], _MON_NUM[m[1]] - 1, 1) : null;
+  };
+  const ta = parse(a), tb = parse(b);
+  if (ta == null || tb == null) return 0;
+  return Math.round((tb - ta) / 86400000);
+}
+
 // 持仓量按数值大小映射蓝紫色深浅（深色主题）
 function _oiBarColor(oi, maxOI, isFront) {
   const t = maxOI > 0 ? oi / maxOI : 0;
@@ -1139,6 +1154,16 @@ function _afterFitRight(scale) {
   if (ca) scale.width = ca.right;
 }
 
+// 微小持仓的最小柱高：非活跃月只有几十手，按比例算不足 0.1px，会整列消失。
+// X 轴按合约存续状态过滤（不按持仓阈值），所以这些列必然存在，需要渲染成细线。
+//
+// 用 Chart.js 内置的 minBarLength，不自己改元素几何 —— 手改 el.y 会和动画
+// 插值器抢同一批属性，动画期间被覆盖，看起来像完全没生效。
+//
+// 传 2.5 得到净高 2px：minBarLength 的实际几何是「传入值 − borderWidth/2」，
+// 边框内缩半像素（实测 2→1.5px、3→2.5px、4→3.5px）。
+const _MIN_BAR_PX = 2.5;
+
 // ── 图表初始化（只建一次，之后只更新数据）────────────────────────────────────
 function _initCharts(series) {
   const { contracts, scale } = series;
@@ -1160,7 +1185,7 @@ function _initCharts(series) {
         // dataset 0: current OI bars
         { type:'bar', label:'持仓 OI', data: new Array(labels.length).fill(null),
           backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:3,
-          yAxisID:'yOI', order:2 },
+          yAxisID:'yOI', order:2, minBarLength:_MIN_BAR_PX },
         // dataset 1: price line
         { type:'line', label:'结算价', data: new Array(labels.length).fill(null),
           borderColor:'#58a6ff', backgroundColor:'rgba(88,166,255,0.08)',
@@ -1236,7 +1261,8 @@ function _initCharts(series) {
     data: {
       labels,
       datasets: [{ label:'持仓变化', data: new Array(labels.length).fill(0),
-        backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2, borderSkipped:false }]
+        backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
+        borderSkipped:false, minBarLength:_MIN_BAR_PX }]
     },
     options: {
       responsive: true,
@@ -1412,18 +1438,34 @@ function _renderFrame(frameIdx, animated) {
   if (!months.length) return;
 
   const frontMonth = months.find(m => m.month === fr.front) || months[0];
-  const near = months[0], far = months[months.length - 1];
-  const contango = far.settle - near.settle;
   const totalOI  = months.reduce((s, m) => s + m.oi, 0);
+
+  // 价差锚点显式绑定合约角色，不用 months[0] / months[last]：
+  // 首列正在到期、末列只有几手，两端都是交易所推定价，算出来的是结算程序
+  // 而不是市场。roll_from = front_by_expiry，roll_to = next_active。
+  const nearM = months.find(m => m.month === fr.roll_from);
+  const farM  = months.find(m => m.month === fr.roll_to);
+  const ctgEl = document.getElementById('oiContango');
+  const ctgLabelEl = document.getElementById('oiContangoLabel');
+  if (nearM && farM && nearM.settle > 0) {
+    const spread = farM.settle - nearM.settle;
+    const days = _monthGapDays(nearM.month, farM.month);
+    const ann = days > 0 ? spread / nearM.settle * (365 / days) * 100 : null;
+    ctgEl.textContent = ann == null ? '--'
+      : (ann >= 0 ? '+' : '') + ann.toFixed(2) + '%';
+    ctgEl.style.color = spread >= 0 ? '#3fb950' : '#f85149';
+    ctgLabelEl.textContent =
+      `${farM.month} − ${nearM.month}：${spread >= 0 ? '+' : ''}${spread.toFixed(2)}`;
+  } else {
+    ctgEl.textContent = '--';
+    ctgEl.style.color = '#8b949e';
+    ctgLabelEl.textContent = '无活跃次月';
+  }
 
   document.getElementById('oiDate').textContent =
     '数据日期：' + fr.date.slice(5).replace('-', '/') + ' · 来源：CME Group';
   document.getElementById('oiFrontPrice').textContent = frontMonth.settle.toFixed(2);
   document.getElementById('oiFrontMonth').textContent = frontMonth.month + ' · 主力月';
-  const ctgEl = document.getElementById('oiContango');
-  ctgEl.textContent = (contango >= 0 ? '+' : '') + contango.toFixed(2);
-  ctgEl.style.color = contango >= 0 ? '#3fb950' : '#f85149';
-  document.getElementById('oiContangoLabel').textContent = far.month + ' − ' + near.month;
   document.getElementById('oiVal').textContent = totalOI.toLocaleString('en-US');
 
   // 播放条日期
@@ -1547,8 +1589,19 @@ function renderOI(oiData) {
       oi: months.map(m => m.oi),
       oi_chg: months.map(m => m.oi_chg ?? null),
       front: months.reduce((a,b) => b.oi > a.oi ? b : a, months[0]).month,
-      // 单帧无法算移仓进度（需要跨帧的持仓迁移）
-      roll_from: null, roll_to: null, roll_progress: null,
+      // 单帧算不出 roll_progress（需要跨帧的持仓迁移），但价差卡只需要两个
+      // 锚点，可以从单个快照近似：到期月取日历序上第一个持仓过 5% 的月，
+      // 承接月取其后持仓最大的月。
+      ...(() => {
+        const tot = months.reduce((s,m) => s + (m.oi||0), 0);
+        const from = months.find(m => (m.oi||0) >= tot * 0.05) || months[0];
+        const after = months.filter(m => m.month !== from.month
+          && months.indexOf(m) > months.indexOf(from));
+        const to = after.length
+          ? after.reduce((a,b) => b.oi > a.oi ? b : a) : null;
+        return { roll_from: from.month, roll_to: to ? to.month : null };
+      })(),
+      roll_progress: null,
       in_roll_window: false, unreliable_chg: null
     }],
     scale: {
