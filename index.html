@@ -110,8 +110,7 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 .oi-panel-sep span{font-size:10px;color:#6e7681;white-space:nowrap}
 .oi-speed-btns{display:flex;gap:4px}
 .oi-speed-btns button{font-size:11px;padding:3px 7px}
-#oiGhostToggle{font-size:11px;padding:3px 8px}
-/* 倍速与残影共用同一种按下态：背景填充表示选中，不靠文字区分 */
+/* 按下态：背景填充表示选中，不靠文字区分 */
 #oiPlaybar button[aria-pressed="true"]{background:rgba(88,166,255,0.16);border-color:#58a6ff;color:#58a6ff;font-weight:600}
 #oiPlaybar button[aria-pressed="true"]:hover{background:rgba(88,166,255,0.24)}
 @media(max-width:600px){
@@ -376,7 +375,6 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
         <button data-speed="1" aria-pressed="true">1x</button>
         <button data-speed="2" aria-pressed="false">2x</button>
       </div>
-      <button id="oiGhostToggle" title="残影：显示前 3 帧轮廓" aria-pressed="true">残影</button>
     </div>
     <div class="chart-wrap" style="height:220px;display:none"><canvas id="oiHistChart"></canvas></div>
   </div>
@@ -1099,7 +1097,6 @@ const _play = {
   frameIdx:  0,
   playing:   false,
   speed:     1,
-  ghost:     true,
   timer:     null,
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
 };
@@ -1160,24 +1157,11 @@ function _initCharts(series) {
     data: {
       labels,
       datasets: [
-        // dataset 0–2: ghost bars (前3帧，透明度递减)
-        // grouped:false —— 4 个 bar dataset 必须重叠在 band 中心，不能并排摊开。
-        // 并排时每个变窄（50→13px）且整体左移 21px，与下方 delta 面板错位；
-        // 残影开关 OFF 只是把数据置 null，dataset 仍在数组里，band 空间照样被分配。
-        { type:'bar', label:'ghost2', data: new Array(labels.length).fill(null),
-          backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
-          yAxisID:'yOI', order:5, grouped:false },
-        { type:'bar', label:'ghost1', data: new Array(labels.length).fill(null),
-          backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
-          yAxisID:'yOI', order:4, grouped:false },
-        { type:'bar', label:'ghost0', data: new Array(labels.length).fill(null),
-          backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:2,
-          yAxisID:'yOI', order:3, grouped:false },
-        // dataset 3: current OI bars
+        // dataset 0: current OI bars
         { type:'bar', label:'持仓 OI', data: new Array(labels.length).fill(null),
           backgroundColor: [], borderColor: [], borderWidth:1, borderRadius:3,
-          yAxisID:'yOI', order:2, grouped:false },
-        // dataset 4: price line
+          yAxisID:'yOI', order:2 },
+        // dataset 1: price line
         { type:'line', label:'结算价', data: new Array(labels.length).fill(null),
           borderColor:'#58a6ff', backgroundColor:'rgba(88,166,255,0.08)',
           borderWidth:2, pointRadius:4, pointHoverRadius:6,
@@ -1382,29 +1366,8 @@ function _renderFrame(frameIdx, animated) {
   // 找主力月索引
   const frontIdx = fr.front ? contracts.indexOf(fr.front) : -1;
 
-  // ── 主图：ghost + 当前帧 ──────────────────────────────────────────────
-  const GHOST_ALPHA = [0.08, 0.15, 0.25];  // ghost2 oldest → ghost0 newest
-  for (let g = 0; g < 3; g++) {
-    const ghostFrameIdx = frameIdx - (3 - g);
-    const ds = _oiChart.data.datasets[g];
-    if (!_play.ghost || ghostFrameIdx < 0) {
-      ds.data = new Array(contracts.length).fill(null);
-      ds.backgroundColor = [];
-      ds.borderColor = [];
-    } else {
-      const gf = frames[ghostFrameIdx];
-      const alpha = GHOST_ALPHA[g];
-      ds.data = gf.oi.map(v => v ?? null);
-      ds.backgroundColor = contracts.map((_, ci) => {
-        const oi = gf.oi[ci] ?? 0;
-        return `hsla(220,50%,45%,${alpha})`;
-      });
-      ds.borderColor = contracts.map(() => `hsla(220,50%,60%,${alpha * 1.5})`);
-    }
-  }
-
-  // 当前帧 OI bars (dataset index 3)
-  const mainDs = _oiChart.data.datasets[3];
+  // 当前帧 OI bars (dataset index 0)
+  const mainDs = _oiChart.data.datasets[0];
   mainDs.data = fr.oi.map(v => v ?? null);
   mainDs.backgroundColor = contracts.map((_, ci) => {
     const oi = fr.oi[ci] ?? 0;
@@ -1412,8 +1375,8 @@ function _renderFrame(frameIdx, animated) {
   });
   mainDs.borderColor = mainDs.backgroundColor.map(c => c.replace(/,[^,]+\)$/, ',1)'));
 
-  // price line (dataset index 4)
-  _oiChart.data.datasets[4].data = fr.settle.map(v => v ?? null);
+  // price line (dataset index 1)
+  _oiChart.data.datasets[1].data = fr.settle.map(v => v ?? null);
 
   // ── Delta 面板 ────────────────────────────────────────────────────────
   const deltaDs = _oiDeltaChart.data.datasets[0];
@@ -1520,13 +1483,6 @@ function _initPlaybarControls(series) {
       _play.speed = parseFloat(btn.dataset.speed);
       speedBtns.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
     });
-  });
-
-  const ghostBtn = document.getElementById('oiGhostToggle');
-  ghostBtn.addEventListener('click', () => {
-    _play.ghost = !_play.ghost;
-    ghostBtn.setAttribute('aria-pressed', String(_play.ghost));
-    _renderFrame(_play.frameIdx, false);
   });
 
   // 键盘左右方向键逐帧步进
