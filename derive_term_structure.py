@@ -241,8 +241,10 @@ def derive(records: list[dict]) -> dict:
             all_labels.add(m["month"])
     expired = sorted(all_labels - last_listed, key=month_key)
     contracts = sorted(all_labels & last_listed, key=month_key)
-    if expired:
-        warnings.append(f"已到期合约已从 X 轴剔除：{', '.join(expired)}")
+    # 到期是合约的正常生命周期，不是异常 —— 记为 info，不进 warnings。
+    # 不设条数上限：窗口保留 730 条，随时间推移这个列表本就会变长，
+    # 截断只会在真正需要追溯时丢掉信息。
+    info = [f"已到期合约已从 X 轴剔除：{', '.join(expired)}"] if expired else []
 
     dates = [r["date"] for r in records]
 
@@ -378,6 +380,7 @@ def derive(records: list[dict]) -> dict:
         "frames":    frames,
         "scale":     scale,
         "warnings":  warnings,
+        "info":      info,
     }
 
 
@@ -646,6 +649,9 @@ def main():
         return
 
     result = derive(records)
+
+    for i in result.get("info") or []:
+        print("INFO:", i)
 
     if result["warnings"]:
         print("Warnings:")
