@@ -1,0 +1,22 @@
+# 行尾规范化。仓库内一律以 LF 存储，避免 Windows 侧编辑器把整份文件
+# 改成 CRLF、在 diff 里产生上万行与内容无关的噪音。
+#
+# text=auto：让 git 自行判定文本/二进制，二进制不受影响。
+# eol=lf：对源码显式钉死 LF，不受本地 core.autocrlf 设置影响。
+
+* text=auto
+
+*.py   text eol=lf
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.md   text eol=lf
+
+# 二进制：显式排除，防止 text=auto 误判
+*.png  binary
+*.ico  binary
+*.pdf  binary
+*.svg  text eol=lf
