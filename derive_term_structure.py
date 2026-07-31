@@ -23,7 +23,8 @@ import json, os, sys, re
 from datetime import date
 
 from trading_calendar import trading_days_between
-from data_envelope import envelope, write_json, upstream_ref
+from data_envelope import envelope, upstream_ref
+from io_utils import atomic_write_json, sweep_stale_tmp
 
 IN_PATH  = os.path.join(os.path.dirname(__file__), "data", "oi.json")
 OUT_DIR  = os.path.join(os.path.dirname(__file__), "data", "derived")
@@ -1014,6 +1015,11 @@ def main():
         run_tests(records)
         return
 
+    # 清理上次崩溃留下的临时文件（只清本文件自己的，见 basename 隔离）
+    swept = sweep_stale_tmp(OUT_PATH)
+    if swept:
+        print(f"清理上次残留的临时文件 {len(swept)} 个")
+
     result = derive(records)
 
     for i in result.get("info") or []:
@@ -1039,7 +1045,8 @@ def main():
         warnings=result["warnings"],
         info=result["info"],
     )
-    write_json(OUT_PATH, payload)
+    # 原子写：崩在中途只留临时文件，term-structure-series.json 保持完整旧版
+    atomic_write_json(OUT_PATH, payload)
 
     n_frames = len(result["frames"])
     n_contracts = len(result["contracts"])

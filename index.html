@@ -1243,7 +1243,12 @@ window.addEventListener('unhandledrejection', e => {
 Promise.all([
   fetch('data/cot.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
   fetch('data/gold_price.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
-  fetch('data/stocks.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => []),
+  // stocks.json 已信封化：取 data。其余三个仍是裸格式，迁移后同样解包。
+  // 过渡期用 payload?.data ?? payload 兼容两种形状，与 initOIPlayback 同一处理。
+  fetch('data/stocks.json?_=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(p => p?.data ?? p)
+    .catch(() => []),
   fetch('data/oi.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => []),
   fetch('data/derived/term-structure-series.json?_=' + Date.now())
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => null),

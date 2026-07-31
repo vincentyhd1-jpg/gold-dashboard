@@ -103,16 +103,78 @@ def envelope(source: str, freq: str, data,
     }
 
 
-def write_json(path: str, payload: dict, *, compact: bool = True) -> None:
-    """
-    单点落盘：目录创建、分隔符、编码统一在这里，各脚本不再各写一遍。
+# 落盘一律走 io_utils.atomic_write_json()。
+#
+# 本模块曾有一个 write_json()（非原子，直接 open+json.dump），靠注释写着
+# 「需要原子性的用 io_utils」拦着 —— 注释挡不住误用：谁顺手 import 就绕过了
+# 原子写保证，且不会有任何 verify 报警（内容是对的，只有崩溃时才暴露，
+# 而崩溃不在测试路径上）。已删除，不留改名版 —— 留着仍是个能被 import 的
+# 非原子入口。
 
-    compact=True 用于派生文件（体积敏感、机器读）；
-    compact=False 用于原始采集文件（人要 review diff）。
+
+# ── 读取端 ────────────────────────────────────────────────────────────────────
+
+# 已知的 schema_version 集合。读到不在其中的值必须拒绝，不能按旧格式硬解 ——
+# 未来版本可能改了 data 的内部结构，静默解析会读出错的业务数据。
+KNOWN_SCHEMA_VERSIONS = frozenset({0})
+
+REQUIRED_ENVELOPE_KEYS = (
+    "schema_version", "source", "freq", "generated_at",
+    "date_field", "coverage", "derived_from", "warnings", "info", "data",
+)
+
+VALID_FREQ = frozenset({"daily", "weekly"})
+
+
+def is_envelope(payload) -> bool:
+    """是否信封格式。只看 schema_version 是否存在，不校验内容。"""
+    return isinstance(payload, dict) and "schema_version" in payload
+
+
+def assert_envelope(payload) -> None:
     """
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        if compact:
-            json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
-        else:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+    校验信封完整性。不合格抛 ValueError，不返回布尔 ——
+    调用方要么拿到合格信封，要么拿到明确的错误，没有第三种。
+
+    类型也是契约的一部分：schema_version 必须是 int，字符串 "0" 不接受。
+    """
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"信封必须是 dict，得到 {type(payload).__name__}")
+
+    missing = [k for k in REQUIRED_ENVELOPE_KEYS if k not in payload]
+    if missing:
+        raise ValueError(f"信封缺字段：{missing}")
+
+    sv = payload["schema_version"]
+    if not isinstance(sv, int) or isinstance(sv, bool):
+        raise ValueError(
+            f"schema_version 必须是 int，得到 {type(sv).__name__}: {sv!r}")
+    if sv not in KNOWN_SCHEMA_VERSIONS:
+        raise ValueError(
+            f"未知的 schema_version={sv}（已知 "
+            f"{sorted(KNOWN_SCHEMA_VERSIONS)}）—— 拒绝按旧格式解析，"
+            f"该文件可能来自更新的写入方"
+        )
+
+    if payload["freq"] not in VALID_FREQ:
+        raise ValueError(
+            f"freq 必须是 {sorted(VALID_FREQ)} 之一，得到 {payload['freq']!r}")
+
+
+def unwrap(payload, *, strict: bool = False):
+    """
+    取出业务数据。信封格式返回 payload["data"]，裸格式原样返回。
+
+    strict=True 时裸格式抛错（迁移完成后可用它锁死回退路径）。
+    strict=False 是过渡期默认：四源尚未全部迁移。
+
+    信封格式一律先过 assert_envelope —— 宁可拒绝也不静默按旧格式解析。
+    """
+    if is_envelope(payload):
+        assert_envelope(payload)
+        return payload["data"]
+    if strict:
+        raise ValueError(
+            "期望信封格式，得到裸格式（无 schema_version）")
+    return payload

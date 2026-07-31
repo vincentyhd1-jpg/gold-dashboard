@@ -15,10 +15,21 @@ import re
 import sys
 from datetime import datetime, timezone
 
+import io_utils
+from io_utils import (
+    atomic_write_json, read_json_or, sweep_stale_tmp,
+    upsert_by_key, apply_retention, quarantine_write,
+    KEEP_OLD, TAKE_NEW,
+)
+from data_envelope import envelope, unwrap
+
 GOLD_PAGE  = "https://www.cmegroup.com/markets/metals/precious/gold.html"
 REPORT_URL = "https://www.cmegroup.com/delivery_reports/Gold_Stocks.xls"
 OUT_PATH   = os.path.join(os.path.dirname(__file__), "data", "stocks.json")
 QUARANTINE_DIR = os.path.join(os.path.dirname(__file__), "data", "quarantine")
+
+# 落盘保留窗口（条）。原逻辑是 sorted(...)[-90:]，语义不变。
+RETENTION_ITEMS = 90
 
 # 仓库数相对上一份的允许变动。实测恒为 10 个。
 MAX_DEPOT_COUNT_DELTA = 3
@@ -255,10 +266,16 @@ def parse(content: bytes) -> dict:
 # ── Storage ───────────────────────────────────────────────────────────────────
 
 def load_existing() -> list[dict]:
-    if os.path.exists(OUT_PATH):
-        with open(OUT_PATH, encoding="utf-8") as f:
-            return json.load(f)
-    return []
+    """
+    读已有记录。信封格式取 data，裸格式原样返回（过渡期两种都能读）。
+
+    read_json_or 的 default 是 [] —— 文件不存在或解析失败时返回空列表，
+    不抛。unwrap 会对坏信封（未知 schema_version 等）抛错，那是有意的：
+    宁可拒绝也不静默按旧格式解析出错的业务数据。
+    """
+    raw = read_json_or(OUT_PATH, [])
+    rows = unwrap(raw)
+    return rows if isinstance(rows, list) else []
 
 
 # ── 采集层校验 ────────────────────────────────────────────────────────────────
@@ -343,28 +360,58 @@ def validate_stocks(entry: dict, records: list[dict]) -> list[str]:
 
 def quarantine_stocks(entry: dict, xls_bytes: bytes,
                       failures: list[str]) -> str:
-    """坏数据与原始 XLS 存入隔离区，data/stocks.json 保持上一份不被覆盖。"""
-    os.makedirs(QUARANTINE_DIR, exist_ok=True)
+    """
+    坏数据与原始 XLS 存入隔离区，data/stocks.json 保持上一份不被覆盖。
+
+    触发条件由 validate_stocks() 判定（本源专属，5 条判据）；
+    这里只调 io_utils 的机械写入，骨架不判断该不该隔离。
+    """
     stamp = (entry.get("date")
              or datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-    path = os.path.join(QUARANTINE_DIR, f"stocks-{stamp}.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({
-            "quarantined_at": datetime.now(timezone.utc).isoformat(),
-            "reason":         failures,
-            "entry":          entry,
-        }, f, ensure_ascii=False, indent=2)
-    if xls_bytes:
-        with open(os.path.join(QUARANTINE_DIR,
-                               f"stocks-{stamp}.xls"), "wb") as f:
-            f.write(xls_bytes)
-    return path
+    return quarantine_write(
+        QUARANTINE_DIR, "stocks", stamp,
+        reason=failures,
+        payload={"entry": entry},
+        raw=xls_bytes if xls_bytes else None,
+        raw_ext="xls",
+    )
+
+
+def merge_stocks(old: dict, new: dict):
+    """
+    同一 date 已有记录时的取舍。由本脚本提供，io_utils 不内置内容比较。
+
+    三种情形，info 如实区分 —— 补全不是修订，不能掺假：
+      逐字段相同        → KEEP_OLD，幂等跳过，文件完全不变
+      缺 depositories   → TAKE_NEW/backfilled，首次补全
+      值变了            → TAKE_NEW/revised，CME 当日重发修订版报告
+
+    原逻辑只在「缺 depositories」时补写，其余一律 return 跳过 ——
+    那会让 CME 修订版的新值被静默丢弃。这里改为取新值并记 info。
+    """
+    FIELDS = ("registered", "eligible", "total")
+
+    if old == new:
+        return KEEP_OLD, None
+
+    old_has = isinstance(old.get("depositories"), list)
+    new_has = isinstance(new.get("depositories"), list)
+    same_totals = all(old.get(k) == new.get(k) for k in FIELDS)
+
+    if not old_has and new_has and same_totals:
+        return TAKE_NEW, "backfilled"
+    return TAKE_NEW, "revised"
 
 
 def main():
     if "--test" in sys.argv:
         run_tests()
         return
+
+    # 清理上次崩溃留下的临时文件（只清 stocks.json 自己的，见 basename 隔离）
+    swept = sweep_stale_tmp(OUT_PATH)
+    if swept:
+        print(f"  清理上次残留的临时文件 {len(swept)} 个")
 
     print("正在下载 CME COMEX 黄金库存报告...")
     content = download()
@@ -408,27 +455,46 @@ def main():
     print("  5 项校验通过（总量归零 / registered 非正 / 仓库数 / "
           "明细核对 / 总量骤变）")
 
-    existing_dates = {r["date"] for r in records}
+    # ── 去重追加：同 date 的取舍由 merge_stocks 决定 ───────────────────
+    info: list[str] = []
+    updated, action, reason = upsert_by_key(
+        records, entry, key="date", merge=merge_stocks)
 
-    if entry["date"] in existing_dates:
-        # Update existing record if it's missing depositories
-        for r in records:
-            if r["date"] == entry["date"] and "depositories" not in r:
-                r["depositories"] = entry["depositories"]
-                print(f"  {entry['date']} 已存在但缺少明细，已补写 depositories")
-                break
+    if action == KEEP_OLD:
+        # 数据逐字段相同 → 文件完全不变、git 无 diff。
+        # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
+        print(f"  {entry['date']} 与已有记录逐字段相同，跳过写入"
+              f"（generated_at 不刷新）")
+        return
+
+    if action == TAKE_NEW:
+        prev = next((r for r in records if r.get("date") == entry["date"]), None)
+        if reason == "backfilled":
+            msg = f"{entry['date']} 记录补全 depositories（原记录缺该字段）"
+        elif reason == "revised":
+            old_total = prev.get("total") if prev else None
+            msg = (f"{entry['date']} 数据被源站修订：total "
+                   f"{'?' if old_total is None else format(old_total, ',')}"
+                   f" → {entry['total']:,}")
         else:
-            print(f"  {entry['date']} 已存在且有明细，跳过写入")
-            return
-    else:
-        records.append(entry)
-    records = sorted(records, key=lambda r: r["date"])[-90:]
+            msg = f"{entry['date']} 取新值（{reason}）"
+        info.append(msg)
+        print(f"  {msg}")
 
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
+    # 保留窗口：先按 date 排序再截断（按数组位置截断会在乱序输入时删错记录）
+    kept = apply_retention(updated, key="date", max_items=RETENTION_ITEMS)
 
-    print(f"  已追加到 {OUT_PATH}，共 {len(records)} 条记录")
+    payload = envelope(
+        source="cme_gold_stocks",
+        freq="daily",
+        data=kept,
+        dates=[r["date"] for r in kept],
+        info=info,
+    )
+    # 原子写：崩在中途只留临时文件，stocks.json 保持完整旧版
+    atomic_write_json(OUT_PATH, payload, compact=False)
+
+    print(f"  已写入 {OUT_PATH}，共 {len(kept)} 条记录（信封格式）")
 
 
 # ── 校验逻辑单元测试 ──────────────────────────────────────────────────────────
@@ -547,6 +613,30 @@ def run_tests():
     check("10 个仓库 → 32（max(20, 32)）", depot_sum_tolerance(10) == 32)
     check("20 个仓库 → 40（max(40, 32)）", depot_sum_tolerance(20) == 40)
     check("0 个仓库 → 32（兜底）", depot_sum_tolerance(0) == 32)
+
+    # ── merge_stocks：同 date 的取舍（B 表语义，io_utils 不内置）─────────
+    print("\n[merge_stocks]")
+    base = entry_at("2026-07-29")
+
+    act, why = merge_stocks(base, dict(base))
+    check("逐字段相同 → KEEP_OLD（幂等，文件不变）",
+          (act, why) == (KEEP_OLD, None), (act, why))
+
+    revised = dict(base, total=base["total"] + 1000)
+    act, why = merge_stocks(base, revised)
+    check("值变了 → TAKE_NEW/revised（源站修订，取新值不丢弃）",
+          (act, why) == (TAKE_NEW, "revised"), (act, why))
+
+    old_no_dep = {k: v for k, v in base.items() if k != "depositories"}
+    act, why = merge_stocks(old_no_dep, base)
+    check("缺 depositories 变有 → TAKE_NEW/backfilled（补全，不是修订）",
+          (act, why) == (TAKE_NEW, "backfilled"), (act, why))
+
+    # 补全与修订必须分得开：既补了明细又改了总量 → 算修订，不算补全
+    both = dict(base, total=base["total"] + 500)
+    act, why = merge_stocks(old_no_dep, both)
+    check("既补明细又改总量 → revised（不掺假成 backfilled）",
+          (act, why) == (TAKE_NEW, "revised"), (act, why))
 
     print(f"\n{passed} passed, {failed} failed")
     if failed:

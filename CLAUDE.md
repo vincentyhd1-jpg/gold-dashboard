@@ -111,6 +111,43 @@ tools/*.mjs       Playwright 验证脚本
 本地 Python 被 Application Control 拦截（`python`/`python3` 是 Store 占位符）。
 用 WSL 跑：`wsl -d Ubuntu-22.04 -- bash -c "cd /mnt/d/VScode/test/gold-dashboard && python3 ..."`
 
+### WSL exit code 取证禁忌
+
+两个独立的 bug，都会把非零码读成 0，让坏代码看起来通过 CI。适用于**所有**
+verify / `--test` 取证，不限于某一步。
+
+**禁忌 1：在 WSL 内部 `echo $?`。** `$?` 被 Windows 侧 shell 先展开成上一条
+命令的码，恒为 0，与 WSL 内实际结果无关。
+
+```bash
+# 坏：注入缺陷后测试打印「72 passed, 9 failed」，这里却报 exit=0
+wsl -d Ubuntu-22.04 -- bash -c "... && python3 tools/xxx.py; echo exit=$?"
+```
+
+**禁忌 2：取码时接管道。** `| tail` / `| head` / `| grep` 让 shell 返回**管道末
+命令**的状态，python 的非零码被吞掉。
+
+```bash
+# 坏：python 明明 exit 1，这里报 exit=0（tail 成功了）
+wsl ... -- bash -c "python3 x.py 2>&1 | tail -6"
+```
+
+**正确：让 WSL 进程退出码自然传出、在 Windows 侧读。** 需要截断输出时用
+`> /dev/null`，或把「看输出」与「取码」分成两步跑。
+
+```bash
+wsl -d Ubuntu-22.04 -- bash -c "cd ... && python3 tools/xxx.py > /dev/null 2>&1"
+echo "exit=$?"                      # 在 WSL 命令之外读，且不接管道
+
+wsl ... -- bash -c "... python3 x.py 2>&1 | tail -6"   # 单独一步只看输出
+```
+
+**应该红却显示绿时，先怀疑取证方式，再怀疑被测对象。** 实测遇到过一次：
+stocks 校验闸注入后报 exit=0，第一反应若是「闸坏了」就会去改本来正确的代码；
+先查测量方式才发现是 `| tail -6` 吞了退出码，去掉管道后如实报 exit=1。
+
+这与「验证护栏靠注入破坏确认」是同一类陷阱：不注入就不会发现读到的是假码。
+
 ## 数据规则
 
 ### 合约列表只按存续状态过滤，不按持仓阈值
