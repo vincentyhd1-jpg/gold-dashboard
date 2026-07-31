@@ -179,9 +179,70 @@ tools/*.mjs       Playwright 验证脚本
 
 ### 坏数据拦在采集层
 
-`fetch_oi.py` 的 `validate()` 在写入 `data/oi.json` 之前跑 4 项校验
-（Trade Date / 逐字段重复比对 / 合约数量突变 / 主力月持仓）。任一命中则坏数据
-与原始 PDF 进 `data/quarantine/`，`oi.json` 保持上一份，`exit 1`。
+四个采集脚本都在写盘之前跑 `validate_*()`，任一判据命中则坏数据与原始响应进
+`data/quarantine/`，目标 JSON 保持上一份，`exit 1`。
+
+| 脚本 | 判据数 | 判据 |
+|---|---|---|
+| `fetch_oi.py` | 4 | Trade Date / 逐字段重复 / 合约数量突变 / 主力月持仓 |
+| `fetch_cot.py` | 5 | 全期归零 / 单期归零 / OI 非正 / 期数骤降 / 日期分布 |
+| `fetch_gold.py` | 5 | 全 null / 缺失比例 / 最新一期 null / 价格越界 / 序列退化 |
+| `fetch_stocks.py` | 5 | 总量归零 / registered 非正 / 仓库数 / 明细核对 / 总量骤变 |
+
+**判据必须按源分别定义，不能照搬。** `fetch_oi` 的四条硬套到另三个源会系统性
+误报：「逐字段相同」对周频源是每周 6 次的常态（日频 workflow 跑周频数据），
+「Trade Date 容差 0」在周频源上差 3~10 天，「合约数量」「主力月 OI」在库存和
+金价里没有对应概念。三个源真正共享的只有骨架（隔离区写法、exit code 语义、
+失败则不覆盖旧文件），判据本身各写一套。
+
+拦截点必须在采集层：坏数据一旦落盘，既显示在页面上，也成为下一交易日差分的
+输入，把错误传播到后续所有帧。派生层不该因可重算的计算而拒绝出数据。
+
+闸的位置有两条硬要求：
+
+- **在归一化之前**。`fetch_cot` 的闸必须在 `cot_index()` 之前 —— 后者会把
+  退化输入粉饰成中性值，闸放后面看到的是被加工过的数字。
+- **在幂等判断之前**。`fetch_stocks` 的闸在 `date in existing_dates` 之前 ——
+  坏数据即使日期重复也该被隔离，不能让幂等 `return` 抢先吞掉。
+
+### 静默归零／归 null 是最危险的一类损坏
+
+三个采集脚本都有把解析失败静默转成 0 或 null 的兜底，全部在出口拦截：
+
+| 位置 | 兜底行为 | 拦它的判据 |
+|---|---|---|
+| `fetch_cot` `i()` | `float(row.get(key) or 0)` → 字段改名变 0 | a) b) c) |
+| `fetch_cot` `cot_index()` | 曾经 `mx == mn → 50` | **已改为返回 None** |
+| `fetch_gold` `align_price()` | 对不上返回 None | a) b) c) |
+| `fetch_stocks` `_to_float()` | 任何异常返回 `0.0` | d) 明细与总量交叉核对 |
+
+`cot_index()` 原先返 50 是**第二层掩盖**：上游全 0 被 `i()` 吞掉，再被归一化
+粉饰成「中性 50%」，页面上完全看不出异常。现改为返回 `None`（落盘 null，语义
+是"不可知"，与 0"确实为零"严格区分）。
+
+`fetch_stocks` 的 d) 是抓这类问题最强的一条 —— 明细与顶层 total 独立解析，
+单仓库静默归零必然让两者不符。
+
+### 判据阈值靠真实数据定，不靠拍
+
+`fetch_stocks` 的 d) 容差是 `max(2 * 仓库数, 32)` oz，绝对阈而非相对阈。
+
+来源：30 期真实数据里 `sum(details) − total` 恒为 −8 ~ −10 oz，追查到是每仓库
+`int()` 截断的累积残余（每仓库 < 1 oz，10 个仓库合成个位数），与库存量级无关。
+
+原计划拍的 `total * 0.01` = 27 万 oz **会放过最小仓库 STONEX（17 万 oz）整仓
+归零** —— 相对阈在这里恰好是错的工具。绝对阈下同样的注入差值是阈值的 8500 倍。
+
+### exit code 三态
+
+`0` 正常（含幂等跳过）/ `1` 校验失败需人工介入 / `2` 上游未更新。
+
+`fetch_stocks` 的 CME WAF 封锁原先 `exit 0`，把"抓不到"当成正常态、workflow
+静默绿灯，现改为 `exit 2`。
+
+`continue-on-error: true` 会把 1 和 2 都记成 `outcome=failure`，闸门分不清。
+所以 stocks 步骤显式捕获 exit code 存进 `$GITHUB_OUTPUT`，末尾闸门按 `case`
+分三态：`1` → 红，`2` → 只 `::warning::` 不红，其他非零 → 红（未预期）。
 
 拦截点必须在采集层：坏数据一旦落盘，既显示在页面上，也成为下一交易日差分的
 输入，把错误传播到后续所有帧。派生层不该因可重算的计算而拒绝出数据。
@@ -216,8 +277,12 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 ## 验证
 
 ```
-python3 derive_term_structure.py --test    # 派生逻辑 11 项（含信封契约）
+python3 derive_term_structure.py --test    # 派生逻辑 13 项（含信封契约、KPI）
 python3 fetch_oi.py --test                 # 采集校验 23 项（不联网）
+python3 fetch_cot.py --test                # 采集校验 16 项（含 cot_index 退化）
+python3 fetch_gold.py --test               # 采集校验 12 项（含退化边界）
+python3 fetch_stocks.py --test             # 采集校验 18 项（含缺字段 SKIP）
+python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘 24 项
 node tools/verify-ui-fixes.mjs             # 柱对齐 / 按钮态 / 轴刻度 / 合约列表
 node tools/verify-contract-contango.mjs    # 合约过滤 / 最小柱高 / 价差锚点
 node tools/verify-playback.mjs             # 回放交互

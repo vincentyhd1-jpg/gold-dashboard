@@ -18,6 +18,24 @@ from datetime import datetime, timezone
 GOLD_PAGE  = "https://www.cmegroup.com/markets/metals/precious/gold.html"
 REPORT_URL = "https://www.cmegroup.com/delivery_reports/Gold_Stocks.xls"
 OUT_PATH   = os.path.join(os.path.dirname(__file__), "data", "stocks.json")
+QUARANTINE_DIR = os.path.join(os.path.dirname(__file__), "data", "quarantine")
+
+# 仓库数相对上一份的允许变动。实测恒为 10 个。
+MAX_DEPOT_COUNT_DELTA = 3
+
+# 明细求和与顶层 total 的允许差值（oz）。
+#
+# 两者独立解析，实测 30 期差值恒为 -8 ~ -10 oz，来源是每仓库 int() 截断的
+# 累积残余（每仓库 < 1 oz，10 个仓库合成个位数），与库存量级无关 ——
+# 所以用绝对阈而非相对阈。相对阈 total*0.01 = 27 万 oz，反而会放过
+# 最小仓库 STONEX（17 万 oz）整仓静默归零。
+#
+# 2 * 仓库数 给每仓库 2 oz 余量（理论上界 1 oz），32 是仓库数偏少时的兜底。
+def depot_sum_tolerance(n_depots: int) -> int:
+    return max(2 * n_depots, 32)
+
+# 总量相对上一份的允许变动比例。库存日变化实测在 1% 量级。
+MAX_TOTAL_CHANGE_RATIO = 0.20
 
 HEADERS = {
     "User-Agent": (
@@ -243,13 +261,121 @@ def load_existing() -> list[dict]:
     return []
 
 
+# ── 采集层校验 ────────────────────────────────────────────────────────────────
+#
+# 堵「解析失败静默归零」：_to_float() 对任何异常返回 0.0，parse() 又会跳过
+# 全 0 仓库，两者叠加会让单仓库解析失败表现为「该仓库凭空消失」而非报错。
+# d) 的明细与总量交叉核对是抓这类问题最强的一条 —— 两者独立解析。
+
+def validate_stocks(entry: dict, records: list[dict]) -> list[str]:
+    """返回失败原因列表；空列表表示通过。"""
+    failures: list[str] = []
+
+    reg   = entry.get("registered")
+    eli   = entry.get("eligible")
+    total = entry.get("total")
+
+    # a) 总量同时为零 —— COMEX 库存不可能归零
+    if (reg or 0) == 0 and (eli or 0) == 0:
+        failures.append(
+            f"a) registered 与 eligible 同时为 0（{reg!r} / {eli!r}）"
+            f" —— 解析失败"
+        )
+
+    # b) registered 非正 —— 注册库存恒 > 0
+    if reg is None or reg <= 0:
+        failures.append(f"b) registered 为 {reg!r} —— 注册库存恒为正")
+
+    # 上一份记录，供 c) e) 比对
+    prev = None
+    for r in sorted(records, key=lambda r: r["date"], reverse=True):
+        if r["date"] < entry["date"]:
+            prev = r
+            break
+
+    # c) 仓库数为零或骤变
+    #    三态严格区分：字段缺失 ≠ 空列表 ≠ 正常
+    has_depots = "depositories" in entry
+    depots = entry.get("depositories")
+    if has_depots and not isinstance(depots, list):
+        failures.append(
+            f"c) depositories 字段类型异常（{type(depots).__name__}）"
+        )
+    elif has_depots and len(depots) == 0:
+        failures.append("c) depositories 为空列表 —— 所有仓库解析失败")
+    elif has_depots and prev and isinstance(prev.get("depositories"), list):
+        delta = len(depots) - len(prev["depositories"])
+        if abs(delta) > MAX_DEPOT_COUNT_DELTA:
+            failures.append(
+                f"c) 仓库数 {len(prev['depositories'])} → {len(depots)}"
+                f"（{delta:+d}），超过阈值 ±{MAX_DEPOT_COUNT_DELTA}"
+            )
+
+    # d) 明细与总量交叉核对。
+    #    仅对「有明细」的记录做 —— 早期 8 条记录无 depositories 字段，
+    #    缺字段时这条判据 SKIP：不是 pass 也不是 fail，是跳过。
+    #    严禁把 sum([]) = 0 当成真实求和（会让 abs(0 - total) = total 全爆红），
+    #    也严禁直接索引导致 KeyError 让闸自崩。
+    if not has_depots:
+        pass   # SKIP：无明细可核对
+    elif isinstance(depots, list) and depots:
+        detail_sum = sum(d.get("total") or 0 for d in depots)
+        diff = abs(detail_sum - (total or 0))
+        tol = depot_sum_tolerance(len(depots))
+        if diff > tol:
+            failures.append(
+                f"d) 明细求和 {detail_sum:,} 与 total {(total or 0):,} 相差 "
+                f"{diff:,} oz，超过容差 {tol} oz"
+                f" —— 可能有仓库静默归零"
+            )
+
+    # e) 总量骤变
+    if prev and prev.get("total"):
+        change = abs((total or 0) - prev["total"]) / prev["total"]
+        if change > MAX_TOTAL_CHANGE_RATIO:
+            failures.append(
+                f"e) total {prev['total']:,} → {(total or 0):,}"
+                f"（{change:.1%}），超过阈值 {MAX_TOTAL_CHANGE_RATIO:.0%}"
+            )
+
+    return failures
+
+
+def quarantine_stocks(entry: dict, xls_bytes: bytes,
+                      failures: list[str]) -> str:
+    """坏数据与原始 XLS 存入隔离区，data/stocks.json 保持上一份不被覆盖。"""
+    os.makedirs(QUARANTINE_DIR, exist_ok=True)
+    stamp = (entry.get("date")
+             or datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    path = os.path.join(QUARANTINE_DIR, f"stocks-{stamp}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({
+            "quarantined_at": datetime.now(timezone.utc).isoformat(),
+            "reason":         failures,
+            "entry":          entry,
+        }, f, ensure_ascii=False, indent=2)
+    if xls_bytes:
+        with open(os.path.join(QUARANTINE_DIR,
+                               f"stocks-{stamp}.xls"), "wb") as f:
+            f.write(xls_bytes)
+    return path
+
+
 def main():
+    if "--test" in sys.argv:
+        run_tests()
+        return
+
     print("正在下载 CME COMEX 黄金库存报告...")
     content = download()
 
     if content is None:
-        print("  CME WAF 封锁，跳过本次更新（stocks.json 保持不变）")
-        sys.exit(0)
+        # exit 2 = 上游未更新／抓不到，与「正常无新数据」区分。
+        # 原先 exit 0 把被 WAF 封锁当成正常态，workflow 静默绿灯。
+        print("  CME WAF 封锁，本次无法获取（stocks.json 保持不变）")
+        print("::warning title=CME 库存抓取失败::"
+              "WAF 封锁，stocks.json 未更新")
+        sys.exit(2)
 
     print(f"  已下载 {len(content):,} 字节")
 
@@ -263,6 +389,25 @@ def main():
     print(json.dumps(entry.get("depositories", []), ensure_ascii=False, indent=4))
 
     records = load_existing()
+
+    # ── 校验：坏数据不得写入 stocks.json ───────────────────────────────
+    # 必须在幂等判断之前 —— 坏数据即使日期重复也该被隔离，
+    # 不能让幂等 return 抢先吞掉
+    print("校验中...")
+    failures = validate_stocks(entry, records)
+    if failures:
+        path = quarantine_stocks(entry, content, failures)
+        print("  校验失败，已隔离，data/stocks.json 保持上一份可用数据：")
+        for f in failures:
+            print(f"    - {f}")
+        print(f"  隔离区：{path}")
+        print(f"::error title=CME 库存采集校验失败::"
+              f"{entry.get('date')} 未通过校验，已隔离；stocks.json 未更新。"
+              f"原因：{'；'.join(failures)}")
+        sys.exit(1)
+    print("  5 项校验通过（总量归零 / registered 非正 / 仓库数 / "
+          "明细核对 / 总量骤变）")
+
     existing_dates = {r["date"] for r in records}
 
     if entry["date"] in existing_dates:
@@ -284,6 +429,128 @@ def main():
         json.dump(records, f, ensure_ascii=False, indent=2)
 
     print(f"  已追加到 {OUT_PATH}，共 {len(records)} 条记录")
+
+
+# ── 校验逻辑单元测试 ──────────────────────────────────────────────────────────
+
+def run_tests():
+    """python fetch_stocks.py --test（不联网）"""
+    passed = failed = 0
+
+    def check(name, cond, detail=""):
+        nonlocal passed, failed
+        if cond:
+            passed += 1
+            print(f"  PASS  {name}")
+        else:
+            failed += 1
+            print(f"  FAIL  {name}  {detail}")
+
+    def depot(name, reg, eli):
+        return {"name": name, "registered": reg, "eligible": eli,
+                "total": reg + eli, "reg_adj": 0}
+
+    # 10 个仓库，仿真实分布（含 STONEX 这类小仓库）
+    DEPOTS = [
+        depot("ASAHI", 1725473, 113286),
+        depot("BRINKS", 5621485, 1219574),
+        depot("DELAWARE", 63924, 118089),
+        depot("HSBC", 1534977, 3967924),
+        depot("IDS", 65748, 1850),
+        depot("JPM", 2551327, 5929640),
+        depot("LOOMIS", 532058, 132656),
+        depot("MALCA", 1223887, 747),
+        depot("MTB", 1310041, 754838),
+        depot("STONEX", 118757, 51312),
+    ]
+    SUM = sum(d["total"] for d in DEPOTS)
+
+    def entry_at(date_s, **kw):
+        e = {"date": date_s, "registered": 14747681, "eligible": 12289920,
+             "total": SUM + 9,   # 实测残余 +9 oz
+             "depositories": [dict(d) for d in DEPOTS]}
+        e.update(kw)
+        return e
+
+    prev = entry_at("2026-07-28", total=SUM + 9)
+    records = [prev]
+
+    print("\n[validate_stocks]")
+    check("正常数据（残余 9 oz）→ 无失败",
+          validate_stocks(entry_at("2026-07-29"), records) == [],
+          validate_stocks(entry_at("2026-07-29"), records))
+
+    # a) 总量同时为零
+    f = validate_stocks(entry_at("2026-07-29", registered=0, eligible=0), records)
+    check("a) registered 与 eligible 同时为 0 → 命中",
+          any(x.startswith("a)") for x in f), f)
+
+    # b) registered 非正
+    for bad in (0, -100):
+        f = validate_stocks(entry_at("2026-07-29", registered=bad), records)
+        check(f"b) registered = {bad} → 命中",
+              any(x.startswith("b)") for x in f), f)
+
+    # c) 仓库数为空列表
+    f = validate_stocks(entry_at("2026-07-29", depositories=[]), records)
+    check("c) depositories 为空列表 → 命中",
+          any(x.startswith("c)") for x in f), f)
+
+    # c) 仓库数骤变 10 → 3
+    few = [dict(d) for d in DEPOTS[:3]]
+    f = validate_stocks(entry_at("2026-07-29", depositories=few,
+                                 total=sum(d["total"] for d in few)), records)
+    check("c) 仓库数 10 → 3 → 命中",
+          any(x.startswith("c)") for x in f), f)
+
+    # d) 最小仓库 STONEX（170,069 oz）静默归零
+    #    这是原计划 total*0.01 阈值会放过的情形
+    zeroed = [dict(d) for d in DEPOTS]
+    zeroed[-1] = depot("STONEX", 0, 0)
+    f = validate_stocks(entry_at("2026-07-29", depositories=zeroed), records)
+    check("d) 最小仓库 STONEX 归零（17 万 oz 差）→ 命中",
+          any(x.startswith("d)") for x in f), f)
+
+    # d) 容差边界：残余 9 / 20 oz 不该命中，33 oz 该命中
+    for resid, want_hit in ((9, False), (20, False), (33, True)):
+        f = validate_stocks(entry_at("2026-07-29", total=SUM + resid), records)
+        hit = any(x.startswith("d)") for x in f)
+        check(f"d) 残余 {resid} oz → {'命中' if want_hit else '不命中'}"
+              f"（容差 {depot_sum_tolerance(10)}）", hit == want_hit, f)
+
+    # d) 三态：字段缺失 → SKIP，不是 fail
+    no_depots = entry_at("2026-07-29")
+    del no_depots["depositories"]
+    f = validate_stocks(no_depots, records)
+    check("d) 无 depositories 字段 → 跳过，不误判损坏",
+          f == [], f)
+    check("d) 无 depositories 字段时不抛 KeyError",
+          isinstance(f, list))
+
+    # d) 三态对照：空列表命中 c) 而非 d)（值为 0 ≠ 字段缺失）
+    f = validate_stocks(entry_at("2026-07-29", depositories=[]), records)
+    check("d) 空列表 ≠ 字段缺失：命中 c) 但不命中 d)",
+          any(x.startswith("c)") for x in f)
+          and not any(x.startswith("d)") for x in f), f)
+
+    # e) 总量骤变
+    f = validate_stocks(entry_at("2026-07-29", total=int(prev["total"] * 2),
+                                 depositories=[]), records)
+    check("e) total 翻倍 → 命中",
+          any(x.startswith("e)") for x in f), f)
+
+    # 首次运行（库为空）→ c) e) 无从比对，但不应失败
+    f = validate_stocks(entry_at("2026-07-29"), [])
+    check("首次运行（库为空）→ 无失败", f == [], f)
+
+    print("\n[depot_sum_tolerance]")
+    check("10 个仓库 → 32（max(20, 32)）", depot_sum_tolerance(10) == 32)
+    check("20 个仓库 → 40（max(40, 32)）", depot_sum_tolerance(20) == 40)
+    check("0 个仓库 → 32（兜底）", depot_sum_tolerance(0) == 32)
+
+    print(f"\n{passed} passed, {failed} failed")
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

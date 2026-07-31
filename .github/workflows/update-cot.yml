@@ -32,6 +32,9 @@ jobs:
       - name: Run validation unit tests
         id: tests
         run: |
+          python fetch_cot.py --test
+          python fetch_gold.py --test
+          python fetch_stocks.py --test
           python fetch_oi.py --test
           python derive_term_structure.py --test
         continue-on-error: true
@@ -49,9 +52,16 @@ jobs:
         run: python fetch_gold.py
         continue-on-error: true
 
+      # exit code 三态：0 正常 / 1 校验失败需人工介入 / 2 上游未更新（WAF 封锁）。
+      # continue-on-error 会把 1 和 2 都记成 outcome=failure，闸门分不清 ——
+      # 显式捕获 exit code 存进 outputs，让末尾闸门按三态分别处理。
       - name: Run fetch_stocks.py
         id: stocks
-        run: python fetch_stocks.py
+        run: |
+          set +e
+          python fetch_stocks.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
         continue-on-error: true
 
       # 采集层校验（Trade Date / 重复比对 / 合约数量 / 主力月持仓）在这一步内。
@@ -112,11 +122,18 @@ jobs:
           [ "${{ steps.tests.outcome }}"  = "failure" ] && \
             fail "校验器自检" "fetch_oi.py --test 或 derive_term_structure.py --test 失败 —— 校验逻辑本身有问题，本次采集的校验结果不可信"
           [ "${{ steps.cot.outcome }}"    = "failure" ] && \
-            fail "采集层：COT" "fetch_cot.py 失败 —— CFTC 周报未更新，cot.json 保持上一份"
+            fail "采集层：COT" "fetch_cot.py 失败或未通过 5 项校验 —— 坏数据已隔离到 data/quarantine/，cot.json 保持上一份。详见该步骤日志"
           [ "${{ steps.gold.outcome }}"   = "failure" ] && \
-            fail "采集层：金价" "fetch_gold.py 失败 —— Yahoo Finance 取数失败，gold_price.json 保持上一份"
-          [ "${{ steps.stocks.outcome }}" = "failure" ] && \
-            fail "采集层：库存" "fetch_stocks.py 失败 —— CME 库存报告未更新，stocks.json 保持上一份"
+            fail "采集层：金价" "fetch_gold.py 失败或未通过 5 项校验 —— 坏数据已隔离到 data/quarantine/，gold_price.json 保持上一份。详见该步骤日志"
+          # 库存按 exit code 三态分开处理：
+          #   1 = 校验失败，坏数据已隔离，需人工介入 → 红
+          #   2 = CME WAF 封锁／上游未更新，属正常 → 只告警，不红
+          case "${{ steps.stocks.outputs.code }}" in
+            1) fail "采集层：库存" "fetch_stocks.py 未通过 5 项校验 —— 坏数据已隔离到 data/quarantine/，stocks.json 保持上一份。详见该步骤日志" ;;
+            2) echo "::warning title=采集层：库存::CME WAF 封锁，本次未取到数据，stocks.json 保持上一份（非异常）" ;;
+            0|"") : ;;
+            *) fail "采集层：库存" "fetch_stocks.py 以未预期的 exit code ${{ steps.stocks.outputs.code }} 退出" ;;
+          esac
           [ "${{ steps.oi.outcome }}"     = "failure" ] && \
             fail "采集层：期限结构" "fetch_oi.py 失败或未通过 4 项校验 —— 坏数据已隔离到 data/quarantine/，oi.json 保持上一份。详见该步骤日志中的具体校验项"
           [ "${{ steps.derive.outcome }}" = "failure" ] && \
