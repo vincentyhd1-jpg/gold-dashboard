@@ -252,6 +252,10 @@ def roll_noise(oi_chg: list[int | None], front_idx: int | None) -> float | None:
 
     暂不设阈值：当前数据全在移仓加剧的上升段，没有平静期可供定位拐点。
     详见 CLAUDE.md。
+
+    全精度落盘，不做任何舍入 —— 阈值待定，将来要在这一列上跑分布，
+    round(4) 会给分布垫一层量化地板（相邻值被吸附到同一格），
+    影响拐点定位。展示层若需要再格式化。
     """
     if front_idx is None or front_idx < 0 or front_idx >= len(oi_chg):
         return None
@@ -262,7 +266,7 @@ def roll_noise(oi_chg: list[int | None], front_idx: int | None) -> float | None:
     fv = oi_chg[front_idx]
     if total == 0 or fv is None:
         return None
-    return round(abs(fv) / total, 4)
+    return abs(fv) / total
 
 
 # ── Integrity checks ─────────────────────────────────────────────────────────
@@ -488,11 +492,12 @@ def derive(records: list[dict]) -> dict:
 
     # roll_noise 的移动平均。逐帧算完原始值后统一做，窗口不足时用已有样本。
     # 只存字段，前端暂不使用 —— 阈值待数据覆盖一个完整移仓周期后再定。
+    # 同 roll_noise：全精度落盘，不舍入，避免给待跑的分布垫量化地板。
     for i, f in enumerate(frames):
         lo = max(0, i - (ROLL_NOISE_MA_DAYS - 1))
         w = [frames[j]["roll_noise"] for j in range(lo, i + 1)
              if frames[j]["roll_noise"] is not None]
-        f["roll_noise_ma"] = round(sum(w) / len(w), 4) if w else None
+        f["roll_noise_ma"] = sum(w) / len(w) if w else None
 
     if scale["settle_min"] == float("inf"):
         scale["settle_min"] = 0
@@ -818,6 +823,52 @@ def run_tests(records: list[dict]) -> None:
                       f"应为 100200，得到 {kf2['total_oi']}")
     else:
         print("  PASS  KPI fixture: 无承接月 → 价差三字段 None，total_oi 仍有值")
+
+    # ── 2c. roll_noise 全精度 fixture ────────────────────────────────────
+    # 构造一组 oi_chg，使 |到期月变化| / Σ|全部变化| 落在无限小数上：
+    #   AUG26 = -1000, DEC26 = +2000, SEP26 = -1  →  1000 / 3001
+    # 该值 = 0.33322225924691766...，round(4) 会压成 0.3332，丢掉后续位。
+    # 阈值待定、将来要在这列上跑分布，量化地板会影响拐点定位。
+    NOISE_FIXTURE = [
+        {"date": "2026-01-05", "months": [
+            {"month": "AUG26", "settle": 4000.0, "oi": 200000, "oi_chg": 0},
+            {"month": "SEP26", "settle": 4030.0, "oi": 300,    "oi_chg": 0},
+            {"month": "DEC26", "settle": 4122.0, "oi": 80000,  "oi_chg": 0},
+        ]},
+        {"date": "2026-01-06", "months": [
+            {"month": "AUG26", "settle": 4000.0, "oi": 199000},
+            {"month": "SEP26", "settle": 4030.0, "oi": 299},
+            {"month": "DEC26", "settle": 4122.0, "oi": 82000},
+        ]},
+    ]
+    nf = derive(NOISE_FIXTURE)["frames"][1]
+    want_noise = 1000 / 3001            # 到期月 AUG26 流出 1000，总变动 3001
+    EPS_N = 1e-12
+
+    if nf["roll_from"] != "AUG26":
+        errors.append(f"NOISE fixture: roll_from 应为 AUG26，得到 {nf['roll_from']}")
+    elif nf["roll_noise"] is None:
+        errors.append("NOISE fixture: roll_noise 不应为 None")
+    elif abs(nf["roll_noise"] - want_noise) > EPS_N:
+        errors.append(f"NOISE fixture: roll_noise 应为 {want_noise!r}，"
+                      f"得到 {nf['roll_noise']!r}")
+    elif nf["roll_noise"] == round(nf["roll_noise"], 4):
+        # 真值是无限小数，落盘值若恰等于自身 4 位舍入 → 计算层仍在舍入
+        errors.append(f"NOISE fixture: roll_noise 似被舍入到 4 位"
+                      f"（{nf['roll_noise']!r}）—— 应落全精度，"
+                      f"round(4) 会给待跑的分布垫量化地板")
+    elif nf["roll_noise_ma"] is None:
+        errors.append("NOISE fixture: roll_noise_ma 不应为 None")
+    elif abs(nf["roll_noise_ma"] - want_noise) > EPS_N:
+        # 首帧 oi_chg 全 None 不入均值窗口，第二帧 ma == raw
+        errors.append(f"NOISE fixture: roll_noise_ma 应为 {want_noise!r}，"
+                      f"得到 {nf['roll_noise_ma']!r}")
+    elif nf["roll_noise_ma"] == round(nf["roll_noise_ma"], 4):
+        errors.append(f"NOISE fixture: roll_noise_ma 似被舍入到 4 位"
+                      f"（{nf['roll_noise_ma']!r}）—— 应落全精度")
+    else:
+        print(f"  PASS  NOISE fixture: roll_noise={nf['roll_noise']!r}"
+              f" 全精度（未舍入到 4 位）")
 
     # ── 3. 信封契约 ──────────────────────────────────────────────────────
     # 断言落盘信封字段齐全，且 data 内容与 derive() 的原始返回逐字段一致 ——
