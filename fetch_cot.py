@@ -2,7 +2,15 @@
 """
 从 CFTC Socrata API 获取黄金期货 COT 数据（合约代码 088691），
 计算管理基金净多持仓、商业套保净持仓、COT Index，
-保存到 data/cot.json。
+以信封格式保存到 data/cot.json（业务数据在 data 键里）。
+
+落盘走 io_utils 骨架：sweep_stale_tmp → 校验 → 幂等比对 → atomic_write_json。
+七个骨架函数用五个 —— upsert_by_key / apply_retention 不用，因为 cot 是周频
+全量重写：API 每次返回完整 52 周，整体替换，没有「单条追加」语义；窗口在
+请求端由 $limit=52 决定，落盘端再截一次就是两处窗口定义，早晚打架。
+
+时间戳从业务数据里删掉了（原 updated_at）—— 它属信封元数据 generated_at，
+且只在业务数据真变时刷新，见 main() 的幂等比对。
 """
 
 import json
@@ -11,6 +19,11 @@ import sys
 from datetime import datetime, timezone, date as date_cls
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
+
+from io_utils import (
+    atomic_write_json, read_json_or, sweep_stale_tmp, quarantine_write,
+)
+from data_envelope import envelope, unwrap
 
 API_URL   = "https://publicreporting.cftc.gov/resource/72hh-3qpy.json"
 GOLD_CODE = "088691"
@@ -155,25 +168,70 @@ def validate_cot(weekly: list[dict],
 
 
 def quarantine_cot(weekly: list[dict], raw, failures: list[str]) -> str:
-    """坏数据与原始 API 响应存入隔离区，data/cot.json 保持上一份不被覆盖。"""
-    os.makedirs(QUARANTINE_DIR, exist_ok=True)
+    """
+    坏数据与原始 API 响应存入隔离区，data/cot.json 保持上一份不被覆盖。
+
+    这里只调 io_utils 的机械写入，骨架不判断该不该隔离（硬约束 3）——
+    触发条件在 validate_cot() 的五条判据里。
+
+    stamp 用数据自身的最新期日期而非运行时刻：同一份坏数据反复抓到时覆盖
+    而非堆积。weekly 为空（连一行都没解析出来）时无日期可用，退回当日。
+
+    raw 是 Socrata 的 JSON 响应，序列化成字节另存一份（`raw_ext="raw.json"`，
+    不能用 `"json"` —— 会与 payload 撞名）—— 与 parsed_weekly 分开保存，
+    便于事后区分「API 返回就是坏的」与「parse_row 解析错了」。
+    """
     stamp = (weekly[-1]["date"] if weekly
              else datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-    path = os.path.join(QUARANTINE_DIR, f"cot-{stamp}.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({
-            "quarantined_at": datetime.now(timezone.utc).isoformat(),
-            "reason":         failures,
-            "parsed_weekly":  weekly,
-            "raw_response":   raw,
-        }, f, ensure_ascii=False, indent=2)
-    return path
+    return quarantine_write(
+        QUARANTINE_DIR, "cot", stamp,
+        reason=failures,
+        payload={"parsed_weekly": weekly},
+        raw=json.dumps(raw, ensure_ascii=False, indent=2).encode("utf-8"),
+        # 不能用 "json" —— 会与 payload 的 cot-<stamp>.json 撞同一路径，
+        # raw 覆盖掉 parsed_weekly，隔离区只剩一半证据（已由 quarantine_write
+        # 的撞名断言拦住，这里显式错开）。
+        raw_ext="raw.json",
+    )
+
+
+def build_payload(weekly: list[dict]) -> dict:
+    """
+    业务数据 {latest, weekly}。不含时间戳 —— generated_at 属信封元数据。
+
+    单独成函数是为了让幂等比对能拿到「本次算出的业务数据」这一个对象，
+    与磁盘上的旧 data 直接 == 比较。
+    """
+    mf_vals   = [r["mf_net"]   for r in weekly]
+    comm_vals = [r["comm_net"] for r in weekly]
+
+    latest = weekly[-1]
+    prev   = weekly[-2] if len(weekly) >= 2 else {}
+
+    return {
+        "latest": {
+            "date":          latest["date"],
+            "mf_net":        latest["mf_net"],
+            "comm_net":      latest["comm_net"],
+            "open_interest": latest["open_interest"],
+            "mf_net_chg":    latest["mf_net"]   - prev.get("mf_net",   0),
+            "comm_net_chg":  latest["comm_net"] - prev.get("comm_net", 0),
+            "mf_index":      cot_index(mf_vals,   latest["mf_net"]),
+            "comm_index":    cot_index(comm_vals, latest["comm_net"]),
+        },
+        "weekly": weekly,
+    }
 
 
 def main():
     if "--test" in sys.argv:
         run_tests()
         return
+
+    # 清理上次崩溃留下的临时文件（只清 cot.json 自己的，见 basename 隔离）
+    swept = sweep_stale_tmp(OUT_PATH)
+    if swept:
+        print(f"  清理上次残留的临时文件 {len(swept)} 个")
 
     print("正在请求 CFTC Socrata API...")
     raw = fetch_api(limit=52)
@@ -200,35 +258,38 @@ def main():
         sys.exit(1)
     print(f"  5 项校验通过（全期归零 / 单期归零 / OI 非正 / 期数 / 日期分布）")
 
-    mf_vals   = [r["mf_net"]   for r in weekly]
-    comm_vals = [r["comm_net"] for r in weekly]
+    data = build_payload(weekly)
+    latest     = data["latest"]
+    mf_index   = latest["mf_index"]
+    comm_index = latest["comm_index"]
 
-    latest = weekly[-1]
-    prev   = weekly[-2] if len(weekly) >= 2 else {}
+    # ── 幂等：业务数据与磁盘上完全相同则不写盘 ─────────────────────────
+    #
+    # cot 是周频全量重写、无 upsert 路径，所以判断点在这里显式比对。
+    #
+    # 比**整个 data**（latest + weekly 全量），不是只比 latest：CFTC 会修订
+    # 历史期，老周数字变了而最新一期没动时，只比 latest 会把真实修订静默跳过。
+    # dict/list 的 == 是结构化递归比较，够用。
+    #
+    # 信封元数据全部排除：generated_at 自比自永远不等；coverage/derived_from
+    # 由 data 派生，比它等于重复比 data；warnings/info 是本次运行的旁注。
+    old = unwrap(read_json_or(OUT_PATH, None)) if os.path.exists(OUT_PATH) else None
+    if old == data:
+        # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
+        print(f"  {latest['date']} 业务数据与磁盘上逐字段相同，跳过写入"
+              f"（generated_at 不刷新）")
+        return
 
-    mf_index   = cot_index(mf_vals,   latest["mf_net"])
-    comm_index = cot_index(comm_vals, latest["comm_net"])
+    payload = envelope(
+        source="cftc_cot",
+        freq="weekly",
+        data=data,
+        dates=[r["date"] for r in weekly],
+    )
+    # 原子写：崩在中途只留临时文件，cot.json 保持完整旧版
+    atomic_write_json(OUT_PATH, payload, compact=False)
 
-    output = {
-        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "latest": {
-            "date":          latest["date"],
-            "mf_net":        latest["mf_net"],
-            "comm_net":      latest["comm_net"],
-            "open_interest": latest["open_interest"],
-            "mf_net_chg":    latest["mf_net"]   - prev.get("mf_net",   0),
-            "comm_net_chg":  latest["comm_net"] - prev.get("comm_net", 0),
-            "mf_index":      mf_index,
-            "comm_index":    comm_index,
-        },
-        "weekly": weekly,
-    }
-
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
-
-    print(f"已保存 {len(weekly)} 条数据到 {OUT_PATH}")
+    print(f"已保存 {len(weekly)} 条数据到 {OUT_PATH}（信封格式）")
     print(
         f"最新一期：{latest['date']}"
         f"  管理基金净多={latest['mf_net']:+,}"
@@ -320,6 +381,36 @@ def run_tests():
           parse_row({"report_date_as_yyyy_mm_dd": "2026-07-21"})
           == {"date": "2026-07-21", "mf_net": 0, "comm_net": 0,
               "open_interest": 0})
+
+    print("\n[build_payload]")
+    p = build_payload(good)
+    check("不含时间戳字段（updated_at 已删，generated_at 归信封）",
+          "updated_at" not in p and "generated_at" not in p, sorted(p.keys()))
+    check("顶层只有 latest / weekly",
+          sorted(p.keys()) == ["latest", "weekly"], sorted(p.keys()))
+    check("latest 八个字段齐全",
+          sorted(p["latest"].keys()) == sorted([
+              "date", "mf_net", "comm_net", "open_interest",
+              "mf_net_chg", "comm_net_chg", "mf_index", "comm_index"]),
+          sorted(p["latest"].keys()))
+    check("latest.date = 最后一期", p["latest"]["date"] == good[-1]["date"])
+    check("mf_net_chg = 末期 − 前期",
+          p["latest"]["mf_net_chg"] == good[-1]["mf_net"] - good[-2]["mf_net"],
+          p["latest"]["mf_net_chg"])
+    check("weekly 原样透传（不排序不改写）", p["weekly"] == good)
+    check("单期输入 → chg 以 0 为基准（prev 缺失）",
+          build_payload([good[0]])["latest"]["mf_net_chg"] == good[0]["mf_net"])
+
+    # 幂等的相等判断：build_payload 必须是纯函数，同输入产出可 == 的对象。
+    # 若将来有人往 data 里塞时间戳，这条会立刻红 —— 那正是幂等失效的形态。
+    check("同输入两次调用结果相等（纯函数，幂等比对的前提）",
+          build_payload(good) == build_payload(good))
+    check("weekly 里历史期变了 → payload 不相等（防「只比 latest」退化）",
+          build_payload(good)
+          != build_payload([dict(good[0], mf_net=999999)] + good[1:]))
+    check("只有 latest 变了 → payload 不相等",
+          build_payload(good)
+          != build_payload(good[:-1] + [dict(good[-1], mf_net=777777)]))
 
     print(f"\n{passed} passed, {failed} failed")
     if failed:

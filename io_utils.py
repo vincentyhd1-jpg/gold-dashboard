@@ -242,15 +242,29 @@ def quarantine_write(quar_dir: str, prefix: str, stamp: str, *,
 
     os.makedirs(quar_dir, exist_ok=True)
     json_path = os.path.join(quar_dir, f"{prefix}-{stamp}.json")
+
+    raw_path = None
+    if raw is not None:
+        ext = raw_ext or "bin"
+        raw_path = os.path.join(quar_dir, f"{prefix}-{stamp}.{ext}")
+        # raw_ext="json" 会让 raw 覆盖掉 payload —— 两者同名，写完只剩一半
+        # 证据，且哪一半留下取决于写入顺序。撞名必须抛，不能静默覆盖：
+        # 隔离区是坏数据的唯一快照（CME 无历史归档），丢一半等于事后无法
+        # 区分「API 返回就是坏的」与「parse 解析错了」。
+        if os.path.abspath(raw_path) == os.path.abspath(json_path):
+            raise ValueError(
+                f"quarantine_write: raw_ext={raw_ext!r} 与 payload 的 .json "
+                f"撞同一路径 {json_path!r} —— raw 会覆盖 payload，"
+                f"隔离区只剩一半证据。改用 raw_ext='raw.json' 之类错开。"
+            )
+
     atomic_write_json(json_path, {
         "quarantined_at": utc_now_iso(),
         "reason":         reason,
         **payload,
     }, compact=False)
 
-    if raw is not None:
-        ext = raw_ext or "bin"
-        atomic_write_bytes(
-            os.path.join(quar_dir, f"{prefix}-{stamp}.{ext}"), raw)
+    if raw_path is not None:
+        atomic_write_bytes(raw_path, raw)
 
     return json_path

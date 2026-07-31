@@ -440,6 +440,36 @@ with tempfile.TemporaryDirectory() as d:
     check("隔离区写完无临时文件残留",
           not any(f.startswith(TMP_PREFIX) for f in os.listdir(q)))
 
+    # raw_ext="json" 撞名必须抛，不能静默让 raw 覆盖 payload。
+    # 实测踩到过：fetch_cot 存 Socrata 的 JSON 响应，顺手传 raw_ext="json"，
+    # 两者同为 cot-<stamp>.json，写完隔离区只剩 raw —— parsed_weekly 没了，
+    # 事后无法区分「API 返回就是坏的」与「parse_row 解析错了」。
+    try:
+        quarantine_write(q, "cot", "2026-07-22", reason=["x"],
+                         payload={"parsed": [1, 2]},
+                         raw=b'{"api": "resp"}', raw_ext="json")
+        check("raw_ext='json' 撞名 → 抛 ValueError", False, "没抛")
+    except ValueError as e:
+        check("raw_ext='json' 撞名 → 抛 ValueError", True)
+        check("撞名报错点明后果与改法",
+              "覆盖" in str(e) and "raw.json" in str(e), str(e))
+    check("撞名时不留半份证据（payload 未被写出）",
+          not os.path.exists(os.path.join(q, "cot-2026-07-22.json")),
+          sorted(os.listdir(q)))
+
+    # 错开扩展名 → 两份并存
+    quarantine_write(q, "cot", "2026-07-23", reason=["x"],
+                     payload={"parsed": [1, 2]},
+                     raw=b'{"api": "resp"}', raw_ext="raw.json")
+    both = sorted(f for f in os.listdir(q) if f.startswith("cot-2026-07-23"))
+    check("raw_ext='raw.json' → parsed 与 raw 两份并存",
+          both == ["cot-2026-07-23.json", "cot-2026-07-23.raw.json"], both)
+    check("两份内容各自正确",
+          read_json_or(os.path.join(q, "cot-2026-07-23.json"),
+                       {})["parsed"] == [1, 2]
+          and open(os.path.join(q, "cot-2026-07-23.raw.json"),
+                   "rb").read() == b'{"api": "resp"}')
+
 
 # ══ D 表：信封读取端（unwrap / assert_envelope）═════════════════════════════
 print("\n[D 表：信封读取端]")

@@ -41,8 +41,13 @@ tools/*.mjs       Playwright 验证脚本
 `derived_from` 记上游身份，能看出派生数据基于哪一版原始数据算的；上游若还是
 裸格式则标 `envelope:false`，便于审计哪些源没迁。
 
-**迁移状态**：`term-structure-series.json`、`stocks.json` 已用信封。
-`cot/gold_price/oi.json` 仍是裸格式（cot 的**读取端**已容双形状，写入端待切）。
+**迁移状态**：`term-structure-series.json` 已用信封。`cot.json`、`stocks.json`
+的**写入端已切**，但磁盘上的文件要等下一次 Actions 跑才会变形（本地不可见，
+参照 `4f4834e` 之后 `stocks.json` 长期仍是 `Array[38]`）。`gold_price/oi.json`
+写入端未切。
+
+三个读 `cot.json` 的地方都已容双形状（`fetch_gold.py`、
+`tools/verify-fetch-gates.py`、`index.html`），所以写入端切换不会开破窗。
 
 **TODO（四源全迁完后）**：统一 `unwrap(strict=True)` + 删前端双形状兼容
 （`payload?.data ?? payload`、cot 的 `p?.data ? {...} : p`）+ 删 `generated_at
@@ -285,6 +290,18 @@ stocks 校验闸注入后报 exit=0，第一反应若是「闸坏了」就会去
 
 将来某类 warning 确需持久化审计，走**单独日志文件**，不塞进数据文件。
 
+### 隔离区两份证据不许同名
+
+`quarantine_write` 的 `raw_ext` 不能是 `"json"`：raw 与 payload 都会落到
+`<prefix>-<stamp>.json`，写完只剩一份，且留下哪份取决于写入顺序。丢的那份
+让事后无法区分「API 返回就是坏的」与「parse 解析错了」—— 而隔离区是坏数据的
+唯一快照（CME/CFTC 无历史归档），错过就永久拿不回来。
+
+`fetch_cot` 存 Socrata 的 JSON 响应时真踩到了：撞名后 `parsed_weekly` 静默
+消失。现已在 `quarantine_write` 里断言撞名即抛（错开用 `raw_ext="raw.json"`），
+`verify-io-utils` 有对应用例。**注释挡不住误用，断言才行** —— 与删掉
+`data_envelope.write_json()` 同一判断。
+
 ### 静默归零／归 null 是最危险的一类损坏
 
 三个采集脚本都有把解析失败静默转成 0 或 null 的兜底，全部在出口拦截：
@@ -366,10 +383,11 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 ```
 python3 derive_term_structure.py --test    # 派生逻辑 13 项（含信封契约、KPI）
 python3 fetch_oi.py --test                 # 采集校验 23 项（不联网）
-python3 fetch_cot.py --test                # 采集校验 16 项（含 cot_index 退化）
+python3 fetch_cot.py --test                # 采集校验 26 项（含 build_payload 幂等前提）
 python3 fetch_gold.py --test               # 采集校验 12 项（含退化边界）
 python3 fetch_stocks.py --test             # 采集校验 18 项（含缺字段 SKIP）
 python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘 24 项
+python3 tools/verify-io-utils.py           # 落盘骨架 100 项（含隔离区撞名断言）
 node tools/verify-ui-fixes.mjs             # 柱对齐 / 按钮态 / 轴刻度 / 合约列表
 node tools/verify-contract-contango.mjs    # 合约过滤 / 最小柱高 / 价差锚点
 node tools/verify-playback.mjs             # 回放交互
