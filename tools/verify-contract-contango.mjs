@@ -17,13 +17,32 @@ const derived = await page.evaluate(async () => {
   const r = await fetch('data/derived/term-structure-series.json?_=' + Date.now());
   const p = await r.json();
   const s = p?.data ?? p;
-  return Object.fromEntries(s.frames.map(f => [
-    f.date.slice(5).replace('-', '/'),
-    { total_oi: f.total_oi, spread: f.spread,
-      gap: f.spread_gap_days, ann: f.spread_annualized_pct,
-      roll_from: f.roll_from, roll_to: f.roll_to },
-  ]));
+
+  // total_oi 的 B2 口径需要 ever_front（已当过持仓最大月的月份集合）。
+  // 从帧序列独立重算一遍，不读 derive 的中间量 —— 这样才是真的交叉验证。
+  const everFront = new Set();
+  for (const f of s.frames) {
+    let best = null, bestOi = -1;
+    s.contracts.forEach((c, i) => {
+      const v = f.oi[i];
+      if (v != null && v > bestOi) { bestOi = v; best = c; }
+    });
+    if (best && bestOi > 0) everFront.add(best);
+  }
+
+  return {
+    everFront: [...everFront],
+    frames: Object.fromEntries(s.frames.map(f => [
+      f.date.slice(5).replace('-', '/'),
+      { total_oi: f.total_oi, spread: f.spread,
+        gap: f.spread_gap_days, ann: f.spread_annualized_pct,
+        roll_from: f.roll_from, roll_to: f.roll_to },
+    ])),
+  };
 });
+
+const EVER_FRONT = new Set(derived.everFront);
+console.log('独立重算的 ever_front:', derived.everFront.join(' '));
 
 const EPS = 1e-9;
 
@@ -109,7 +128,7 @@ for (const frac of [1, 0]) {
       settles, ois,
     };
   }, frac);
-  const d = derived[r.date];
+  const d = derived.frames[r.date];
   console.log(`\n  ${r.date}  卡片「${r.cardLabel}」= ${r.val}`);
   console.log(`    副标题: ${r.label}`);
   console.log(`    derive 落盘: spread=${d?.spread} gap=${d?.gap} ann=${d?.ann} total_oi=${d?.total_oi}`);
@@ -123,7 +142,13 @@ for (const frac of [1, 0]) {
       (Date.UTC(2000 + +d.roll_to.slice(3), MON[d.roll_to.slice(0, 3)] - 1, 1)
        - Date.UTC(2000 + +d.roll_from.slice(3), MON[d.roll_from.slice(0, 3)] - 1, 1)) / 86400000);
     const expAnn = expSpread / r.settles[d.roll_from] * (365 / expGap) * 100;
+    // total_oi 口径 B2：只累加 ever_front（已当过持仓最大月的已确立主角）。
+    // 旧口径「全部挂牌月求和」已作废 —— 它含到期残余与从未当过主角的名义月。
     const expOi = Object.entries(r.ois)
+      .filter(([l]) => r.settles[l] != null && EVER_FRONT.has(l))
+      .reduce((s, [, v]) => s + (v || 0), 0);
+    // 对照：旧口径的值，用于确认两者确实不同（口径变更的正向证据）
+    const oldCaliberOi = Object.entries(r.ois)
       .filter(([l]) => r.settles[l] != null)
       .reduce((s, [, v]) => s + (v || 0), 0);
 
@@ -133,8 +158,12 @@ for (const frac of [1, 0]) {
           d.gap === expGap, { got: d.gap, exp: expGap });
     check(`${r.date} derive 年化与复算一致`,
           Math.abs(d.ann - expAnn) < EPS, { got: d.ann, exp: expAnn });
-    check(`${r.date} derive total_oi 与柱子求和一致`,
+    check(`${r.date} derive total_oi = Σ ever_front（B2 口径）`,
           d.total_oi === expOi, { got: d.total_oi, exp: expOi });
+    // 口径确实变窄了：B2 必须严格小于旧口径，否则说明退回全部挂牌月
+    check(`${r.date} B2 口径严格窄于旧口径`,
+          expOi < oldCaliberOi,
+          { b2: expOi, oldCaliber: oldCaliberOi });
 
     // 计算层不得舍入到显示精度：落盘值若恰等于自身 2 位舍入、而真值不是，
     // 说明精度在派生层就丢了

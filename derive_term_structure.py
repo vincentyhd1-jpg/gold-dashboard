@@ -91,15 +91,36 @@ def month_gap_days(a: str | None, b: str | None) -> int:
 # 计算逻辑进 --test 有回归保护，将来别的页面（term-3d 等）要用也不必重写。
 # 角色锚定不在这里 —— roll_from / roll_to 由 find_roll_pair() 决定。
 
-def total_oi_of(months: list[dict]) -> int:
+def total_oi_of(months: list[dict],
+                established: set[str] | None = None) -> int:
     """
-    窗口总持仓 = 求和，只计有结算价的合约。
+    已确立主角总持仓 = Σ OI over month ∈ ever_front。
+    即只累加「已当过持仓最大月」的月份，只计有结算价的合约。**零阈值。**
 
-    传入的必须是「X 轴上的合约」（contracts），不是原始记录的全部窗口月份：
-    已到期月不在轴上，不该计入。实测按全部窗口月份求和，首帧会多出 JUN26
-    的 7 手（该合约当日仍挂牌，但在序列末帧已到期、已从 X 轴剔除）。
+    传 ever_front 而非 major_months() 的返回值：后者会用
+    MIN_NEXT_OI_RATIO（未跑分布的拍值）给序列末端那个尚未坐正的承接月补位
+    （当前数据下是 FEB27），那会让 total_oi 依赖一个没锚定的阈值。
+    ever_front 由逐帧取持仓最大月累积得出，纯序数、尺度无关、无阈值。
+
+    不含三类：
+      到期清算残余         首帧 JUN26 的 7 手
+      从未当过主角的名义月  OCT26 全程横盘 21~43k，从未成为持仓最大月
+      未坐正的末端承接月    当前 FEB27（还在积累，尚未当过最大月）
+
+    与价差/主力月共享 major_months 家族但**口径有意略窄**：
+      价差含承接月     问「往哪移」→ 用 major_months（含 FEB27）
+      total_oi 只含主角 问「盘子多大」→ 用 ever_front
+    两者不同口径是有意的，不是不一致。
+
+    旧口径「全部挂牌月求和」已作废：它把到期残余与名义月一并计入。
+
+    established 为 None 时退化为「全部传入月份求和」，仅供无 ever_front
+    上下文的调用方（单帧场景）使用。
     """
-    return sum(m["oi"] or 0 for m in months if m.get("settle") is not None)
+    rows = [m for m in months if m.get("settle") is not None]
+    if established is not None:
+        rows = [m for m in rows if m["month"] in established]
+    return sum(m["oi"] or 0 for m in rows)
 
 
 def spread_metrics(months: list[dict],
@@ -455,13 +476,16 @@ def derive(records: list[dict]) -> dict:
                             contracts.index(roll_from) if roll_from in contracts else None)
 
         # KPI 算术：原先在前端 _renderFrame 里，下沉到这里。
-        # 口径按 X 轴合约（contracts）而非原始窗口月份（wm）—— 两者差在已到期月，
-        # 实测首帧会多出 JUN26 的 7 手。本次只搬算术，不改口径。
+        # 入参按 X 轴合约（contracts）而非原始窗口月份（wm），两者差在已到期月。
         axis_months = [{"month": lbl,
                         "settle": settle_arr[i],
                         "oi": oi_arr[i]}
                        for i, lbl in enumerate(contracts)]
-        kpi_total_oi = total_oi_of(axis_months)
+        # total_oi 口径 B2：只累加 ever_front（已当过持仓最大月的已确立主角），
+        # 零阈值。不传 major_months() 的返回值 —— 它含 MIN_NEXT_OI_RATIO 补位的
+        # 末端承接月。价差用 major_months（问往哪移）、total_oi 用 ever_front
+        # （问盘子多大），口径有意略窄。见 total_oi_of()。
+        kpi_total_oi = total_oi_of(axis_months, ever_front)
         kpi_spread   = spread_metrics(axis_months, roll_from, roll_to)
 
         # in_roll_window: 到期月持仓已从自身峰值跌破一半 → 移仓正在进行
@@ -785,9 +809,12 @@ def run_tests(records: list[dict]) -> None:
     if kf["roll_from"] != "AUG26" or kf["roll_to"] != "DEC26":
         errors.append(f"KPI fixture: 锚点应为 AUG26→DEC26，"
                       f"得到 {kf['roll_from']}→{kf['roll_to']}")
-    elif kf["total_oi"] != 280300:
-        # 200000 + 300 + 80000，三个都有结算价所以全计入
-        errors.append(f"KPI fixture: total_oi 应为 280300，得到 {kf['total_oi']}")
+    elif kf["total_oi"] != 200000:
+        # B2 口径：只累加 ever_front。单帧 fixture 里只有 AUG26 当过持仓最大月
+        # （200000），SEP26 存根月与 DEC26 承接月都未坐正 → 不计入。
+        # 旧口径（全部挂牌月）会得到 280300 = 200000 + 300 + 80000。
+        errors.append(f"KPI fixture: total_oi 应为 200000（B2 只含 ever_front），"
+                      f"得到 {kf['total_oi']}")
     elif abs(kf["spread"] - 122.0) > EPS:
         errors.append(f"KPI fixture: spread 应为 122.0，得到 {kf['spread']!r}")
     elif kf["spread_gap_days"] != 122:
@@ -803,8 +830,9 @@ def run_tests(records: list[dict]) -> None:
         errors.append(f"KPI fixture: 年化似被舍入到 2 位（{kf['spread_annualized_pct']!r}）"
                       f"—— 计算层应落全精度")
     else:
-        print(f"  PASS  KPI fixture: total_oi=280300 spread=122.0 "
-              f"gap=122天 年化={kf['spread_annualized_pct']!r}（全精度）")
+        print(f"  PASS  KPI fixture: total_oi=200000（B2 只含 ever_front）"
+              f" spread=122.0 gap=122天 "
+              f"年化={kf['spread_annualized_pct']!r}（全精度）")
 
     # 无承接月 → 三个价差字段全 None，但 total_oi 仍要算
     kf2 = derive([{"date": "2026-01-05", "months": [
@@ -818,11 +846,55 @@ def run_tests(records: list[dict]) -> None:
         errors.append(f"KPI fixture: 无承接月时价差三字段应全 None，得到 "
                       f"{kf2['spread']} / {kf2['spread_gap_days']} / "
                       f"{kf2['spread_annualized_pct']}")
-    elif kf2["total_oi"] != 100200:
+    elif kf2["total_oi"] != 100000:
+        # B2 口径：只有 AUG26 当过持仓最大月，SEP26 存根月不计入。
+        # 旧口径会得到 100200 = 100000 + 200。
         errors.append(f"KPI fixture: 无承接月时 total_oi 仍应算，"
-                      f"应为 100200，得到 {kf2['total_oi']}")
+                      f"应为 100000（B2 只含 ever_front），得到 {kf2['total_oi']}")
     else:
-        print("  PASS  KPI fixture: 无承接月 → 价差三字段 None，total_oi 仍有值")
+        print("  PASS  KPI fixture: 无承接月 → 价差三字段 None，"
+              "total_oi=100000 仍有值")
+
+    # B2 口径专项：未坐正的末端承接月不得计入 total_oi。
+    # major_months() 会用 MIN_NEXT_OI_RATIO 给末端承接月补位，total_oi 若误用
+    # 它的返回值就会把那个月算进来，并引入一个未跑分布的阈值。
+    # 构造：AUG26 一直最大 → DEC26 反超坐正 → FEB27 在积累但从未最大。
+    B2_FIXTURE = [
+        {"date": "2026-01-05", "months": [
+            {"month": "AUG26", "settle": 4000.0, "oi": 200000},
+            {"month": "OCT26", "settle": 4050.0, "oi": 30000},   # 名义月，从未最大
+            {"month": "DEC26", "settle": 4122.0, "oi": 50000},
+            {"month": "FEB27", "settle": 4180.0, "oi": 5000},
+        ]},
+        {"date": "2026-01-06", "months": [
+            {"month": "AUG26", "settle": 4000.0, "oi": 60000},
+            {"month": "OCT26", "settle": 4050.0, "oi": 32000},
+            {"month": "DEC26", "settle": 4122.0, "oi": 210000},   # 反超，坐正
+            {"month": "FEB27", "settle": 4180.0, "oi": 16000},    # 积累中，未坐正
+        ]},
+    ]
+    b2 = derive(B2_FIXTURE)
+    b2f = b2["frames"][1]
+    # ever_front = {AUG26, DEC26} → 60000 + 210000 = 270000
+    # 若误用 major_months（含 FEB27 补位）会得到 286000
+    # 若用旧口径（全部挂牌月）会得到 318000
+    if b2f["total_oi"] != 270000:
+        errors.append(
+            f"B2 fixture: total_oi 应为 270000（仅 AUG26+DEC26 已坐正），"
+            f"得到 {b2f['total_oi']} —— "
+            f"286000 说明误用了 major_months（含 FEB27 补位，引入 "
+            f"MIN_NEXT_OI_RATIO 阈值）；318000 说明退回了全部挂牌月旧口径"
+        )
+    elif (b2f["roll_from"], b2f["roll_to"]) != ("AUG26", "DEC26"):
+        # 此帧 AUG26 仍持 60000（占自身峰值 30%，高于 ROLL_DONE_OI_RATIO），
+        # 移仓未完毕 → 配对仍是 AUG26→DEC26。FEB27 要等 AUG26 走完才轮到。
+        errors.append(f"B2 fixture: 配对应为 AUG26→DEC26（AUG26 移仓未完毕），"
+                      f"得到 {b2f['roll_from']}→{b2f['roll_to']}")
+    else:
+        # FEB27 在 major_months 里（承接月补位）但不在 total_oi 里 ——
+        # 这正是两者口径有意不同的证据
+        print("  PASS  B2 fixture: total_oi=270000 只含已坐正主角"
+              "（FEB27 在 major_months 却不计入 total_oi）")
 
     # ── 2c. roll_noise 全精度 fixture ────────────────────────────────────
     # 构造一组 oi_chg，使 |到期月变化| / Σ|全部变化| 落在无限小数上：

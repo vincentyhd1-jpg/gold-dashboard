@@ -67,15 +67,24 @@ tools/*.mjs       Playwright 验证脚本
 
 - **天数不能按「月数 × 30」估**。AUG26→DEC26 是 122 天，按 4×30=120 算年化
   偏高 1.7%。`spread_gap_days == 122` 那条断言就是防这个回归。
-- **`total_oi` 的口径是「X 轴合约」而非「原始窗口月份」**。两者差在已到期月：
-  实测首帧按窗口月份求和会多出 JUN26 的 7 手（该合约当日仍挂牌，但在序列
-  末帧已到期、已从 X 轴剔除）。派生层要显式按 `contracts` 构造入参。
+- **`total_oi` 口径 B2（已执行）**：`total_oi = Σ OI over month ∈ ever_front`
+  —— 即「已当过持仓最大月」的已确立主角之和。**零阈值。**
 
-  **口径定稿（未执行）**：`total_oi = Σ OI over month ∈ major_months(peak_oi,
-  ever_front)` —— 即「曾当过持仓最大月」的月份持仓之和。与同卡价差/主力月复用
-  同一 `major_months` 序数信号，三数同口径。不含到期清算残余，不含从未当过主角
-  的名义交割月（如当前数据下的 OCT26）。无新增阈值。旧口径（全部挂牌月求和）
-  作废。执行时机 = P1 信封化时于 derive 一并改，现仅记录未执行。
+  不含三类：到期清算残余、从未当过主角的名义月（当前 OCT26）、尚在积累未坐正
+  的末端承接月（当前 FEB27）。
+
+  与价差/主力月共享 `major_months` 家族但**口径有意略窄**：价差含承接月
+  （问「往哪移」，用 `major_months`），`total_oi` 只含已确立主角（问「盘子多大」，
+  用 `ever_front`）。两者不同口径是有意的，不是不一致。
+
+  实现上传 `ever_front` 而非 `major_months()` 的返回值 —— 后者会用
+  `MIN_NEXT_OI_RATIO`（未跑分布的拍值）给末端承接月补位，那会让 `total_oi`
+  依赖一个没锚定的阈值。`ever_front` 由逐帧取持仓最大月累积得出，纯序数、
+  尺度无关、零阈值。
+
+  旧口径（全部挂牌月求和）作废。切换实测：07/29 `380,608 → 302,267`、
+  06/26 `361,195 → 320,600`，五处 KPI 卡显示值单向变小，`front` /
+  `deltaData` / 图表存活均未变 —— 是口径变更不是回归。
 - **计算层全精度，展示层才格式化**。`spread` / `spread_annualized_pct` 原始
   float 落盘，派生层不做任何舍入（实测落盘值形如 `60.69999999999982` /
   `4.499230954497755`）。`toFixed(2)` 只出现在前端 `_renderFrame`。
@@ -308,6 +317,7 @@ node tools/verify-gapframe.mjs             # 断层帧
 node tools/verify-isolation.mjs            # 注入渲染故障，验证模块隔离
 node tools/verify-schema-coupling.mjs      # 注入 schema 破坏，验证护栏会变红
 node tools/verify-kpi-injection.mjs        # 注入错误 KPI 值，验证护栏会变红
+node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证护栏会变红
 node tools/verify-live.mjs                 # 线上端到端
 ```
 
