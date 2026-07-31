@@ -351,10 +351,11 @@ node tools/verify-ui-fixes.mjs             # 柱对齐 / 按钮态 / 轴刻度 /
 node tools/verify-contract-contango.mjs    # 合约过滤 / 最小柱高 / 价差锚点
 node tools/verify-playback.mjs             # 回放交互
 node tools/verify-gapframe.mjs             # 断层帧
-node tools/verify-isolation.mjs            # 注入渲染故障，验证模块隔离
+node tools/verify-isolation.mjs            # 注入渲染故障，验证模块隔离（37 项断言）
 node tools/verify-schema-coupling.mjs      # 注入 schema 破坏，验证护栏会变红
 node tools/verify-kpi-injection.mjs        # 注入错误 KPI 值，验证护栏会变红
 node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证护栏会变红
+node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
 node tools/verify-live.mjs                 # 线上端到端
 ```
 
@@ -363,15 +364,21 @@ node tools/verify-live.mjs                 # 线上端到端
 「这个脚本看起来会覆盖到」是不可靠的判断。要确认一条护栏真的有效，
 往被测对象里注入一个已知破坏，看它是否**变红**。
 
-已两次证明这一步不可省：
+已四次证明这一步不可省：
 
 | 场景 | 读代码的判断 | 注入实测的结果 |
 |---|---|---|
-| `verify-isolation` | 「它注入故障验证模块隔离，有效」 | `initOIPlayback` 搬到 `js/playback.js` 后，脚本只拦 root HTML，注入变成空操作 —— 静默通过，从此不再验证任何东西 |
+| `verify-isolation` 探针 | 「它注入故障验证模块隔离，有效」 | `initOIPlayback` 搬到 `js/playback.js` 后，脚本只拦 root HTML，注入变成空操作 —— 静默通过，从此不再验证任何东西 |
 | 信封化后的四个脚本 | 「它们不直接读 JSON，可能对 schema 破坏无感」 | 注入 `data` 缺失 / `frames` 为空，三图表全建不起来，几何断言必然失败 —— 实际是 fail loudly，无需改动 |
+| KPI 算术下沉 | 「四个字段都有断言覆盖」 | 年化率/spread 三种注入都红，但 `total_oi` 改成 1 仍全绿 —— 缺一条断言 |
+| `verify-isolation` 判定机制 | 「它是六个 verify 之一，全绿就是隔离正常」 | 该脚本**根本没有断言**，只打印状态；退出码仅反映「脚本自身是否抛异常」。三模块全挂只要不抛也是 exit 0 —— 历史上所有「六个 verify 全绿」里，isolation 那条一直不携带信息 |
 
-两次的方向相反：一次是以为有效实际失效，一次是以为失效实际有效。
-两次都只有注入才看得出来。
+方向各不相同：以为有效实际失效、以为失效实际有效、以为覆盖实际缺断言、
+以为在断言实际连断言都没有。四次都只有注入才看得出来。
+
+**「没有断言」比「断言写错」更隐蔽。** 断言写错至少会在某次注入里露出来，
+而一个只打印不断言的脚本永远是绿的，且它出现在「全绿」清单里会制造安全感。
+新增 verify 脚本时先确认三件事：有累加器、结束时按失败数退出、注入能让它红。
 
 **规程**：凡改动 schema 或做重构后，对相关 verify 脚本做一次破坏注入，
 确认它 fail loudly。第三次证明这一步不可省：KPI 算术下沉后注入四种错值，
