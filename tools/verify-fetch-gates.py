@@ -103,8 +103,12 @@ run_injected(
 )
 
 # 正常数据应放行（用真实 cot.json 的 weekly 反推成 API 行）
+# 经 unwrap 读：cot.json 信封化前后都取到同一份业务数据。
+sys.path.insert(0, ROOT)
+from data_envelope import unwrap                                    # noqa: E402
+
 with open(os.path.join(DATA, "cot.json"), encoding="utf-8") as f:
-    real_cot = json.load(f)
+    real_cot = unwrap(json.load(f))
 GOOD_ROWS = json.dumps([
     {"report_date_as_yyyy_mm_dd": w["date"],
      "m_money_positions_long_all": str(max(w["mf_net"], 0) + 100000),

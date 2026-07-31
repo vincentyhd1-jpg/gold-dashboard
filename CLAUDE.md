@@ -41,8 +41,13 @@ tools/*.mjs       Playwright 验证脚本
 `derived_from` 记上游身份，能看出派生数据基于哪一版原始数据算的；上游若还是
 裸格式则标 `envelope:false`，便于审计哪些源没迁。
 
-**迁移状态**：只有 `term-structure-series.json` 用了信封。四个采集脚本产出的
-原始文件（`cot/gold_price/stocks/oi.json`）仍是裸格式。
+**迁移状态**：`term-structure-series.json`、`stocks.json` 已用信封。
+`cot/gold_price/oi.json` 仍是裸格式（cot 的**读取端**已容双形状，写入端待切）。
+
+**TODO（四源全迁完后）**：统一 `unwrap(strict=True)` + 删前端双形状兼容
+（`payload?.data ?? payload`、cot 的 `p?.data ? {...} : p`）+ 删 `generated_at
+?? updated_at` 的 `updated_at` 分支。**过渡期兼容不许永久化** —— 双形状分支
+留着就永远有一半代码路径不被真实数据走到，坏了也不会有人发现。
 
 前端在 `initOIPlayback()` 入口用 `payload?.data ?? payload` 兼容双形状，
 其余代码零改动。等所有派生文件迁完可简化为 `payload.data` —— 该行注释里写了
@@ -261,6 +266,24 @@ stocks 校验闸注入后报 exit=0，第一反应若是「闸坏了」就会去
   退化输入粉饰成中性值，闸放后面看到的是被加工过的数字。
 - **在幂等判断之前**。`fetch_stocks` 的闸在 `date in existing_dates` 之前 ——
   坏数据即使日期重复也该被隔离，不能让幂等 `return` 抢先吞掉。
+
+### 时间戳缺失显示「未知」，不许回退 `new Date()`
+
+页面「页面更新」读 `cot.generated_at ?? cot.updated_at`，两者皆缺时显示
+**「未知」**。曾经的 `: new Date()` 兜底是把「不知道数据多新」粉饰成「刚刚
+更新」—— 数据停更多久页面都显示当前时刻，陈旧完全看不出来。显示不出时间是
+小事，谎报新鲜度是大事。
+
+`screenshots/diag-cot-timestamp-injection.mjs` 有一条反恒真注入守着：把兜底
+改回 `new Date()`，「显示未知」那条断言必须变红。不变红说明断言只是碰巧成立。
+
+### warning 不刷 `generated_at`，要持久化就走单独日志
+
+数据未变但本次运行产生了新 warning 时：**跳过写盘**，warning 打 stdout。
+`generated_at` 只在业务数据真变时刷新 —— 为 warning 刷它会让「文件变了」与
+「数据变了」再次脱钩，而这正是幂等要建立的等价关系。
+
+将来某类 warning 确需持久化审计，走**单独日志文件**，不塞进数据文件。
 
 ### 静默归零／归 null 是最危险的一类损坏
 

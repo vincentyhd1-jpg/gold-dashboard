@@ -15,6 +15,8 @@ import sys
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+from data_envelope import unwrap
+
 COT_PATH = os.path.join(os.path.dirname(__file__), "data", "cot.json")
 OUT_PATH  = os.path.join(os.path.dirname(__file__), "data", "gold_price.json")
 QUARANTINE_DIR = os.path.join(os.path.dirname(__file__), "data", "quarantine")
@@ -192,8 +194,10 @@ def main():
         return
 
     print("读取 COT 日期列表...")
+    # unwrap 容双形状：cot.json 信封化前后都能读。strict=False 是过渡期默认，
+    # 四源全迁完后统一收紧（见 CLAUDE.md TODO）。
     with open(COT_PATH, encoding="utf-8") as f:
-        cot = json.load(f)
+        cot = unwrap(json.load(f))
     cot_dates = [r["date"] for r in cot["weekly"]]
     print(f"  COT 包含 {len(cot_dates)} 周，范围 {cot_dates[0]} ~ {cot_dates[-1]}")
 
