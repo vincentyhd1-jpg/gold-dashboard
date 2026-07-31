@@ -183,14 +183,35 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 ## 验证
 
 ```
-python3 derive_term_structure.py --test    # 派生逻辑 10 项
+python3 derive_term_structure.py --test    # 派生逻辑 11 项（含信封契约）
 python3 fetch_oi.py --test                 # 采集校验 23 项（不联网）
 node tools/verify-ui-fixes.mjs             # 柱对齐 / 按钮态 / 轴刻度 / 合约列表
+node tools/verify-contract-contango.mjs    # 合约过滤 / 最小柱高 / 价差锚点
 node tools/verify-playback.mjs             # 回放交互
 node tools/verify-gapframe.mjs             # 断层帧
 node tools/verify-isolation.mjs            # 注入渲染故障，验证模块隔离
+node tools/verify-schema-coupling.mjs      # 注入 schema 破坏，验证护栏会变红
 node tools/verify-live.mjs                 # 线上端到端
 ```
+
+### 验证护栏是否有效，靠注入破坏，不靠读代码推断
+
+「这个脚本看起来会覆盖到」是不可靠的判断。要确认一条护栏真的有效，
+往被测对象里注入一个已知破坏，看它是否**变红**。
+
+已两次证明这一步不可省：
+
+| 场景 | 读代码的判断 | 注入实测的结果 |
+|---|---|---|
+| `verify-isolation` | 「它注入故障验证模块隔离，有效」 | `initOIPlayback` 搬到 `js/playback.js` 后，脚本只拦 root HTML，注入变成空操作 —— 静默通过，从此不再验证任何东西 |
+| 信封化后的四个脚本 | 「它们不直接读 JSON，可能对 schema 破坏无感」 | 注入 `data` 缺失 / `frames` 为空，三图表全建不起来，几何断言必然失败 —— 实际是 fail loudly，无需改动 |
+
+两次的方向相反：一次是以为有效实际失效，一次是以为失效实际有效。
+两次都只有注入才看得出来。
+
+**规程**：凡改动 schema 或做重构后，对相关 verify 脚本做一次破坏注入，
+确认它 fail loudly。`tools/verify-schema-coupling.mjs` 是信封格式的现成模板
+（注入 `data` 缺失 / `frames` 为空 / 旧平铺格式三种情形）。
 
 Playwright 脚本不要用 `waitUntil:'networkidle'` —— Chart.js 走 CDN，网络不畅时
 该事件永不触发（实测卡满 30s 超时）。改用
