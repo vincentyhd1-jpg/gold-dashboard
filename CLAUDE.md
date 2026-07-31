@@ -12,9 +12,22 @@ fetch_stocks.py   CME 库存             → data/stocks.json
 fetch_oi.py       CME Section 62 PDF   → data/oi.json        （含 4 项写入前校验）
 derive_term_structure.py                → data/derived/term-structure-series.json
 index.html        期限结构回放 + 各图表
+term-3d.html      Plotly 3D 曲面页，**直接读 data/oi.json**（不经派生层）
 trading_calendar.py  交易日历，采集层与派生层共用一份假日表
 tools/*.mjs       Playwright 验证脚本
 ```
+
+### 改 oi.json 结构时必须同步检查 term-3d.html
+
+`term-3d.html` 绕过派生层直接 `fetch('data/oi.json')`，且**没有任何 verify
+脚本覆盖它** —— 5 个 Playwright 脚本全都只测 `index.html`。
+
+它依赖的字段：`r.date`、`r.months[]`、`m.month`、`m.settle`、`m.oi`
+（见 term-3d.html 的 `windowMonths()` 与 X/Y/Z 轴构造）。
+
+改动 `oi.json` 的结构（换字段名、改嵌套、加落盘模板）时若只跑现有 verify，
+全绿也不代表这一页没坏 —— 它会静默变成空白或错图，而 CI 与本地测试都不会
+报错。改完手动打开 `term-3d.html` 看一眼，或给它补一个 verify 脚本。
 
 本地 Python 被 Application Control 拦截（`python`/`python3` 是 Store 占位符）。
 用 WSL 跑：`wsl -d Ubuntu-22.04 -- bash -c "cd /mnt/d/VScode/test/gold-dashboard && python3 ..."`
