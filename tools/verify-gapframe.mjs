@@ -13,7 +13,9 @@ page.on('console', m => { if (m.type() === 'error') errs.push('[console] ' + m.t
 // 拦截 series JSON，注入一个断层帧
 await page.route('**/term-structure-series.json*', async route => {
   const res = await route.fetch();
-  const s = await res.json();
+  const payload = await res.json();
+  // 信封格式：业务数据在 data 里。兼容旧的平铺格式（与前端入口同一处理）。
+  const s = payload?.data ?? payload;
   // 把第 5 帧改成断层帧：oi_chg 全 null，移仓相关字段全 null
   const i = 5;
   s.frames[i].oi_chg = s.frames[i].oi_chg.map(() => null);
@@ -22,7 +24,7 @@ await page.route('**/term-structure-series.json*', async route => {
   s.frames[i].roll_noise_ma = null;
   s.frames[i].roll_to = null;
   s.frames[i].unreliable_chg = null;
-  await route.fulfill({ response: res, body: JSON.stringify(s) });
+  await route.fulfill({ response: res, body: JSON.stringify(payload) });
 });
 
 // 不用 networkidle：Chart.js 走 CDN，网络不畅时该事件永不触发（实测超时 30s）。

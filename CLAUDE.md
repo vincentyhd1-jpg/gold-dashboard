@@ -14,8 +14,39 @@ derive_term_structure.py                → data/derived/term-structure-series.j
 index.html        期限结构回放 + 各图表
 term-3d.html      Plotly 3D 曲面页，**直接读 data/oi.json**（不经派生层）
 trading_calendar.py  交易日历，采集层与派生层共用一份假日表
+data_envelope.py  统一落盘信封 + write_json 单点落盘
 tools/*.mjs       Playwright 验证脚本
 ```
+
+### 落盘统一信封（schema_version = 0）
+
+所有派生文件走 `data_envelope.py` 的 `envelope()` + `write_json()`：
+
+```
+{
+  "schema_version": 0,          // 0 = 尚未稳定，加完新源冻结格式后升 1
+  "source":       "cme_section62_term_structure",
+  "freq":         "daily",
+  "generated_at": "...Z",
+  "date_field":   "date",       // 跨源 join 的契约，不靠猜
+  "coverage":     {"first","last","count"},
+  "derived_from": [{source, generated_at, coverage, envelope}],
+  "warnings":     [],
+  "info":         [],
+  "data":         { ...业务数据原样... }
+}
+```
+
+元数据在外、业务数据在 `data` 里 —— 加新源时信封字段不会和业务字段撞名。
+`derived_from` 记上游身份，能看出派生数据基于哪一版原始数据算的；上游若还是
+裸格式则标 `envelope:false`，便于审计哪些源没迁。
+
+**迁移状态**：只有 `term-structure-series.json` 用了信封。四个采集脚本产出的
+原始文件（`cot/gold_price/stocks/oi.json`）仍是裸格式。
+
+前端在 `initOIPlayback()` 入口用 `payload?.data ?? payload` 兼容双形状，
+其余代码零改动。等所有派生文件迁完可简化为 `payload.data` —— 该行注释里写了
+可删除条件。读派生文件的测试脚本（`tools/verify-gapframe.mjs`）也要同样解包。
 
 ### 改 oi.json 结构时必须同步检查 term-3d.html
 

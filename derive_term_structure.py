@@ -23,6 +23,7 @@ import json, os, sys, re
 from datetime import date
 
 from trading_calendar import trading_days_between
+from data_envelope import envelope, write_json, upstream_ref
 
 IN_PATH  = os.path.join(os.path.dirname(__file__), "data", "oi.json")
 OUT_DIR  = os.path.join(os.path.dirname(__file__), "data", "derived")
@@ -676,6 +677,56 @@ def run_tests(records: list[dict]) -> None:
         else:
             print("  PASS  2026-07-27: 修订合约已正确标记 unreliable_chg")
 
+    # ── 3. 信封契约 ──────────────────────────────────────────────────────
+    # 断言落盘信封字段齐全，且 data 内容与 derive() 的原始返回逐字段一致 ——
+    # 信封只是包一层，不该改动任何业务数据。
+    env = envelope(
+        source="cme_section62_term_structure",
+        freq="daily",
+        data={k: result[k] for k in ("dates", "contracts", "frames", "scale")},
+        dates=result["dates"],
+        derived_from=[upstream_ref(IN_PATH, "cme_section62")],
+        warnings=result["warnings"],
+        info=result["info"],
+    )
+
+    REQUIRED = ["schema_version", "source", "freq", "generated_at",
+                "date_field", "coverage", "derived_from",
+                "warnings", "info", "data"]
+    missing_keys = [k for k in REQUIRED if k not in env]
+    extra_keys   = [k for k in env if k not in REQUIRED]
+
+    if missing_keys:
+        errors.append(f"ENVELOPE: 缺字段 {missing_keys}")
+    elif extra_keys:
+        errors.append(f"ENVELOPE: 多出未声明字段 {extra_keys}")
+    elif env["schema_version"] != 0:
+        errors.append(f"ENVELOPE: schema_version 应为 0（格式尚未冻结），"
+                      f"得到 {env['schema_version']}")
+    elif set(env["data"].keys()) != {"dates", "contracts", "frames", "scale"}:
+        errors.append(f"ENVELOPE: data 键集不符，得到 {sorted(env['data'])}")
+    elif env["data"]["frames"] != result["frames"]:
+        errors.append("ENVELOPE: data.frames 与 derive() 返回不一致 —— 信封改动了业务数据")
+    elif env["data"]["scale"] != result["scale"]:
+        errors.append("ENVELOPE: data.scale 与 derive() 返回不一致")
+    elif env["data"]["contracts"] != result["contracts"]:
+        errors.append("ENVELOPE: data.contracts 与 derive() 返回不一致")
+    elif "warnings" in env["data"] or "info" in env["data"]:
+        errors.append("ENVELOPE: warnings/info 应在信封层，不该留在 data 里")
+    else:
+        cov = env["coverage"]
+        if cov["count"] != len(result["dates"]) \
+                or cov["first"] != result["dates"][0] \
+                or cov["last"] != result["dates"][-1]:
+            errors.append(f"ENVELOPE: coverage 与 dates 不符，得到 {cov}")
+        else:
+            up = env["derived_from"]
+            if not up or up[0]["source"] != "cme_section62":
+                errors.append(f"ENVELOPE: derived_from 未记录上游 oi.json，得到 {up}")
+            else:
+                print(f"  PASS  信封: {len(REQUIRED)} 个字段齐全，"
+                      f"data 与 derive() 逐字段一致，schema_version=0")
+
     if errors:
         print("\nFAILURES:")
         for e in errors:
@@ -708,9 +759,22 @@ def main():
         for w in result["warnings"]:
             print(" ", w)
 
-    os.makedirs(OUT_DIR, exist_ok=True)
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, separators=(",", ":"))
+    # warnings / info 提到信封层，data 只留业务数据
+    payload = envelope(
+        source="cme_section62_term_structure",
+        freq="daily",
+        data={
+            "dates":     result["dates"],
+            "contracts": result["contracts"],
+            "frames":    result["frames"],
+            "scale":     result["scale"],
+        },
+        dates=result["dates"],
+        derived_from=[upstream_ref(IN_PATH, "cme_section62")],
+        warnings=result["warnings"],
+        info=result["info"],
+    )
+    write_json(OUT_PATH, payload)
 
     n_frames = len(result["frames"])
     n_contracts = len(result["contracts"])
