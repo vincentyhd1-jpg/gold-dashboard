@@ -11,6 +11,22 @@ await page.waitForFunction(
   () => typeof Chart !== 'undefined' && Chart.getChart('oiChart'), { timeout: 60000 });
 await page.waitForTimeout(1000);
 
+// derive 的原始落盘值（全精度）。价差断言比这个，不比前端显示串 ——
+// 显示串已过 toFixed(2)，拿它对齐后再比等于比截断后的值，绿得没意义。
+const derived = await page.evaluate(async () => {
+  const r = await fetch('data/derived/term-structure-series.json?_=' + Date.now());
+  const p = await r.json();
+  const s = p?.data ?? p;
+  return Object.fromEntries(s.frames.map(f => [
+    f.date.slice(5).replace('-', '/'),
+    { total_oi: f.total_oi, spread: f.spread,
+      gap: f.spread_gap_days, ann: f.spread_annualized_pct,
+      roll_from: f.roll_from, roll_to: f.roll_to },
+  ]));
+});
+
+const EPS = 1e-9;
+
 let pass = 0, fail = 0;
 const check = (n, ok, d = '') => {
   if (ok) { pass++; console.log(`  PASS  ${n}`); }
@@ -93,37 +109,58 @@ for (const frac of [1, 0]) {
       settles, ois,
     };
   }, frac);
+  const d = derived[r.date];
   console.log(`\n  ${r.date}  卡片「${r.cardLabel}」= ${r.val}`);
   console.log(`    副标题: ${r.label}`);
-  // 反算校验
-  const m = /^(\w+) − (\w+)：([+-][\d.]+)$/.exec(r.label);
-  if (m) {
-    const [, far, near, sp] = m;
-    const actual = r.settles[far] - r.settles[near];
-    const days = Math.round((Date.UTC(2000 + +far.slice(3), MON[far.slice(0,3)] - 1, 1)
-                           - Date.UTC(2000 + +near.slice(3), MON[near.slice(0,3)] - 1, 1)) / 86400000);
-    const ann = actual / r.settles[near] * (365 / days) * 100;
-    console.log(`    ${near}=${r.settles[near]}  ${far}=${r.settles[far]}  价差=${actual.toFixed(2)}  天数=${days}`);
-    console.log(`    年化 = ${actual.toFixed(2)} / ${r.settles[near]} × (365/${days}) = ${ann.toFixed(2)}%`);
-    check(`${r.date} 副标题价差与结算价一致`, Math.abs(+sp - actual) < 0.01, { sp, actual });
-    check(`${r.date} 年化率计算正确`, r.val === (ann >= 0 ? '+' : '') + ann.toFixed(2) + '%',
-          { shown: r.val, expect: ann.toFixed(2) });
-    check(`${r.date} 锚点非首末列`, near !== axis.labels[0] || far !== axis.labels[axis.labels.length - 1],
-          { near, far, first: axis.labels[0], last: axis.labels[axis.labels.length - 1] });
-    check(`${r.date} 锚点均在 X 轴上`, axis.labels.includes(near) && axis.labels.includes(far));
-  } else {
-    check(`${r.date} 副标题格式`, false, r.label);
-  }
+  console.log(`    derive 落盘: spread=${d?.spread} gap=${d?.gap} ann=${d?.ann} total_oi=${d?.total_oi}`);
 
-  // 窗口总持仓：独立复算一遍，与卡片显示比对。
-  // KPI 算术下沉到 derive 后前端只读字段，这条断言原本缺失 ——
-  // 破坏注入实测把 total_oi 改成 1 仍然全绿。
-  const oiSum = Object.entries(r.ois)
-    .filter(([l]) => r.settles[l] != null)
-    .reduce((s, [, v]) => s + (v || 0), 0);
-  check(`${r.date} 窗口总持仓与柱子求和一致`,
-        r.oiVal === oiSum.toLocaleString('en-US'),
-        { shown: r.oiVal, expect: oiSum.toLocaleString('en-US') });
+  if (!d) {
+    check(`${r.date} derive 有对应帧`, false, r.date);
+  } else {
+    // 独立复算，与 derive 的全精度落盘值比，容差 1e-9
+    const expSpread = r.settles[d.roll_to] - r.settles[d.roll_from];
+    const expGap = Math.round(
+      (Date.UTC(2000 + +d.roll_to.slice(3), MON[d.roll_to.slice(0, 3)] - 1, 1)
+       - Date.UTC(2000 + +d.roll_from.slice(3), MON[d.roll_from.slice(0, 3)] - 1, 1)) / 86400000);
+    const expAnn = expSpread / r.settles[d.roll_from] * (365 / expGap) * 100;
+    const expOi = Object.entries(r.ois)
+      .filter(([l]) => r.settles[l] != null)
+      .reduce((s, [, v]) => s + (v || 0), 0);
+
+    check(`${r.date} derive spread 与结算价复算一致`,
+          Math.abs(d.spread - expSpread) < EPS, { got: d.spread, exp: expSpread });
+    check(`${r.date} derive gap_days = 真实日历天数`,
+          d.gap === expGap, { got: d.gap, exp: expGap });
+    check(`${r.date} derive 年化与复算一致`,
+          Math.abs(d.ann - expAnn) < EPS, { got: d.ann, exp: expAnn });
+    check(`${r.date} derive total_oi 与柱子求和一致`,
+          d.total_oi === expOi, { got: d.total_oi, exp: expOi });
+
+    // 计算层不得舍入到显示精度：落盘值若恰等于自身 2 位舍入、而真值不是，
+    // 说明精度在派生层就丢了
+    const rounded2 = v => Math.round(v * 100) / 100;
+    check(`${r.date} derive 落全精度（未舍入到 2 位）`,
+          !(d.ann === rounded2(d.ann) && expAnn !== rounded2(expAnn)),
+          { ann: d.ann, rounded: rounded2(expAnn) });
+
+    // 展示层：卡片显示 = 落盘值过 toFixed(2)
+    check(`${r.date} 卡片显示 = 落盘值 toFixed(2)`,
+          r.val === (d.ann >= 0 ? '+' : '') + d.ann.toFixed(2) + '%',
+          { shown: r.val, expect: d.ann.toFixed(2) });
+    check(`${r.date} 副标题价差 = 落盘值 toFixed(2)`,
+          r.label === `${d.roll_to} − ${d.roll_from}：`
+            + (d.spread >= 0 ? '+' : '') + d.spread.toFixed(2),
+          { shown: r.label });
+    check(`${r.date} 总持仓卡 = 落盘值`,
+          r.oiVal === d.total_oi.toLocaleString('en-US'),
+          { shown: r.oiVal, expect: d.total_oi.toLocaleString('en-US') });
+
+    check(`${r.date} 锚点非首末列`,
+          d.roll_from !== axis.labels[0] || d.roll_to !== axis.labels[axis.labels.length - 1],
+          { near: d.roll_from, far: d.roll_to });
+    check(`${r.date} 锚点均在 X 轴上`,
+          axis.labels.includes(d.roll_from) && axis.labels.includes(d.roll_to));
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

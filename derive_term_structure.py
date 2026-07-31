@@ -122,14 +122,16 @@ def spread_metrics(months: list[dict],
     if near is None or far is None or near <= 0:
         return empty
 
-    spread = round(far - near, 4)
+    # 全精度落盘，不做任何舍入 —— 计算层保精度，展示层才格式化。
+    # 舍入到显示精度会让断言比的是截断后的值（绿得没意义），且精度一旦丢就
+    # 拿不回来。前端 _renderFrame 的 toFixed(2) 负责显示。
+    spread = far - near
     days = month_gap_days(roll_from, roll_to)
     if days <= 0:
         return {"spread": spread, "spread_gap_days": days,
                 "spread_annualized_pct": None}
 
-    # 舍入到 2 位与前端 toFixed(2) 的显示精度对齐，避免跨语言末位不一致
-    ann = round(spread / near * (365 / days) * 100, 2)
+    ann = spread / near * (365 / days) * 100
     return {"spread": spread, "spread_gap_days": days,
             "spread_annualized_pct": ann}
 
@@ -769,8 +771,11 @@ def run_tests(records: list[dict]) -> None:
 
     # 期望值手算：spread = 4122 - 4000 = 122
     #              gap   = 2026-08-01 → 2026-12-01 = 122 天
-    #              ann   = 122 / 4000 * (365 / 122) * 100 = 9.125 → round(,2) = 9.13
-    want_ann = round(122 / 4000 * (365 / 122) * 100, 2)
+    #              ann   = 122 / 4000 * (365 / 122) * 100 = 9.125（全精度，不舍入）
+    # 断言比全精度值，容差 1e-9 —— 不用 round/toFixed 对齐后再比，
+    # 否则比的是截断后的值，绿得没意义。
+    want_ann = 122 / 4000 * (365 / 122) * 100
+    EPS = 1e-9
 
     if kf["roll_from"] != "AUG26" or kf["roll_to"] != "DEC26":
         errors.append(f"KPI fixture: 锚点应为 AUG26→DEC26，"
@@ -778,18 +783,23 @@ def run_tests(records: list[dict]) -> None:
     elif kf["total_oi"] != 280300:
         # 200000 + 300 + 80000，三个都有结算价所以全计入
         errors.append(f"KPI fixture: total_oi 应为 280300，得到 {kf['total_oi']}")
-    elif kf["spread"] != 122.0:
-        errors.append(f"KPI fixture: spread 应为 122.0，得到 {kf['spread']}")
+    elif abs(kf["spread"] - 122.0) > EPS:
+        errors.append(f"KPI fixture: spread 应为 122.0，得到 {kf['spread']!r}")
     elif kf["spread_gap_days"] != 122:
         # 这条防「月数 × 30」回归：4 个月按 30 天算是 120，会让年化偏高 1.7%
         errors.append(f"KPI fixture: spread_gap_days 应为 122（真实日历天数），"
                       f"得到 {kf['spread_gap_days']} —— 可能退回了「月数×30」")
-    elif kf["spread_annualized_pct"] != want_ann:
-        errors.append(f"KPI fixture: 年化应为 {want_ann}，"
-                      f"得到 {kf['spread_annualized_pct']}")
+    elif abs(kf["spread_annualized_pct"] - want_ann) > EPS:
+        errors.append(f"KPI fixture: 年化应为 {want_ann!r}，"
+                      f"得到 {kf['spread_annualized_pct']!r}")
+    elif kf["spread_annualized_pct"] == round(kf["spread_annualized_pct"], 2) \
+            and want_ann != round(want_ann, 2):
+        # 落盘值恰好等于自身 2 位舍入、而真值不是 → 计算层仍在舍入
+        errors.append(f"KPI fixture: 年化似被舍入到 2 位（{kf['spread_annualized_pct']!r}）"
+                      f"—— 计算层应落全精度")
     else:
         print(f"  PASS  KPI fixture: total_oi=280300 spread=122.0 "
-              f"gap=122天 年化={want_ann}%")
+              f"gap=122天 年化={kf['spread_annualized_pct']!r}（全精度）")
 
     # 无承接月 → 三个价差字段全 None，但 total_oi 仍要算
     kf2 = derive([{"date": "2026-01-05", "months": [
