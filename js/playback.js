@@ -129,6 +129,7 @@ function renderOI(oiData) {
       front: months.reduce((a,b) => b.oi > a.oi ? b : a, months[0]).month,
       // 价差卡只需要两个锚点，可以从单个快照近似：到期月取日历序上第一个
       // 持仓过 5% 的月，承接月取其后持仓最大的月。
+      // KPI 算术已下沉到 derive，降级路径只能就地补上 —— 这里没有派生层。
       ...(() => {
         const tot = months.reduce((s,m) => s + (m.oi||0), 0);
         const from = months.find(m => (m.oi||0) >= tot * 0.05) || months[0];
@@ -136,7 +137,32 @@ function renderOI(oiData) {
           && months.indexOf(m) > months.indexOf(from));
         const to = after.length
           ? after.reduce((a,b) => b.oi > a.oi ? b : a) : null;
-        return { roll_from: from.month, roll_to: to ? to.month : null };
+
+        // 与 derive 的 month_gap_days 同口径：以每月 1 日为基准算日历天数差，
+        // 不用「月数 × 30」（AUG26→DEC26 是 122 天，4×30=120 会让年化偏高 1.7%）
+        const MON = { JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,
+                      JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12 };
+        const ts = s => {
+          const m = /^([A-Z]{3})(\d{2})$/.exec(s || '');
+          return m ? Date.UTC(2000 + +m[2], MON[m[1]] - 1, 1) : null;
+        };
+        let spread = null, gapDays = null, ann = null;
+        if (to && from.settle > 0 && to.settle != null) {
+          spread = Math.round((to.settle - from.settle) * 1e4) / 1e4;
+          const ta = ts(from.month), tb = ts(to.month);
+          gapDays = (ta != null && tb != null)
+            ? Math.round((tb - ta) / 86400000) : 0;
+          if (gapDays > 0) {
+            ann = Math.round(spread / from.settle * (365 / gapDays) * 100 * 100) / 100;
+          }
+        }
+        return {
+          roll_from: from.month,
+          roll_to: to ? to.month : null,
+          total_oi: months.reduce((s,m) =>
+            s + (m.settle != null ? (m.oi || 0) : 0), 0),
+          spread, spread_gap_days: gapDays, spread_annualized_pct: ann,
+        };
       })(),
       // 单帧无历史峰值可比，近月剩余与噪音比都算不出来
       front_remaining: null, roll_noise: null, roll_noise_ma: null,

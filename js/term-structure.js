@@ -343,25 +343,20 @@ function _renderFrame(frameIdx, animated) {
     .filter(m => m.settle != null);
   if (!months.length) return;
 
+  // months 仍需保留：主力月结算价卡要查 front 的 settle（查表，不是算术）
   const frontMonth = months.find(m => m.month === fr.front) || months[0];
-  const totalOI  = months.reduce((s, m) => s + m.oi, 0);
 
-  // 价差锚点显式绑定合约角色，不用 months[0] / months[last]：
-  // 首列正在到期、末列只有几手，两端都是交易所推定价，算出来的是结算程序
-  // 而不是市场。roll_from = front_by_expiry，roll_to = next_active。
-  const nearM = months.find(m => m.month === fr.roll_from);
-  const farM  = months.find(m => m.month === fr.roll_to);
+  // KPI 算术已下沉到 derive（total_oi / spread / spread_annualized_pct），
+  // 这里只读字段不算数。锚点仍是 roll_from → roll_to 的合约角色。
   const ctgEl = document.getElementById('oiContango');
   const ctgLabelEl = document.getElementById('oiContangoLabel');
-  if (nearM && farM && nearM.settle > 0) {
-    const spread = farM.settle - nearM.settle;
-    const days = _monthGapDays(nearM.month, farM.month);
-    const ann = days > 0 ? spread / nearM.settle * (365 / days) * 100 : null;
-    ctgEl.textContent = ann == null ? '--'
-      : (ann >= 0 ? '+' : '') + ann.toFixed(2) + '%';
+  if (fr.spread_annualized_pct != null) {
+    const ann = fr.spread_annualized_pct;
+    const spread = fr.spread;
+    ctgEl.textContent = (ann >= 0 ? '+' : '') + ann.toFixed(2) + '%';
     ctgEl.style.color = spread >= 0 ? '#3fb950' : '#f85149';
     ctgLabelEl.textContent =
-      `${farM.month} − ${nearM.month}：${spread >= 0 ? '+' : ''}${spread.toFixed(2)}`;
+      `${fr.roll_to} − ${fr.roll_from}：${spread >= 0 ? '+' : ''}${spread.toFixed(2)}`;
   } else {
     ctgEl.textContent = '--';
     ctgEl.style.color = '#8b949e';
@@ -372,7 +367,8 @@ function _renderFrame(frameIdx, animated) {
     '数据日期：' + fr.date.slice(5).replace('-', '/') + ' · 来源：CME Group';
   document.getElementById('oiFrontPrice').textContent = frontMonth.settle.toFixed(2);
   document.getElementById('oiFrontMonth').textContent = frontMonth.month + ' · 主力月';
-  document.getElementById('oiVal').textContent = totalOI.toLocaleString('en-US');
+  document.getElementById('oiVal').textContent =
+    (fr.total_oi ?? 0).toLocaleString('en-US');
 
   // 播放条日期
   document.getElementById('oiPlayDate').textContent = fr.date.slice(5).replace('-', '/');

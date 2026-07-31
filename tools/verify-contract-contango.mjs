@@ -79,14 +79,18 @@ for (const frac of [1, 0]) {
     s.value = String(Math.round(f * Number(s.max)));
     s.dispatchEvent(new Event('input', { bubbles: true }));
     const c = Chart.getChart('oiChart');
-    const settles = {};
-    c.data.labels.forEach((l, i) => { settles[l] = c.data.datasets[1].data[i]; });
+    const settles = {}, ois = {};
+    c.data.labels.forEach((l, i) => {
+      settles[l] = c.data.datasets[1].data[i];
+      ois[l] = c.data.datasets[0].data[i];
+    });
     return {
       date: document.getElementById('oiPlayDate').textContent,
       val: document.getElementById('oiContango').textContent,
       label: document.getElementById('oiContangoLabel').textContent,
       cardLabel: document.querySelector('#oiContango').previousElementSibling.textContent,
-      settles,
+      oiVal: document.getElementById('oiVal').textContent,
+      settles, ois,
     };
   }, frac);
   console.log(`\n  ${r.date}  卡片「${r.cardLabel}」= ${r.val}`);
@@ -110,6 +114,16 @@ for (const frac of [1, 0]) {
   } else {
     check(`${r.date} 副标题格式`, false, r.label);
   }
+
+  // 窗口总持仓：独立复算一遍，与卡片显示比对。
+  // KPI 算术下沉到 derive 后前端只读字段，这条断言原本缺失 ——
+  // 破坏注入实测把 total_oi 改成 1 仍然全绿。
+  const oiSum = Object.entries(r.ois)
+    .filter(([l]) => r.settles[l] != null)
+    .reduce((s, [, v]) => s + (v || 0), 0);
+  check(`${r.date} 窗口总持仓与柱子求和一致`,
+        r.oiVal === oiSum.toLocaleString('en-US'),
+        { shown: r.oiVal, expect: oiSum.toLocaleString('en-US') });
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

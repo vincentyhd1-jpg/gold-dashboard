@@ -48,6 +48,32 @@ tools/*.mjs       Playwright 验证脚本
 其余代码零改动。等所有派生文件迁完可简化为 `payload.data` —— 该行注释里写了
 可删除条件。读派生文件的测试脚本（`tools/verify-gapframe.mjs`）也要同样解包。
 
+### 指标算术在派生层，前端只读字段
+
+前端不做指标算术。`_renderFrame` 只读帧字段填 DOM，计算全在
+`derive_term_structure.py`：
+
+| 字段 | 算法 |
+|---|---|
+| `total_oi` | X 轴合约的 OI 求和（只计有结算价的） |
+| `spread` | `roll_to.settle − roll_from.settle` |
+| `spread_gap_days` | 两月日历天数差，以每月 1 日为基准 |
+| `spread_annualized_pct` | `spread / near × (365 / gap_days) × 100` |
+
+这样算术进 `--test` 有回归保护，别的页面要用也不必重写一遍。
+角色锚定（`front` / `roll_from` / `roll_to`）同样在派生层，见 `find_roll_pair()`。
+
+三处易错，都有断言守着：
+
+- **天数不能按「月数 × 30」估**。AUG26→DEC26 是 122 天，按 4×30=120 算年化
+  偏高 1.7%。`spread_gap_days == 122` 那条断言就是防这个回归。
+- **`total_oi` 的口径是「X 轴合约」而非「原始窗口月份」**。两者差在已到期月：
+  实测首帧按窗口月份求和会多出 JUN26 的 7 手（该合约当日仍挂牌，但在序列
+  末帧已到期、已从 X 轴剔除）。派生层要显式按 `contracts` 构造入参。
+- **跨语言舍入**。Python `round(x, 2)` 与 JS `toFixed(2)`：年化率在派生层就
+  舍入到 2 位，与前端显示精度对齐，避免末位不一致。降级路径（`renderOI()`）
+  在前端就地复算，那里的 `Math.round(x * 100) / 100` 必须与 Python 同口径。
+
 ### 改 oi.json 结构时必须同步检查 term-3d.html
 
 `term-3d.html` 绕过派生层直接 `fetch('data/oi.json')`，且**没有任何 verify
@@ -191,6 +217,7 @@ node tools/verify-playback.mjs             # 回放交互
 node tools/verify-gapframe.mjs             # 断层帧
 node tools/verify-isolation.mjs            # 注入渲染故障，验证模块隔离
 node tools/verify-schema-coupling.mjs      # 注入 schema 破坏，验证护栏会变红
+node tools/verify-kpi-injection.mjs        # 注入错误 KPI 值，验证护栏会变红
 node tools/verify-live.mjs                 # 线上端到端
 ```
 
@@ -210,7 +237,9 @@ node tools/verify-live.mjs                 # 线上端到端
 两次都只有注入才看得出来。
 
 **规程**：凡改动 schema 或做重构后，对相关 verify 脚本做一次破坏注入，
-确认它 fail loudly。`tools/verify-schema-coupling.mjs` 是信封格式的现成模板
+确认它 fail loudly。第三次证明这一步不可省：KPI 算术下沉后注入四种错值，
+年化率 / spread 三种都变红，但 `total_oi` 改成 1 仍然全绿 —— 缺一条断言，
+补上后才变红。`tools/verify-schema-coupling.mjs` 是信封格式的现成模板
 （注入 `data` 缺失 / `frames` 为空 / 旧平铺格式三种情形）。
 
 Playwright 脚本不要用 `waitUntil:'networkidle'` —— Chart.js 走 CDN，网络不畅时

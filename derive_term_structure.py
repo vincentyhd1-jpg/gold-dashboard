@@ -68,6 +68,72 @@ def month_key(label: str) -> int:
     return (2000 + yr) * 12 + MON_ORDER.get(m.group(1), 0)
 
 
+def month_gap_days(a: str | None, b: str | None) -> int:
+    """
+    两个交割月之间的日历天数差。
+
+    年化价差需要真实天数，不能按「月数 × 30」估算 —— AUG26→DEC26 是 122 天，
+    按 4×30=120 算会让年化率偏高 1.7%。
+
+    以每月 1 日为基准：合约实际到期日在月中，但两端同样偏移，差值不受影响。
+    """
+    ma, mb = MONTH_RE.match(a or ""), MONTH_RE.match(b or "")
+    if not ma or not mb:
+        return 0
+    da = date(2000 + int(ma.group(2)), MON_ORDER.get(ma.group(1), 1), 1)
+    db = date(2000 + int(mb.group(2)), MON_ORDER.get(mb.group(1), 1), 1)
+    return (db - da).days
+
+
+# ── KPI 指标 ─────────────────────────────────────────────────────────────────
+#
+# 这些算术原先散在前端 _renderFrame 里，下沉到派生层：前端只读字段不算数，
+# 计算逻辑进 --test 有回归保护，将来别的页面（term-3d 等）要用也不必重写。
+# 角色锚定不在这里 —— roll_from / roll_to 由 find_roll_pair() 决定。
+
+def total_oi_of(months: list[dict]) -> int:
+    """
+    窗口总持仓 = 求和，只计有结算价的合约。
+
+    传入的必须是「X 轴上的合约」（contracts），不是原始记录的全部窗口月份：
+    已到期月不在轴上，不该计入。实测按全部窗口月份求和，首帧会多出 JUN26
+    的 7 手（该合约当日仍挂牌，但在序列末帧已到期、已从 X 轴剔除）。
+    """
+    return sum(m["oi"] or 0 for m in months if m.get("settle") is not None)
+
+
+def spread_metrics(months: list[dict],
+                   roll_from: str | None,
+                   roll_to: str | None) -> dict:
+    """
+    到期月 → 承接月的价差与年化率。
+
+    annualized_pct = spread / near_settle × (365 / 日历天数差) × 100
+
+    锚点用合约角色而非首末列：首列正在到期、末列只有几手，两端都是交易所
+    推定价，算出来的是结算程序而不是市场。
+    """
+    empty = {"spread": None, "spread_gap_days": None, "spread_annualized_pct": None}
+    if not roll_from or not roll_to:
+        return empty
+
+    smap = {m["month"]: m.get("settle") for m in months}
+    near, far = smap.get(roll_from), smap.get(roll_to)
+    if near is None or far is None or near <= 0:
+        return empty
+
+    spread = round(far - near, 4)
+    days = month_gap_days(roll_from, roll_to)
+    if days <= 0:
+        return {"spread": spread, "spread_gap_days": days,
+                "spread_annualized_pct": None}
+
+    # 舍入到 2 位与前端 toFixed(2) 的显示精度对齐，避免跨语言末位不一致
+    ann = round(spread / near * (365 / days) * 100, 2)
+    return {"spread": spread, "spread_gap_days": days,
+            "spread_annualized_pct": ann}
+
+
 # ── Roll-progress helpers ────────────────────────────────────────────────────
 
 def find_front(months: list[dict]) -> str | None:
@@ -382,6 +448,16 @@ def derive(records: list[dict]) -> dict:
         rn_raw = roll_noise(oi_chg_arr,
                             contracts.index(roll_from) if roll_from in contracts else None)
 
+        # KPI 算术：原先在前端 _renderFrame 里，下沉到这里。
+        # 口径按 X 轴合约（contracts）而非原始窗口月份（wm）—— 两者差在已到期月，
+        # 实测首帧会多出 JUN26 的 7 手。本次只搬算术，不改口径。
+        axis_months = [{"month": lbl,
+                        "settle": settle_arr[i],
+                        "oi": oi_arr[i]}
+                       for i, lbl in enumerate(contracts)]
+        kpi_total_oi = total_oi_of(axis_months)
+        kpi_spread   = spread_metrics(axis_months, roll_from, roll_to)
+
         # in_roll_window: 到期月持仓已从自身峰值跌破一半 → 移仓正在进行
         # 用持仓相对峰值的比例判定，不用到期日 —— oi.json 里没有到期日字段，
         # 而持仓塌落本身就是移仓正在发生的直接证据。
@@ -404,6 +480,8 @@ def derive(records: list[dict]) -> dict:
             "roll_noise":      rn_raw,
             "in_roll_window":  in_roll_window,
             "unreliable_chg":  unreliable or None,
+            "total_oi":        kpi_total_oi,
+            **kpi_spread,
         })
 
     # roll_noise 的移动平均。逐帧算完原始值后统一做，窗口不足时用已有样本。
@@ -676,6 +754,60 @@ def run_tests(records: list[dict]) -> None:
             )
         else:
             print("  PASS  2026-07-27: 修订合约已正确标记 unreliable_chg")
+
+    # ── 2b. KPI 算术 fixture ─────────────────────────────────────────────
+    # 冻结数据：AUG26=4000.0 / DEC26=4122.0，间隔 122 天。
+    # 用一个持仓在移仓中途的快照，让 roll_from=AUG26、roll_to=DEC26。
+    KPI_FIXTURE = [
+        {"date": "2026-01-05", "months": [
+            {"month": "AUG26", "settle": 4000.0, "oi": 200000},
+            {"month": "SEP26", "settle": 4030.0, "oi": 300},    # 存根月
+            {"month": "DEC26", "settle": 4122.0, "oi": 80000},
+        ]},
+    ]
+    kf = derive(KPI_FIXTURE)["frames"][0]
+
+    # 期望值手算：spread = 4122 - 4000 = 122
+    #              gap   = 2026-08-01 → 2026-12-01 = 122 天
+    #              ann   = 122 / 4000 * (365 / 122) * 100 = 9.125 → round(,2) = 9.13
+    want_ann = round(122 / 4000 * (365 / 122) * 100, 2)
+
+    if kf["roll_from"] != "AUG26" or kf["roll_to"] != "DEC26":
+        errors.append(f"KPI fixture: 锚点应为 AUG26→DEC26，"
+                      f"得到 {kf['roll_from']}→{kf['roll_to']}")
+    elif kf["total_oi"] != 280300:
+        # 200000 + 300 + 80000，三个都有结算价所以全计入
+        errors.append(f"KPI fixture: total_oi 应为 280300，得到 {kf['total_oi']}")
+    elif kf["spread"] != 122.0:
+        errors.append(f"KPI fixture: spread 应为 122.0，得到 {kf['spread']}")
+    elif kf["spread_gap_days"] != 122:
+        # 这条防「月数 × 30」回归：4 个月按 30 天算是 120，会让年化偏高 1.7%
+        errors.append(f"KPI fixture: spread_gap_days 应为 122（真实日历天数），"
+                      f"得到 {kf['spread_gap_days']} —— 可能退回了「月数×30」")
+    elif kf["spread_annualized_pct"] != want_ann:
+        errors.append(f"KPI fixture: 年化应为 {want_ann}，"
+                      f"得到 {kf['spread_annualized_pct']}")
+    else:
+        print(f"  PASS  KPI fixture: total_oi=280300 spread=122.0 "
+              f"gap=122天 年化={want_ann}%")
+
+    # 无承接月 → 三个价差字段全 None，但 total_oi 仍要算
+    kf2 = derive([{"date": "2026-01-05", "months": [
+        {"month": "AUG26", "settle": 4000.0, "oi": 100000},
+        {"month": "SEP26", "settle": 4030.0, "oi": 200},   # 低于 1% 下限
+    ]}])["frames"][0]
+    if kf2["roll_to"] is not None:
+        errors.append(f"KPI fixture: 无承接月时 roll_to 应为 None，得到 {kf2['roll_to']}")
+    elif (kf2["spread"], kf2["spread_gap_days"],
+          kf2["spread_annualized_pct"]) != (None, None, None):
+        errors.append(f"KPI fixture: 无承接月时价差三字段应全 None，得到 "
+                      f"{kf2['spread']} / {kf2['spread_gap_days']} / "
+                      f"{kf2['spread_annualized_pct']}")
+    elif kf2["total_oi"] != 100200:
+        errors.append(f"KPI fixture: 无承接月时 total_oi 仍应算，"
+                      f"应为 100200，得到 {kf2['total_oi']}")
+    else:
+        print("  PASS  KPI fixture: 无承接月 → 价差三字段 None，total_oi 仍有值")
 
     # ── 3. 信封契约 ──────────────────────────────────────────────────────
     # 断言落盘信封字段齐全，且 data 内容与 derive() 的原始返回逐字段一致 ——
