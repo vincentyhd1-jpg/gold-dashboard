@@ -435,10 +435,38 @@ def derive(records: list[dict]) -> dict:
         if has_reliable_stored:
             stored_chg_map = {m["month"]: m.get("oi_chg") for m in raw_months if "oi_chg" in m}
 
+        # unreliable_chg 独立于 X 轴计算 —— 遍历该帧原始数据里的全部合约月，
+        # 不经 contracts 筛。
+        #
+        # 这两者语义不同，复用同一列表会让审计轨静默缩水：
+        #   contracts       展示层决策，按「最后一帧是否仍挂牌」算，到期即移出
+        #   unreliable_chg  帧级历史取证，记的是「该帧当时 stored 与 diff 不符」
+        #
+        # 曾经在下面的 `for label in contracts` 循环里顺带算，于是合约一到期就
+        # 把自己在所有历史帧里的修订记录一起带走。实测 JUL26 在 07-27 确有修订
+        # （stored -5 / diff +3），到期后该帧的 unreliable_chg 里就没有它了 ——
+        # 回放到 7/27 看不出那天数据被 CME 修订过。
+        #
+        # 失真单向（只漏报、不误报）且无视觉异常：该列整个不在图上，不会出现
+        # 「有标记却指向不存在的柱子」这种矛盾，所以一直没被发现。且会随合约
+        # 到期节奏反复发作 —— 越老的记录越「干净」，那是假的干净。
+        unreliable = []
+        if idx > 0 and not gap_too_large and has_reliable_stored:
+            prev_oi_map = oi_maps[idx - 1]
+            for label, oi_v in oi_map.items():
+                if oi_v is None or label not in stored_chg_map:
+                    continue
+                prev_oi = prev_oi_map.get(label)
+                if prev_oi is None:
+                    continue
+                stored_val = stored_chg_map[label]
+                if stored_val is not None and stored_val != oi_v - prev_oi:
+                    unreliable.append(label)
+        unreliable.sort(key=month_key)
+
         settle_arr   = []
         oi_arr       = []
         oi_chg_arr   = []
-        unreliable   = []
 
         for label in contracts:
             s = settle_map.get(label)
@@ -453,13 +481,7 @@ def derive(records: list[dict]) -> dict:
                 if prev_oi is None:
                     oi_chg_arr.append(None)
                 else:
-                    diff = oi - prev_oi
-                    oi_chg_arr.append(diff)
-                    # Check for CME revision: stored ≠ diff
-                    if has_reliable_stored and label in stored_chg_map:
-                        stored_val = stored_chg_map[label]
-                        if stored_val is not None and stored_val != diff:
-                            unreliable.append(label)
+                    oi_chg_arr.append(oi - prev_oi)
 
             if oi is not None and oi > scale["oi_max"]:
                 scale["oi_max"] = oi
