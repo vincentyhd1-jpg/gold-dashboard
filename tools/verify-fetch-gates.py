@@ -24,6 +24,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 QUAR = os.path.join(DATA, "quarantine")
 
+# 读 data/*.json 一律经 unwrap()，容裸格式与信封两种形状。
+# 直读顶层结构（real_st[-1] / cot["weekly"]）会在对应源信封化时崩，而那个
+# 断裂**本地不暴露** —— 磁盘上的文件要等下一次 Actions 跑才变形，本地全绿。
+sys.path.insert(0, ROOT)
+from data_envelope import unwrap                                    # noqa: E402
+
 passed = failed = 0
 
 
@@ -103,10 +109,6 @@ run_injected(
 )
 
 # 正常数据应放行（用真实 cot.json 的 weekly 反推成 API 行）
-# 经 unwrap 读：cot.json 信封化前后都取到同一份业务数据。
-sys.path.insert(0, ROOT)
-from data_envelope import unwrap                                    # noqa: E402
-
 with open(os.path.join(DATA, "cot.json"), encoding="utf-8") as f:
     real_cot = unwrap(json.load(f))
 GOOD_ROWS = json.dumps([
@@ -166,8 +168,11 @@ run_injected(
 # ── 3. fetch_stocks：明细归零 / WAF ─────────────────────────────────────
 print("\n===== fetch_stocks =====")
 
+# 经 unwrap 读：stocks.json 信封化前后都取到同一份业务数据（日频数组）。
+# 直读 real_st[-1] 会在下次 Actions 把 stocks.json 变成信封时崩 —— 且这个
+# 断裂本地不暴露（磁盘上现在还是 Array，本地全绿），要等 CI 才炸。
 with open(os.path.join(DATA, "stocks.json"), encoding="utf-8") as f:
-    real_st = json.load(f)
+    real_st = unwrap(json.load(f))
 LATEST = real_st[-1]
 
 # 最小仓库静默归零
