@@ -6,6 +6,22 @@
 数据源优先级：
 1. Stooq https://stooq.com/q/d/l/?s=xauusd&i=w （CSV，无需 API key）
 2. Yahoo Finance GC=F 周线 JSON（无需 API key）
+
+exit code 三态（与 fetch_stocks 同一约定）：
+
+    0  正常落盘
+    1  五项校验命中 —— 真损坏，需人工介入，坏数据已进 data/quarantine/
+    2  上游未更新/不可达 —— 重跑可能自愈，gold_price.json 保持上一份
+
+两条 exit 2 路径都不是 gold 自身的数据损坏，所以都不隔离：
+  a) Stooq 与 Yahoo 两源皆不可达（原为 exit 1，与「真损坏」压在同一码上）
+  b) 上游 cot.json 没有可用日期（weekly 缺键或为空）
+
+b) 必须单独成一条：不拦的话空 cot_dates 会算出空 result，被闸的 a) 判据
+抓成「全部对齐失败」—— 归因指向对齐逻辑，而真实原因是上游没数据。
+
+exit code 三态要在 workflow 侧同时落地：continue-on-error 会把 1 和 2 都
+记成 outcome=failure，只改 Python 侧则闸门仍分不清，分离等于没做。
 """
 
 import csv
@@ -198,7 +214,19 @@ def main():
     # 四源全迁完后统一收紧（见 CLAUDE.md TODO）。
     with open(COT_PATH, encoding="utf-8") as f:
         cot = unwrap(json.load(f))
-    cot_dates = [r["date"] for r in cot["weekly"]]
+
+    # 上游无日期 → exit 2，不能让它流进对齐循环。
+    # 空 cot_dates 会算出空 result，被 validate_gold 的 a) 判据抓成
+    # 「全部 0 周对齐失败」——归因指向对齐窗口逻辑，而真因是上游没数据。
+    # 用 .get 而非 ["weekly"]：缺键与空列表是同一类上游状态，都该报 2 而非崩。
+    cot_dates = [r["date"] for r in (cot.get("weekly") or [])]
+    if not cot_dates:
+        print("上游 cot.json 没有可用日期（weekly 缺失或为空），"
+              "gold_price.json 保持上一份。")
+        print("::warning title=金价上游未更新::"
+              "cot.json 无 weekly 数据，本次未更新（非数据损坏）")
+        sys.exit(2)
+
     print(f"  COT 包含 {len(cot_dates)} 周，范围 {cot_dates[0]} ~ {cot_dates[-1]}")
 
     price_map: dict[str, float] = {}
@@ -218,8 +246,12 @@ def main():
             print(f"  成功，获取 {len(price_map)} 条记录")
         except Exception as e2:
             print(f"  Yahoo 失败: {e2}")
-            print("ERROR: 所有数据源均失败，终止。")
-            sys.exit(1)
+            # exit 2 而非 1：两源皆不可达属上游问题，重跑可能自愈，
+            # 与「五项闸命中」这种真损坏区分开。不隔离 —— 没有坏数据可留证。
+            print("所有数据源均不可达，gold_price.json 保持上一份。")
+            print("::warning title=金价上游不可达::"
+                  "Stooq 与 Yahoo 均失败，本次未更新（非数据损坏）")
+            sys.exit(2)
 
     result = []
     missing = 0
