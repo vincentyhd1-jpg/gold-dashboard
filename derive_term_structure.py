@@ -377,10 +377,22 @@ def derive(records: list[dict]) -> dict:
     dates = [r["date"] for r in records]
 
     # Per-record maps for fast lookup
+    #
+    # oi_maps      窗口筛后（window_months）—— 展示视图字段用，as-of-now 语义
+    # oi_maps_raw  该帧原始 months，未经任何过滤 —— 帧级取证字段用，
+    #              as-of-that-frame 语义
+    #
+    # 两份分开建而非共用一份：窗口末端随 near 月移动（实测 06-29、07-30 各移动
+    # 一次），拿会移动的边界去筛历史取证记录，等于让今天的窗口位置回头篡改
+    # 昨天的取证结论。展示字段该跟着窗口走（图上只画窗口内那 13 列），
+    # 取证字段不该。
     oi_maps: list[dict[str, int]] = []
+    oi_maps_raw: list[dict[str, int | None]] = []
     for r in records:
         wm = window_months(r.get("months") or [])
         oi_maps.append({m["month"]: m["oi"] for m in wm})
+        oi_maps_raw.append({m["month"]: m.get("oi")
+                            for m in (r.get("months") or [])})
 
     # 全序列一次算好，不逐帧累计：到期月的峰值/主力地位都出现在移仓之前，
     # 逐帧累计会让早期帧看不到后来的信息，导致同一段历史在不同帧里配对不一致。
@@ -435,25 +447,29 @@ def derive(records: list[dict]) -> dict:
         if has_reliable_stored:
             stored_chg_map = {m["month"]: m.get("oi_chg") for m in raw_months if "oi_chg" in m}
 
-        # unreliable_chg 独立于 X 轴计算 —— 遍历该帧原始数据里的全部合约月，
-        # 不经 contracts 筛。
+        # unreliable_chg 走该帧原始 months —— 既不经 contracts 存续筛，
+        # 也不经 window_months 窗口筛。
         #
-        # 这两者语义不同，复用同一列表会让审计轨静默缩水：
-        #   contracts       展示层决策，按「最后一帧是否仍挂牌」算，到期即移出
-        #   unreliable_chg  帧级历史取证，记的是「该帧当时 stored 与 diff 不符」
+        # 这是帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）的
+        # 二分。取证记的是「该帧当时 stored 与 diff 不符」，是历史事实；
+        # 展示字段答的是「今天该画哪些列」。两道过滤的边界都随时间移动：
+        #   contracts       按「最后一帧是否仍挂牌」算，合约到期即移出
+        #   window_months   按 near + 1 年截，窗口末端随 near 月前移
         #
-        # 曾经在下面的 `for label in contracts` 循环里顺带算，于是合约一到期就
-        # 把自己在所有历史帧里的修订记录一起带走。实测 JUL26 在 07-27 确有修订
-        # （stored -5 / diff +3），到期后该帧的 unreliable_chg 里就没有它了 ——
-        # 回放到 7/27 看不出那天数据被 CME 修订过。
+        # 先前两次都栽在同一处：
+        #   一、曾在 `for label in contracts` 循环里顺带算，于是合约一到期就把
+        #       自己在所有历史帧里的修订记录一起带走。实测 JUL26 在 07-27 确有
+        #       修订（stored -5 / diff +3），到期后该帧标记就没了。
+        #   二、改用 oi_map 后仍是 window_months 的产物，窗口外的修订合约照样
+        #       漏标。对当前 24 帧零影响（新增 0 条），但窗口末端实测已移动两次
+        #       （06-29 JUN27→JUL27、07-30 JUL27→AUG27），下一次移动就会漏。
         #
-        # 失真单向（只漏报、不误报）且无视觉异常：该列整个不在图上，不会出现
-        # 「有标记却指向不存在的柱子」这种矛盾，所以一直没被发现。且会随合约
-        # 到期节奏反复发作 —— 越老的记录越「干净」，那是假的干净。
+        # 失真单向（只漏报、不误报）且无视觉异常 —— 该字段全仓无前端消费端，
+        # 漏标不会有任何页面症状，只能靠 Python 侧断言守。
         unreliable = []
         if idx > 0 and not gap_too_large and has_reliable_stored:
-            prev_oi_map = oi_maps[idx - 1]
-            for label, oi_v in oi_map.items():
+            prev_oi_map = oi_maps_raw[idx - 1]
+            for label, oi_v in oi_maps_raw[idx].items():
                 if oi_v is None or label not in stored_chg_map:
                     continue
                 prev_oi = prev_oi_map.get(label)
@@ -965,6 +981,56 @@ def run_tests(records: list[dict]) -> None:
         print(f"  PASS  NOISE fixture: roll_noise={nf['roll_noise']!r}"
               f" 全精度（未舍入到 4 位）")
 
+    # ── 2b. WINDOW fixture：窗口外的修订合约必须被标记 ────────────────────
+    #
+    # 真实数据证伪不了这条：当前 24 帧里所有修订合约恰好都落在窗口内，
+    # 改走原始 months 对落盘产物零影响（新增 0 条）。所以必须造数据 ——
+    # 否则「取证字段不经窗口筛」这个约束没有任何断言守着，退回 oi_map 全绿。
+    #
+    # window_months 取 near + 1 年为 cutoff：near=AUG26 → cutoff=AUG27，
+    # 窗口 = months[:AUG27 的下标 + 1]。故 DEC27 落在窗口外。
+    # DEC27 的 stored=-7 而差分=+50，是修订合约，必须出现在 unreliable_chg。
+    WINDOW_FIXTURE = [
+        {"date": "2026-01-05", "months": [
+            {"month": "AUG26", "settle": 4000.0, "oi": 200000, "oi_chg": 0},
+            {"month": "DEC26", "settle": 4122.0, "oi": 80000,  "oi_chg": 0},
+            {"month": "AUG27", "settle": 4300.0, "oi": 5000,   "oi_chg": 0},
+            {"month": "DEC27", "settle": 4400.0, "oi": 1000,   "oi_chg": 0},
+        ]},
+        {"date": "2026-01-06", "months": [
+            {"month": "AUG26", "settle": 4000.0, "oi": 199000, "oi_chg": -1000},
+            {"month": "DEC26", "settle": 4122.0, "oi": 82000,  "oi_chg": 2000},
+            {"month": "AUG27", "settle": 4300.0, "oi": 5010,   "oi_chg": 10},
+            # stored -7 ≠ 差分 +50 —— 修订合约，且在窗口外
+            {"month": "DEC27", "settle": 4400.0, "oi": 1050,   "oi_chg": -7},
+        ]},
+    ]
+    wres = derive(WINDOW_FIXTURE)
+    wf = wres["frames"][1]
+    w_window = [m["month"] for m in window_months(WINDOW_FIXTURE[1]["months"])]
+    w_unrel = wf["unreliable_chg"] or []
+
+    if "DEC27" in w_window:
+        errors.append(
+            f"WINDOW fixture 自身失效：DEC27 应落在窗口外，但 window_months "
+            f"返回 {w_window} —— fixture 没在测它要测的路径")
+    elif "DEC27" in wres["contracts"]:
+        errors.append(
+            f"WINDOW fixture 自身失效：DEC27 应不在 X 轴 contracts 里，"
+            f"得到 {wres['contracts']}")
+    elif "DEC27" not in w_unrel:
+        errors.append(
+            f"WINDOW fixture: 窗口外的修订合约 DEC27（stored=-7 / 差分=+50）"
+            f"未被标记 unreliable_chg，得到 {w_unrel!r} —— 取证字段仍在经"
+            f"window_months 筛，窗口末端一移动就漏标")
+    elif sorted(w_unrel) != ["DEC27"]:
+        errors.append(
+            f"WINDOW fixture: unreliable_chg 应只含 DEC27，得到 {w_unrel!r}"
+            f" —— 其余三个合约 stored 与差分一致，不该被标记")
+    else:
+        print(f"  PASS  WINDOW fixture: 窗口外修订合约 DEC27 已标记"
+              f"（窗口={w_window}，contracts={wres['contracts']}）")
+
     # ── 3. 信封契约 ──────────────────────────────────────────────────────
     # 断言落盘信封字段齐全，且 data 内容与 derive() 的原始返回逐字段一致 ——
     # 信封只是包一层，不该改动任何业务数据。
@@ -1019,8 +1085,12 @@ def run_tests(records: list[dict]) -> None:
         print("\nFAILURES:")
         for e in errors:
             print(" ", e)
+        # 末尾打印总条数：只看 FAILURES 段落容易漏掉「有几条」，
+        # 多行 FAIL（如 MISMATCH 一条含多个合约）逐行数会数错。
+        print(f"\n{len(errors)} failed")
         sys.exit(1)
     else:
+        print("\n0 failed")
         print("All tests passed.\n")
 
 
