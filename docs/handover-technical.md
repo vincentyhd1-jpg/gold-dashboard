@@ -1,12 +1,15 @@
-# 技术交接（截至 bf1cc6b）
+# 技术交接（截至 f8f5204）
 
 供新会话接续。只记事实与行号，不含建议与计划。
+
+护栏计数已在 `f8f5204`（含 Actions 数据提交 `36a5504`，`oi.json` 25 帧）上重跑，
+与 `bf1cc6b` 时点（24 帧）逐条一致。
 
 ## 1. git 状态
 
 ```
-local  sha = bf1cc6ba0763a75a6e4a48cad4c533b3126cfeda
-remote sha = bf1cc6ba0763a75a6e4a48cad4c533b3126cfeda
+local  sha = f8f5204323103d85d1023c24e25e5fd49f981c26
+remote sha = f8f5204323103d85d1023c24e25e5fd49f981c26
 local == remote = YES
 未推送 commit 数 = 0
 工作区 = 干净（git status --short 无输出）
@@ -17,9 +20,11 @@ local == remote = YES
 
 | sha | 内容 |
 |---|---|
+| `f8f5204` | 本文档 |
+| `36a5504` | Actions 每日数据提交 2026-08-01：`oi.json` 24 → 25 帧，`cot.json` / `gold_price.json` / 派生文件同步更新 |
 | `bf1cc6b` | `unreliable_chg` 遍历改走 `oi_maps_raw`（该帧原始 months），脱离 `window_months` 窗口筛；加 WINDOW fixture；`--test` 尾部补失败总条数 |
-| `3382585` | `unreliable_chg` 遍历从 `contracts` 改走 `oi_map`，拆掉「存续」筛（窗口筛当时仍在） |
-| `3604e16` | `fetch_gold` exit code 三态分离：上游不可达归 2，五项闸命中仍 1 |
+
+再往前：`3382585`（`unreliable_chg` 从 `contracts` 改走 `oi_map`，拆掉「存续」筛，窗口筛当时仍在）、`3604e16`（`fetch_gold` exit code 三态分离）。
 
 ## 3. derive_term_structure.py 结构
 
@@ -66,6 +71,9 @@ local == remote = YES
 | `tools/verify-isolation.mjs` | 0 | 37 passed, 0 failed |
 | `tools/verify-schema-coupling.mjs` | 0 | 双形状兼容生效 |
 
+计数在 `f8f5204`（`oi.json` 25 帧）上重跑得到，与 `bf1cc6b`（24 帧）时点逐条相同 ——
+新增一帧未改变任何护栏的通过数。
+
 ### 红的那一条
 
 ```
@@ -76,10 +84,37 @@ MISMATCH 2026-07-24:
 - 断言位置：`derive_term_structure.py:801-805`（抽查 2，累加进 `mismatches`）
 - 读的字段：`f24["oi_chg"][ci]`（:801）—— 是 `oi_chg` 数组，**不是** `unreliable_chg`
 - `ci` 来自 `contract_idx.get(contract)`（:798）
-- 成因：`AUG27` 在 `contracts` 内（第 13 列），但 2026-07-24 帧的 `window_months` 末端为 `JUL27`，`AUG27` 落窗口外 → `oi_maps` 无此键 → `oi_chg[12] = None`；而 `oi.json` 该帧 `AUG27 oi=572`、`stored oi_chg=+11`
+- 成因：`AUG27` 在 `contracts` 内（第 13 列，列位 12），但 2026-07-24 帧的 `window_months` 末端为 `JUL27`，`AUG27` 落窗口外 → `oi_maps` 无此键 → `oi_chg[12] = None`；而 `oi.json` 该帧 `AUG27 oi=572`、`stored oi_chg=+11`
 - 已量化：改 `unreliable_chg` 的输入来源对此条无影响（`unreliable_chg` 与 `oi_chg` 是两条独立代码路径）
+- 该帧 13 个「stored 非 None 且在 contracts 内」的合约中，只有 `AUG27` 一个不符
 
 `bf1cc6b` 未改此断言，未动 `oi_chg` 取值来源。
+
+### 已知会随数据滑动而消失的红
+
+**抽查 2（`derive_term_structure.py:786-807`）的红是会自行消失的，但消失不等于修复。**
+
+该断言开头有两个 SKIP 分支（:788、:790）：
+
+```
+:788   if f24 is None or r24 is None:      → SKIP「2026-07-24 已滑出窗口」
+:790   elif f24["date"] == first_date:     → SKIP「2026-07-24 已成为序列首帧（无前驱）」
+```
+
+`oi.json` 保留 730 条滚动窗口。当 `2026-07-24` 滑出窗口、或成为序列首帧时，
+断言转 SKIP，`derive --test` 会变成 `0 failed` **全绿** —— 但 `oi_chg` 的口径问题
+（`contracts` 决定列位、`window_months` 决定取值，两道筛边界不一致）一行代码都没改。
+
+`f8f5204` 时点实测：`oi.json` 25 帧、范围 `2026-06-26 ~ 2026-07-31`、
+首帧 `2026-06-26`，两个 SKIP 条件均不成立，断言实际执行并 FAIL。
+
+同类性质的还有抽查 1（`2026-06-26` 首帧）与抽查 3（`2026-07-27` `known_revised`
+四合约），三条都绑定了具体日期，都会随窗口滚动转 SKIP。抽查 3 还额外绑定了
+`known_revised = {"AUG26","DEC26","OCT26","JUL26"}`（:818）这个会过期的事实集合
+—— 合约到期后该集合不再对应当前数据。
+
+**判读规则：看到 `derive --test` 全绿时，先确认抽查 1/2/3 是 PASS 还是 SKIP。**
+输出里 SKIP 与 PASS 是不同前缀，不会混淆，但总计行只数 `errors`，SKIP 不计入。
 
 ## 5. fixture 清单与自检锚点
 
@@ -165,9 +200,23 @@ derive_term_structure.py:1090  --test 尾部失败总条数（0 时走 :1093）
 
 - **`tools/verify-ui-fixes.mjs`** —— 批量连跑六个前端 verify 时出现过一次 `waitForFunction` 30s 超时、exit=1；单独重跑 exit=0 / 13 passed。当时数据文件完好且 dev server 正常服务（`curl` 确认）。表现为并发争用，非代码缺陷。
 
-### 浮点末位差
+### 浮点末位差（已翻回，机制仍在）
 
-`roll_noise_ma` 3 帧与仓库基线末位不一致，量级 `1e-17`（如 `0.07951028607531796` → `...97`）。同机跑未修改的原代码亦复现，与 `bf1cc6b` 改动无关。
+`bf1cc6b` 时点记录：`roll_noise_ma` 3 帧与仓库基线末位不一致，量级 `1e-17`。
+
+`36a5504`（Actions 在 CI 机器上重跑 derive 并提交）把这 3 个值全部改了回去：
+
+| 帧 | bf1cc6b | f8f5204 | Δ |
+|---|---|---|---|
+| 2026-07-06 | `0.07951028607531797` | `0.07951028607531796` | `-1.39e-17` |
+| 2026-07-09 | `0.4795674493184508` | `0.47956744931845074` | `-5.55e-17` |
+| 2026-07-23 | `0.44424759253511864` | `0.4442475925351186` | `-5.55e-17` |
+
+两 ref 共有 24 帧，差异恰好这 3 个，其余帧一致。
+
+即本机重算与 CI 重算的 `roll_noise_ma` 在这 3 帧上稳定地相差 1 ULP，
+谁最后跑谁的值进仓库。本机跑 derive 会把它们改成本机值，
+下次 Actions 跑又会改回去 —— 每次都产生 3 行 git diff。
 
 ### 取证禁忌（已进 CLAUDE.md）
 
