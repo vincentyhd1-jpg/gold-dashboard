@@ -1031,9 +1031,47 @@ def run_tests(records: list[dict]) -> None:
         print(f"  PASS  WINDOW fixture: 窗口外修订合约 DEC27 已标记"
               f"（窗口={w_window}，contracts={wres['contracts']}）")
 
+    # ── 2c. _round_floats：落盘精度 ──────────────────────────────────────
+    #
+    # 新代码路径，若无断言则「13 条护栏全绿」不覆盖它。
+    # 只测这个纯函数本身，不测 main() 的写盘（那需要真落盘）。
+    rf_in = {
+        "f":    1 / 3,                       # 0.3333333333333333
+        "i":    42,                          # int 不得变 float
+        "b":    True,                        # bool 是 int 子类，不得被 round
+        "n":    None,
+        "s":    "AUG26",
+        "lst":  [1 / 7, 2, None, [1 / 9]],   # 嵌套
+        "d":    {"deep": {"x": 1 / 11}},
+    }
+    rf = _round_floats(rf_in)
+
+    if rf["f"] != round(1 / 3, 12):
+        errors.append(f"ROUND fixture: 顶层 float 未 round，得到 {rf['f']!r}")
+    elif not isinstance(rf["i"], int) or isinstance(rf["i"], bool) or rf["i"] != 42:
+        errors.append(f"ROUND fixture: int 被改动，得到 {rf['i']!r}")
+    elif rf["b"] is not True or not isinstance(rf["b"], bool):
+        errors.append(f"ROUND fixture: bool 被改动（bool 是 int 子类，"
+                      f"不该被 round），得到 {rf['b']!r}")
+    elif rf["n"] is not None or rf["s"] != "AUG26":
+        errors.append(f"ROUND fixture: None/str 被改动")
+    elif rf["lst"][0] != round(1 / 7, 12) or rf["lst"][3][0] != round(1 / 9, 12):
+        errors.append(f"ROUND fixture: 列表（含嵌套）内 float 未 round，"
+                      f"得到 {rf['lst']!r}")
+    elif rf["d"]["deep"]["x"] != round(1 / 11, 12):
+        errors.append(f"ROUND fixture: 嵌套 dict 内 float 未 round")
+    elif _round_floats(rf) != rf:
+        errors.append("ROUND fixture: 不幂等 —— 对已 round 的值再 round 应无变化")
+    else:
+        print(f"  PASS  ROUND fixture: float→12 位、int/bool/None/str 原样、"
+              f"嵌套递归、幂等")
+
     # ── 3. 信封契约 ──────────────────────────────────────────────────────
     # 断言落盘信封字段齐全，且 data 内容与 derive() 的原始返回逐字段一致 ——
     # 信封只是包一层，不该改动任何业务数据。
+    #
+    # 注意：这里刻意**不**过 _round_floats —— 本条测的是「信封不改业务数据」，
+    # 与「落盘时降精度」是两件事。main() 的写盘路径才有 _round_floats。
     env = envelope(
         source="cme_section62_term_structure",
         freq="daily",
@@ -1096,6 +1134,38 @@ def run_tests(records: list[dict]) -> None:
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+# 落盘精度：写 JSON 那一刻统一 round，计算链全程保持全精度。
+#
+# 起因：Actions runner 与本机对同一输入算出的 float 末位可能差 1 ULP
+# （实测 roll_noise_ma 3 帧，Δ 量级 1e-17），谁最后跑谁的值进仓库，
+# 每次往返产生无意义的 git diff。
+#
+# 12 位是「远超任何业务精度需求，又远低于 float64 的 ~15-17 位有效数字」
+# 的位置：既不丢真实信息，又把两平台的末位分歧吃掉。
+#
+# 只降低概率，不消除：某值第 13 位若恰在舍入边界，两平台仍可能一边进一边退。
+# 禁止改用容差比对来「彻底解决」—— 容差会把真实的微小变化也判为没变。
+ROUND_NDIGITS = 12
+
+
+def _round_floats(o):
+    """
+    递归 round 所有 float，其余类型原样透传。
+
+    bool 是 int 的子类但不是 float，不会被 round —— 无需特判。
+    int 保持 int（不转 float），None 保持 None。
+    已在计算层有意 round(4) 的字段（front_remaining）再 round(12) 是幂等的，
+    不会被改动。
+    """
+    if isinstance(o, float):
+        return round(o, ROUND_NDIGITS)
+    if isinstance(o, dict):
+        return {k: _round_floats(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_round_floats(v) for v in o]
+    return o
+
+
 def main():
     run_test_mode = "--test" in sys.argv
 
@@ -1123,15 +1193,19 @@ def main():
             print(" ", w)
 
     # warnings / info 提到信封层，data 只留业务数据
+    #
+    # _round_floats 只包在 data 上，且在此处（写盘前最后一刻）才调用 ——
+    # derive() 的返回值仍是全精度，roll_noise_ma 的 3 帧滚动用的是未 round
+    # 的 roll_noise，算完才在这里统一 round。
     payload = envelope(
         source="cme_section62_term_structure",
         freq="daily",
-        data={
+        data=_round_floats({
             "dates":     result["dates"],
             "contracts": result["contracts"],
             "frames":    result["frames"],
             "scale":     result["scale"],
-        },
+        }),
         dates=result["dates"],
         derived_from=[upstream_ref(IN_PATH, "cme_section62")],
         warnings=result["warnings"],
