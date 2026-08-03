@@ -102,13 +102,15 @@ check('roll X 轴已显示', roll.xDisplay === true);
 check('roll X 轴有日期刻度', roll.tickCount > 0 && /\d+\/\d+/.test(roll.xLabels[0]), roll.xLabels);
 check('有分隔线小标题', roll.sepVisible && /日期/.test(roll.sepText || ''), roll.sepText);
 
-// ── 4. 合约列表按存续过滤 ──────────────────────────────────────────────
-// 只剔除已到期的合约，不按持仓大小。持仓微小的月份保留并渲染成细线 ——
-// 它们仍有结算价，删列会把相邻点间距从 1 个月变成 2 个月，扭曲价格曲线几何。
-console.log('\n[4] 合约列表按存续过滤');
+// ── 4. 合约列表 = 全序列 window_months 并集 ────────────────────────────
+// 不按持仓大小过滤。持仓微小的月份保留并渲染成细线 —— 它们仍有结算价，
+// 删列会把相邻点间距从 1 个月变成 2 个月，扭曲价格曲线几何。
+// 也不按「末帧是否仍挂牌」过滤：到期合约保留 X 轴列位，否则它在仍存续的
+// 那些帧上有真实 settle/oi 却无列可放，移仓起点整列消失。
+console.log('\n[4] 合约列表 = 全序列 window_months 并集');
 const cols = await page.evaluate(() => Chart.getChart('oiChart').data.labels);
 console.log('  X 轴合约:', cols.join(' '));
-check('JUN26（已到期）已剔除', !cols.includes('JUN26'), cols);
+check('已到期合约仍保留 X 轴列位（末帧已不挂牌）', cols.includes('JUN26'), cols);
 check('MAR27/MAY27/JUL27（持仓微小但仍挂牌）保留',
       ['MAR27', 'MAY27', 'JUL27'].every(m => cols.includes(m)), cols);
 

@@ -168,11 +168,25 @@ stocks 校验闸注入后报 exit=0，第一反应若是「闸坏了」就会去
 
 ## 数据规则
 
-### 合约列表只按存续状态过滤，不按持仓阈值
+### 合约列表 = 全序列 window_months 并集，不按持仓阈值也不按存续过滤
 
-`derive_term_structure.py` 的 X 轴合约列表只剔除**已到期**（最后一帧不再挂牌）
-的合约。仍在挂牌的一律保留，无论持仓多小 —— 微小持仓靠前端 `minBarLength`
-渲染成细线。
+`derive_term_structure.py` 的 X 轴 `contracts` 是全序列各帧 `window_months`
+的并集（按月份顺序排序）。仍在挂牌的一律保留，无论持仓多小 —— 微小持仓靠前端
+`minBarLength` 渲染成细线。
+
+**到期合约保留 X 轴列位是既定口径。** 曾与"末帧是否仍挂牌"求交，合约一到期
+就把整列从全序列历史里抹掉：实测 06-29 掉 JUN26、07-30 掉 JUL26，这两列在仍
+存续的 23 帧上有真实 settle/oi 却无列可放（24 格，量级最高达该帧主力月 oi 的
+2.87%）。更要紧的是移仓起点 —— 模拟 AUG26 到期，它在**全部 25 帧**失去列位，
+其中作为 `front` 的 19 帧、作为 `roll_from` 的 24 帧，AUG→DEC 的
+272518 → 2908 流出全程无处呈现，回放只剩承接端 DEC26 的上升。
+
+轴长度恒定（不逐帧变），前端 `_initCharts` 一次性写 `labels` 的模式零改动可用。
+代价是空列比例 7.4% → 13.3%。
+
+断言不得再编码"已到期即剔除"。`verify-ui-fixes.mjs` /
+`verify-contract-contango.mjs` 各有一条已反转为「已到期合约仍保留 X 轴列位」，
+措辞与 derive 的 info 文案一致。
 
 历史上用过两个持仓阈值，都被推翻：
 
@@ -534,6 +548,22 @@ node tools/verify-live.mjs                 # 线上端到端
 Playwright 脚本不要用 `waitUntil:'networkidle'` —— Chart.js 走 CDN，网络不畅时
 该事件永不触发（实测卡满 30s 超时）。改用
 `waitForFunction(() => Chart.getChart('oiChart'))`。
+
+### tools/verify-noise-injection.py 在本机静默失效，「全绿」不包含它
+
+该脚本内部 `subprocess.run(["wsl", ...])`，必须从 Windows 侧启动才能调到 WSL。
+本机 Windows 侧只有 Microsoft Store 存根 `python.exe` / `python3.exe`（运行即
+打印安装提示并退出），没有真实 Windows Python；从 WSL 里跑它则 `wsl` 命令不存在。
+两条路都不通，这条护栏当前跑不起来。
+
+清点「全绿」时不得把它算进去 —— 它属于上表「以为在验证实际没在跑」的同一类。
+**待修**：改成不依赖执行侧的调用方式（例如按 `platform.system()` 分支选
+`python3` 直调，或把注入逻辑改写成 `.mjs`）。
+
+同类陷阱：跨 shell 传 Python 代码时 `python`/`python3` 可能命中 Store 存根而
+**静默不执行**，`$?` 仍可能为 0，注入看似完成实际没改任何东西 —— 本轮反转断言
+的注入证明就先踩过一次（改回旧口径后两条断言仍绿，实为源文件从未被修改）。
+注入后务必用 `git diff` 确认改动真的落地，再跑被测脚本。
 
 读柱子几何要用 `getProps([...], true)` 取终态：`el.y` 在动画期间是插值中间态，
 24 万手的柱子也会读成高度 0。

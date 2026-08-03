@@ -52,14 +52,16 @@ const check = (n, ok, d = '') => {
   else { fail++; console.log(`  FAIL  ${n}  ${JSON.stringify(d)}`); }
 };
 
-// ── 1. X 轴按存续过滤 ──────────────────────────────────────────────────
+// ── 1. X 轴 = 全序列 window_months 并集 ────────────────────────────────
+// 到期合约保留列位：与「末帧是否仍挂牌」求交会把整列从全序列历史抹掉。
 console.log('[1] X 轴合约列表');
 const axis = await page.evaluate(() => {
   const c = Chart.getChart('oiChart');
   return { labels: c.data.labels, n: c.data.labels.length };
 });
 console.log(`  ${axis.n} 列: ${axis.labels.join(' ')}`);
-check('JUN26（已到期）已剔除', !axis.labels.includes('JUN26'), axis.labels);
+check('已到期合约仍保留 X 轴列位（末帧已不挂牌）',
+      axis.labels.includes('JUN26'), axis.labels);
 for (const m of ['MAR27', 'MAY27', 'JUL27']) {
   check(`${m}（仍挂牌、持仓微小）已保留`, axis.labels.includes(m));
 }

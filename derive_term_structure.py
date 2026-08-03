@@ -361,6 +361,19 @@ def derive(records: list[dict]) -> dict:
     #    （实测 7906 → 3475 → 280 → 272 → 42 → 14 → 8），不存在稳定的分界。
     #    看似存在的「断层」只是这条衰减曲线当前最陡的一段，会随时间平移。
     #    相对阈值随 oi_max 漂移，绝对阈值则会在衰减到阈值以下时砍掉真实合约。
+    # 并集口径：contracts = 全序列各帧 window_months 的并集，按月份顺序排序。
+    #
+    # 不再与「最后一帧是否仍挂牌」求交 —— 那个交集会让合约一到期就把自己的整列
+    # 从全序列历史里抹掉。实测 06-29 掉 JUN26、07-30 掉 JUL26，两列在它们仍
+    # 存续的那些帧上有真实 settle/oi 却无列可放（23 帧 24 格，量级最高达该帧
+    # 主力月 oi 的 2.87%，比反向的「有列无值」上界 0.32% 高一个数量级）。
+    #
+    # 更要紧的是移仓起点：AUG26 一到期，它作为 front 的 19 帧、作为 roll_from
+    # 的 24 帧会同时失去列位，AUG→DEC 的 272518→2908 流出在回放中无处呈现，
+    # 只剩承接端 DEC26 的上升。轴是历史的坐标系，不该由最后一帧的存续状态决定。
+    #
+    # 轴仍不逐帧变（并集全序列算一次，长度恒定），前端 _initCharts 建图时
+    # 一次性写 labels 的模式零改动可用。
     last_listed = {m["month"] for m in window_months(records[-1].get("months") or [])} \
         if records else set()
     all_labels: set[str] = set()
@@ -368,11 +381,12 @@ def derive(records: list[dict]) -> dict:
         for m in window_months(r.get("months") or []):
             all_labels.add(m["month"])
     expired = sorted(all_labels - last_listed, key=month_key)
-    contracts = sorted(all_labels & last_listed, key=month_key)
+    contracts = sorted(all_labels, key=month_key)
     # 到期是合约的正常生命周期，不是异常 —— 记为 info，不进 warnings。
     # 不设条数上限：窗口保留 730 条，随时间推移这个列表本就会变长，
     # 截断只会在真正需要追溯时丢掉信息。
-    info = [f"已到期合约已从 X 轴剔除：{', '.join(expired)}"] if expired else []
+    info = [f"已到期合约仍保留 X 轴列位（末帧已不挂牌）：{', '.join(expired)}"] \
+        if expired else []
 
     dates = [r["date"] for r in records]
 
