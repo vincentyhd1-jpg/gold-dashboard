@@ -1,0 +1,388 @@
+# 交接摘要（决策侧）：COMEX 黄金期货分析看板
+
+> 本文档是**决策侧**交接，配合 Claude Code 生成的**技术侧**文档一起使用。
+> 技术侧含：git 状态、代码结构、行号索引、护栏当前红绿。**行号以技术侧为准**（已多次移位且经校验脚本核对）。
+> 本文档含：已定决策、待办清单、协作方式。
+> 两份都贴进新窗口。
+
+---
+
+## 1. 背景与角色
+
+COMEX 黄金（GC）多源数据分析看板，域名 www.zhangtongxue.com，用 Claude Code 开发。
+已有五块：期限结构图（含移仓回放）、COT 持仓、金价、库存、仓库明细。
+
+**核心定位：数据观察工具，不是交易系统。**
+贯穿原则：诚实标注不确定性——区分 0 / null / 字段缺失（三态不塌成两态）、
+不在数据不足时硬拍阈值、护栏必须真能抓错。
+
+**助手（你）的角色**：帮我审计划、审验证结果、把关方向，**不是替我写代码**。
+- 要质疑我和 Claude Code 的方案，指出「用连续指标回答二元问题」「相对于漂移基准的阈值」
+  「同一个列表被用在两个不同语义的地方」这类系统性问题。
+- 我给的方案错了要直接推翻（已发生多次，且推翻是对的）。
+- 每轮结束提醒我还挂着哪些未落地的 TODO，防止它们只活在对话里。
+- 涉及交易/投资内容，提醒我你不是投资顾问、这是数据观察非交易建议。
+- 我状态累时会直说，此时优先建议我停在干净存盘点（local=remote、tree clean、无半拉子），
+  而不是硬推进度。
+
+**当前所处阶段**：「三件地基重构」的第③件（代号 P1）——抽统一落盘模板 + 四源信封化，
+为接入新数据源（FRED 宏观利率、SPDR ETF、上海黄金、COMEX 期权）理顺架构分层。
+
+---
+
+## 2. 已定决策（不用再议）
+
+### 分层与契约
+- 三层：采集层（fetch，只抓取落盘）→ 计算层（derive，派生指标）→ 展示层（前端只读）。
+  跨源计算必须落在计算层。
+- 派生/落盘 JSON 用信封：`{schema_version, source, freq, generated_at, date_field,
+  coverage, derived_from, warnings, info, data}`，业务数据全在 data。
+  schema_version 从 0 开始，接完四源再升 1。
+- 前端过渡期双形状兼容 `payload?.data ?? payload`；
+  **TODO：四源全迁完后统一 unwrap(strict=True) + 删双形状兼容，不许永久化。**
+- `oi_chg` 一律从 OI 存量差分自算，源站字段仅作交叉验证。
+
+### io_utils 骨架 vs 语义边界
+- io_utils 只提供机械操作：`atomic_write_json` / `atomic_write_bytes` / `read_json_or` /
+  `upsert_by_key` / `apply_retention` / `quarantine_write` / `sweep_stale_tmp`。
+- 硬约束：禁任何 `value or 0` 兜底；**不调 sys.exit()，一次都不**；
+  不做任何失败/无新数据的语义判断。
+- 留在各调用方：quarantine 触发条件、exit code 语义、「无新数据」判定、0/null 语义、
+  merge 回调、compact 参数。
+- `upsert_by_key` 返回 `(列表, 动作, 原因)`；KEEP_OLD 时列表对象原样返回（`out is REC`），
+  调用方据此跳过写盘。merge 必须传，不传一律 KEEP_OLD 不猜；merge 返回未知动作 raise。
+- merge 三态：KEEP_OLD / TAKE_NEW(reason="revised" 值变了 / "backfilled" 缺失变有) /
+  REJECT 交给 validate 不在 merge 判。**info 措辞必须区分修订与补全。**
+- 原子写失败时**不删临时文件**（诊断线索，sweep 下次清）。
+- **不反向迁就骨架**：形态不匹配的函数就不用。cot/gold 都是七用五，理由各不相同。
+
+### exit code 三态
+0 正常（含幂等跳过）/ 1 需人工介入 / 2 上游未更新。
+**Python 侧和 workflow yml 必须同时改**，否则 continue-on-error 把 1 和 2 都记成 failure。
+yml 用 `case` + `0|"")` 空串分支（防步骤被跳过时误报）。
+
+### generated_at 语义
+表示「数据这次真变了」，不是「脚本跑了」。数据逐字段相同 → 文件完全不变、git 无 diff。
+幂等判断**只比业务数据（data 内容），不含信封元数据**。
+cot 比整个 data（latest+weekly 全量，因 CFTC 会修订历史期）；gold 直接比自己的 data，
+**不以 cot 的 generated_at 为判据**。
+若数据相同但产生新 warnings → 仍跳过不写盘，warning 打 stdout。
+
+### total_oi 口径（三层收窄，已定死）
+`total_oi = Σ OI over month ∈ ever_front`，即「已当过持仓最大月」的已确立主角之和。零阈值。
+不含到期清算残余、不含从未当过主角的名义月、**不含尚在积累未坐正的末端承接月（当前 FEB27）**。
+不用 `major_months()` 返回值（含未跑分布的拍值 `MIN_NEXT_OI_RATIO=0.01`）。
+与价差/主力月口径**有意略窄**：价差含承接月（问「往哪移」）、total_oi 只含已确立主角（问「盘子多大」）。
+实测：07/29=302,267、06/26=320,600（旧值 380,608 / 361,195 已作废）。
+
+### contracts 并集口径（`44aecf2` 已定）
+`contracts` = 全序列各帧 `window_months` 的并集，按月份顺序排序。
+**到期合约保留 X 轴列位**，不与「末帧是否仍挂牌」求交。
+论据见第 4 节。**断言不得再编码「已到期即剔除」**——
+两条编码旧口径的前端断言已于同一 commit 反转（反转而非删除，删了该路径零覆盖）。
+轴长度恒定，前端 `_initCharts` 一次性写 `labels` 零改动可用。
+代价：空列比例 7.4% → 13.3%，730 帧外推约 48 列（日历月法）。
+
+### 移仓相关
+`front_by_expiry`（到期月）与 `dominant_by_oi`（持仓最大月）严格分开。
+活跃月用序数信号 `ever_front`/`major_months` 判定，不是 OI 绝对阈值。
+`front_remaining` 保留 round(4)（纯展示比率）；`roll_noise`/`roll_noise_ma` 全精度落盘。
+CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
+
+### 帧级 vs 展示视图二分（重要）
+**帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）是两类东西。**
+取证字段不得经任何**随时间移动的边界**过滤：
+- `contracts`（**已于 `44aecf2` 改为全序列 `window_months` 并集**，不再随存续状态变动）
+- `window_months`（near + 1 年截窗，末端随 near 右移，实测 06-29、07-30 各移一次）
+- 任何跨帧汇总列表（`ever_front` / `peak_oi` / `major_months`）
+
+实现方式：**两份 map 分开建，不共用一份再过滤**——
+`oi_maps`（窗口筛后，展示用）与 `oi_maps_raw`（该帧原始 months，取证用）。
+语义分离落在数据结构上而非条件判断里，不容易被误合并。
+
+**推广形式（`3719857` 之后）**：同一个列表不得同时充当**展示范围**与**校验范围**。
+判断某断言该用哪个范围，先问：**这个字段是在哪个范围上算出来的？**
+校验范围跟计算范围对齐，不跟展示范围对齐。
+
+**背景（为什么有这条）**：`unreliable_chg` 是帧级历史取证字段，原先被 `contracts` 过滤，
+等于让今天的存续状态回头篡改历史帧的取证记录。JUL26 到期后，7/27 那天它被修订过的事实消失了。
+失真单向、只漏报不误报、无视觉异常，所以长期未被发现，且会随合约到期节奏反复发作。
+
+### 测试与取证（血泪教训）
+- 护栏靠注入证明真会红，不靠读代码推断。每条闸单独注入验证。
+- **执行侧陷阱：用哪个 shell / 哪个解释器启动会静默改变结果**（本仓已实测四种形态，
+  红绿两个方向都能错）：
+  1. Windows 侧 `python`/`python3` 命中 Microsoft Store 存根 → **脚本静默不执行**，
+     源文件从未被修改，注入恒不落地，断言仍绿（假「已验证」）。**最危险**
+  2. `bash -c "... ; echo $?"` 包装取码 → 取到中间命令退出码（假绿）
+  3. WSL bash 跑 `.mjs` → Playwright 的 `executablePath` 是 Windows 路径、WSL 里不存在
+     → `executable doesn't exist`，exit 1（假红）
+  4. 注入脚本写盘格式与生产写入端不一致（注入用 `indent=2`、生产用
+     `separators=(",",":")`）→ 整文件重排，diff 上千行淹没真实改动，落地确认失去分辨力
+
+  **硬规则**：前端 verify（`.mjs`）必须从 PowerShell 原生调 `node`；
+  Python 取证必须 `wsl -d Ubuntu-22.04 -- python3`，不经 `bash -c`；
+  exit code 直接取自解释器不取包装层；
+  注入写盘必须复用生产写入端的序列化参数，不得自行选择 `indent`。
+- **「注入后无变化」只有在落地已被 `git diff` 证实的前提下才是证据。**
+  否则它什么都不证明——包括那些据此写进 CLAUDE.md 的结论。**换执行侧后都要重验一次。**
+  仅"脚本跑完没报错"不算落地。
+- **注入还要证明被测端确实吃到了改动**：改数据文件后，还需确认服务端送出的就是那份、
+  页面 `fetch` 到的就是那份（缓存 / `?_=` 时间戳 / dev server 路径都可能插一脚）。
+  ZZZ99 重验补的正是这一环。
+- **范围收窄类改动必须同时加防恒真闸**：收窄到零时断言会变恒真。
+  抽查 2 收窄到 `window_months` 后加了 `if not checked` 计数器，
+  窗口内一条可对账都没有时报「抽查 2 自身失效」而非 PASS。
+- **收窄后要做双向注入**：范围内注入必红（证明断言还活着）、
+  范围外注入按定义应绿（证明是"符合定义"而非"误放行"）。
+- **应该红却显示绿时，先怀疑取证方式，再怀疑被测对象。**
+- **秒精度时间戳参与的比较，同秒执行会使结果失去分辨力，红绿两个方向都会错。**
+  （已知：同秒 timestamp 相同致假红；同秒连跑 derive 致幂等假绿。）
+  幂等类取证必须强制跨秒或用哨兵时钟（如 `2099-01-02T03:04:05Z`）。
+- 防恒真断言：`X or True`、set 差集恒为空。
+- **比对基准要取 `git show HEAD` 的版本，不要取磁盘文件**——磁盘那份可能已被前几轮重跑覆盖，
+  拿它比是自比自。
+- **改了写入端格式，必须临时造出新格式文件让所有读取端在新格式下也跑一遍。**
+- 一红七绿比全红更有信息量（证明断言之间无耦合、分辨力够）。
+- 阈值一律先跑分布再定。
+- **对现有数据零影响的改动，必须造 fixture 才能证伪**——真实数据测不出来的就造数据测。
+  fixture 要自带锚点自检（如「该合约必须在窗口外、必须不在 contracts」），
+  锚点失效要自曝而非静默通过。
+- **取证脚本的临时文件不受 `sweep_stale_tmp` 覆盖**（它只清 OUT_PATH 同名 tmp），
+  同一轮内自行清理。
+
+### 破窗规则
+改格式时，**读取端先容双形状 → 写入端再切**。因为数据文件要等下次 Actions 才变形，
+本地 verify 全绿、破窗在下次 CI 才炸、归因窗口已关。
+但要看读取端的**失败性质**：会崩的（KeyError）必须抢先容错；
+只静默退化的（`Array.isArray()` 退化成空 map、金价线整条消失但 pageerror 为空）——
+先补断言再改，把「补断言」和「改读取点」放同一 commit。
+
+### 其他既定
+图表绝不用双 Y 轴；颜色编码含义不编码顺序；持仓量单色深浅，红绿只留给变化量正负。
+回测和 AI 策略推荐明确推迟（数据不足）。
+本地 Python 走 WSL：`wsl -d Ubuntu-22.04 -- bash -c "cd /mnt/d/VScode/test/gold-dashboard && python3 ..."`
+
+---
+
+## 3. 进度
+
+### 已完成并推送
+- 第①件信封格式 ✅、第②件 KPI 算术下沉 derive ✅、KPI 全精度落盘 ✅
+- P0 三源防伪闸 ✅（cot/gold/stocks 各 5 条判据 + quarantine + 三态 exit）
+- `roll_noise`/`roll_noise_ma` 全精度 ✅
+- P1 第 0 步 total_oi B2 口径 ✅（`c123981`）
+- P1 第 1 步 stocks 接 io_utils + 信封化 ✅（`4f4834e`）
+- verify-isolation 补断言累加器（0 → 37 条真断言）✅（`63e28c5`）
+- P1 第 2 步 cot 双形状 + 写入端切换 ✅（`b069a9c` / `9e4af97` / `eab5833`）
+- **`3382585`**：`unreliable_chg` 改走 `oi_map`（拆掉 contracts 存续筛）
+- **`bf1cc6b`**：取证路径彻底去窗口（`oi_maps_raw`）+ WINDOW fixture + CLAUDE.md 二分法
+- **`f8f5204`**：技术侧交接文档 `docs/handover-technical.md`
+- **`779f480`**：文档更新（float 判别结论 + 「已知会随数据滑动而消失的红」一节）
+- **`a31cdcb`**：落盘 float 统一 round(12) + ROUND fixture + CLAUDE.md
+- **`44aecf2`**：`contracts` 改为全序列 `window_months` 并集口径 + 两条前端断言反转
+- **`3719857`**：MISMATCH 断言比对范围收到该帧 `window_months`
+- **`3995959`**：CLAUDE.md 补执行侧陷阱 + 重验 ZZZ99 注入结论
+- **`a8c733a`**：交接文档更新至 `3995959` + CLAUDE.md 补第四种执行侧形态
+- 期间 Actions 提交 `36a5504`（每日数据，oi.json 增至 25 帧，范围 06-26 ~ 07-31）
+
+**当前 HEAD = `a8c733a`，local=remote，工作区干净。**
+派生规模 25 帧 × 15 列。`derive --test` **exit 0，17 PASS / 0 failed / 无 SKIP**。
+`oi_chg` 口径线已完结（详见第 4 节）。
+
+### P1 第 3 步 gold（进行中，未完）
+- commit1 exit 三态分离 + workflow yml ✅（`3604e16`，已随 `3382585` 推送）
+- **commit2、commit3 未开始**（详见待办）
+
+---
+
+## 4. `oi_chg` / `contracts` 口径 —— 已完结（决策记录）
+
+> 此节保留为决策记录，**不再是待办**。保留理由：结论的论据不易重建，
+> 且将来若有人想把 `contracts` 改回交集，需要看到为什么不能。
+
+### 当时的问题
+`contracts`（列位，按最后一帧存续）与 `window_months`（取值，near+1 年截窗）
+两道筛并存且集合不同，导致两类错位：
+- **有列无值** 24 格：AUG27/JUL27 等远端月，占该帧主力月 OI 的 0.0017%~0.2196%（噪声）
+- **有值无列** —— 更严重：到期合约整列从全序列历史消失。
+  实测 06-29 掉 JUN26、07-30 掉 JUL26，这两列在仍存续的 23 帧上有真实 settle/oi 却无列可放。
+
+### 决定性证据：AUG26 到期模拟
+模拟 AUG26 退市后重跑 `contracts` 推导：AUG26 **在全部 25 帧失去列位**，
+其中 19 帧它是 `front`、24 帧是 `roll_from`。
+OI 从 272,518 → 2,908 的整个流出过程无处呈现，回放只剩承接端 DEC26 的上升——
+**看得见承接、看不见流出**，而移仓回放是本看板的核心功能。AUG26 即将到期，是硬时限。
+
+### 三个方向与选择
+- **A（取值服从 contracts）**：只填「有列无值」的远端月噪声，不解决到期侵蚀。淘汰。
+- **B（contracts 逐帧变）**：数据正确，但 `_initCharts` 只在 `js/playback.js:100`
+  调一次、`_renderFrame` 全函数无 `data.labels` 赋值 → **必须动前端约 20 个读取点**，
+  且回放时轴会滑动。淘汰。
+- **C（contracts = 全序列各帧 window_months 的并集）** ← **已采用**
+  - `roll_noise`/`roll_noise_ma` 与 B **逐帧数值完全相同**（|Δ|max 9.59e-02，22 帧）
+    → 证明 `contracts` 只决定展示列位、不参与派生计算，C 完全支配 B
+  - 轴长度恒定 → 前端零改动
+  - 代价：15 列（+JUN26/JUL26），空列比例 7.4% → 13.3%；
+    730 帧外推约 48 列（日历月法，黄金近月逐月挂牌）或 71 列（实测速率法）。
+    **日历月法更可信**，建议实施后按季度实测校正。
+
+### roll_noise 漏掉的是信号不是噪声
+B/C 多算进来的部分，取证证实：差异最大三帧（07-01 Δ=-0.0959、07-17、07-16）
+新增计入的**全部是 JUL26 单一合约，100% 临近到期月，远端月 0 个**，
+Δ 由分母变化单一解释。JUL26 是前一轮 JUN→AUG 移仓的到期端，其 OI 流出**就是移仓活动本身**。
+→ 旧口径的 `roll_noise` 历史序列漏掉的是信号。**阈值分布必须在新口径下跑**，此前不得跑。
+（另：窗口移动造成的台阶在新旧口径下都存在、落差变化 ≤4e-4，窗口移动本身不是污染源。）
+
+### 连带的两处修正
+1. **两条前端断言反转**（`verify-ui-fixes.mjs` / `verify-contract-contango.mjs`）：
+   原断言「JUN26（已到期）已剔除」编码的正是被判定为错误的行为。
+   **反转而非删除**——删了该路径零覆盖。已附注入证明。
+2. **MISMATCH 断言比对范围收到该帧 `window_months`**：
+   `contracts` 改并集后含从未进入该帧窗口的月份，那些格子 derive 根本没算、
+   值是 None 代表「未计算」而非「算错了」。拿 `contracts` 当校验范围会把两者混淆。
+   **同一个列表不得同时充当展示范围与校验范围。**
+   收窄后加了 `if not checked` 空转保护（窗口内一条可对账都没有时报「抽查 2 自身失效」，
+   防止收窄导致断言恒真）。双向注入已验：窗口内注入必红、窗口外注入按定义应绿且实测绿。
+
+### 仍需知道的
+- **覆盖率事实**：窗口 13 个月份、stored 共 27 条、实际对账 13 条，
+  **14 条窗口外的 stored 从不参与任何校验**。这是定义的必然结果（derive 没算它们），
+  不是缺陷；它们将来进入窗口时用差分自算而非 stored，不影响正确性。记录备查。
+- **抽查 2 仍有滑窗 SKIP 风险**：帧滑出 730 条滚动窗口或成首帧时转 SKIP。
+  730 帧约需两年，但届时口径正确性不再被任何断言检查。
+
+---
+
+## 5. 待办清单
+
+### 下一件：P1 第 3 步 gold（**commit2 必须在 commit3 之前，硬约束**）
+`oi_chg` 口径线已完结，P1 主线通了，这是自然的下一件。详见下条。
+
+### 紧接着（`oi_chg` 定了之后）
+- 按选定方向改口径，`derive --test` 应转全绿
+- `roll_noise` 窗口污染量化（若随方向 A 一并解，则不用单独做）
+
+### P1 第 3 步 gold（**commit2 必须在 commit3 之前，硬约束**）
+- **commit2**：`index.html:1255` 加 `.then(p => p?.data ?? p)`
+  （五个读取点中唯一无双形状兼容的，信封化时会断且本地不暴露）
+  + 给 `verify-ui-fixes.mjs` 补断言「cotDual 金价 dataset 至少有 N 个非 null 点」
+  （用注入验非恒真：goldData 强制成 `{}` → 新断言必须红）
+- **commit3**：io_utils + `envelope()` + `derived_from=[upstream_ref(COT_PATH, "cftc_cot")]`
+  + 幂等跳过 + `quarantine_gold` 补存原始响应（现在只存解析结果，事后分不清
+  「Stooq 返回就是坏的」还是「align_price 对齐错了」）
+  + `info` 记 `price_source=stooq.com`（价格源不进 derived_from，它不是本仓库落盘文件）
+
+### P1 第 4 步 oi 信封化
+`fetch_oi.py:203`、`derive_term_structure.py`、`tools/inspect_oi.py:2`、
+`index.html:1262`、`term-3d.html:274` 需同步改（derive 行号已多次移位，以技术侧文档为准）；
+**term-3d 无 verify 覆盖，必须手动开页确认**。注意本机 Plotly CDN 离线，
+上次是用 stub 顶替只验了数据通路（xLen/xFirst/xLast），**真实渲染从未验过**。
+
+### 四源全迁完之后
+- 统一 `unwrap(strict=True)` + 删前端双形状兼容
+- **注意**：`index.html:1254` 的 `p?.data ? {...p.data, generated_at: p.generated_at} : p`
+  把 `generated_at` 提到了业务对象上，删兼容代码时**这个提取动作要保留**
+
+### 护栏与取证的欠账（新增，勿忽略）
+- **`tools/verify-noise-injection.py` 静默失效**：内部 `subprocess.run(["wsl",...])`
+  需 Windows 侧真实 Python，本机仅 Store 存根，两条路都不通。
+  **清点「全绿」时不得把它算进去。** 待改成不依赖执行侧的调用方式。
+- **注入类 verify 之间无隔离**：一条跑完的注入残留会污染下一条
+  （实测 `verify-totaloi-injection` 曾因上一步残留的派生文件显红），
+  一条跑完须重跑 derive 再跑下一条。
+- **抽查 2 的滑窗 SKIP**：见第 4 节末，约两年后到期。
+- **`term-3d.html`**：无 verify 覆盖 + 真实渲染未验。
+
+### 独立小项
+- **derive 无幂等跳过**：落盘路径无条件写，未导入 `read_json_or`，每跑必刷 `generated_at`。
+  采集层（cot/gold/stocks）都有幂等，唯独派生层没有，分层是反的。
+  目前只表现为 git 噪声（其 `generated_at` 不进页面显示）。
+  **前置依赖 round(12) 经 Actions 验证**，否则跨平台比对恒判「数据变了」，幂等等于白做。
+- **float 平台差异 —— 已定 round(12)，`a31cdcb` 已实施，待 Actions 验证**：
+  Actions 提交 `36a5504` 曾把 3 处 `roll_noise_ma` 末位**全部翻回**，Δ 均为 1 ULP，
+  差异帧恰好是记录的那 3 个、无第四处 → 判定为 runner 与本机 float 末位不一致的永久性 flapping。
+  已实施：落盘统一 `_round_floats()` round(12)，**只在写盘那刻 round，计算链全程全精度**
+  （`roll_noise_ma` 的 3 帧滚动用未 round 的 `roll_noise` 算）。
+  `front_remaining` 有意 round(4) 保持不动；int/bool/None/str 原样。
+  一次性 diff 94 处（Δ 均 1e-13 量级），非 float 变化 0 处，落盘后无 >12 位小数。
+  意外收益：顺带消掉了 `spread` 的本机浮点减法残差（`59.90000000000009 → 59.9`），
+  那不是平台差异，是一直在污染落盘值的自身残差。
+  新增 ROUND fixture 覆盖 `_round_floats()` 本身（新代码路径，
+  `bool` 是 `int` 子类这类细节错了不会有任何护栏发现）。
+
+  **⚠ 真正的验证尚未发生**：本地跑不出平台差异。
+  **下次 Actions 跑完，判据是那 3 处 `roll_noise_ma` 不再被翻回。**
+  若仍被翻回，说明 12 位不够（第 13 位在舍入边界），要再议。
+  **禁止用容差比对代替**：容差会让真实微小变化也被判为没变，而 CFTC/CME 的历史修订
+  可能只差几个单位。
+  余量备注：NOISE_FIXTURE 当前误差 8.23e-14 vs 容差 1e-12，余一个数量级；
+  若将来把 round 收紧到 10 位，这条 fixture 会踩线失效。
+- **`index.html:470` 的 `mfVals.map(v => (mx===mn) ? 50 : ...)` 重算删除** ——
+  **先补 verify 再删，无护栏不删**。采集层 `cot_index()` 已返 None，
+  前端仍把退化输入粉饰成 50%，两处语义不一致，且六个 verify 无一条校验 COT Index 显示值。
+- **「页面更新」文案覆盖不全**：时间戳源自 `cot.json` 的 `generated_at`（读取点 `:1252`），
+  只代表 COT 一源，但页面还有金价、库存、期限结构。
+  若 stocks 因 WAF 封锁 exit 2 停在旧数据而 COT 正常更新，用户会以为全页都是新的。
+  不是撒谎，是文案比实际范围大。最省事改文案（「COT 更新」），彻底做法是每块各显示各的。
+- **`total_oi`/`ever_front` 追溯性未定义**：历史帧 T 的 `total_oi` 用的是
+  「截至 T 的 ever_front」还是「截至今天的 ever_front」？
+  若是后者，FEB27 将来坐正时历史帧数值会回头改变——与 JUL26 同族的历史篡改，方向相反。
+  现在 `ever_front = ['AUG26','DEC26']` 都在窗口深处所以不表现。**不表现不等于没有。**
+  是定义问题不是 bug，等有事逼它表现再谈。
+- **`roll_noise` 阈值 —— 已解锁**：口径已改为并集，旧口径漏掉的移仓信号已补回，
+  分布可以跑了。round(12) 对分布无影响（1e-13 vs 真实值 0.079~0.48），不构成量化地板。
+  仍建议等 AUG26 彻底到期后再跑，届时分布才有谷可锚。
+- **`verify-ui-fixes` 偶发超时**：批量连跑时 `waitForFunction` 30s 超时 exit=1，
+  单独重跑 13 passed。归因并发争用。与已知的 verify-gapframe 400ms 帧竞态是两回事，
+  别让它变成「一直都这样」。
+
+### P1 之后
+四象限信号散点图（quad_x/quad_y，换月当天用新主力自身前后日结算价、**禁跨合约相减**）；
+接 FRED / SPDR ETF / 上海黄金 / COMEX 期权。
+
+### 已知技术债
+`js/*.js` 共享全局作用域 + 加载顺序依赖（后续改 ES modules）。
+
+---
+
+## 6. 关键信息
+
+**路径**：Windows `D:\VScode\test\gold-dashboard`，WSL `/mnt/d/VScode/test/gold-dashboard`。
+GitHub：`vincentyhd1-jpg/gold-dashboard`。
+
+**数据锚点**：主力 DEC26；AUG26 移仓中（7/28 剩 71,430 手）；移仓路径 AUG→DEC（跳过流动性差的 OCT）；
+`ever_front = ['AUG26','DEC26']`，`major_months` 多一个 FEB27（末端补位）。
+窗口末端移动实测：06-29（JUN27→JUL27）、07-30（JUL27→AUG27）。
+
+**数据源**：COT 来自 CFTC Socrata API（每周五约 15:30 ET 发布上周二数据）；
+库存来自 CME Section 62 PDF（有 WAF 封锁风险 → exit 2）；金价 Stooq/Yahoo 级联，日期完全跟随 cot。
+
+**CLAUDE.md** 是项目记忆，含所有既定约定 + WSL 取证禁忌 + 各类 TODO。
+
+---
+
+## 7. 给 Claude Code 下指令的方式
+
+- 只给动作 + 验收标准，不重复讲 CLAUDE.md 里已有的背景
+- 结尾加「只贴 diff / 只贴验证输出，不解释」
+- 指路不让它找；给假设让它验证、不让它从零排查
+- 每件事分阶段：**先出计划 → 我审 → 再动手 → 做完停下不自动进下一件**
+- 守住范围，不许「顺便优化」
+- 量化类任务要**预设停止线**（如「若超现有 10 倍则停下报告，不许顺手加守卫」）
+- 验收项里明确写「预期仍红哪一条、属哪个已知问题、不许改断言迁就、
+  除它以外不得有任何其他 FAIL」——既防它凑绿，也防它拿已知红当借口掩盖新 FAIL
+- 少用截图验证（贵且不如数字准），让它文字报 PASS/FAIL + 正确 exit code
+
+**省 token**：
+- 禁止 `cat` 整个 `oi.json` / `term-structure-series.json`，用脚本提取后打印摘要
+- 逐帧输出改为「只输出有差异的帧 + 汇总统计」
+- 不要复述文件内容、不要贴未改动的周边代码
+- 一件事做完就 `/clear`（有本文档 + CLAUDE.md 作外部记忆，切了不亏）
+- 长验证输出只报汇总行，失败时才贴详情
+
+---
+
+## 8. 风格偏好
+
+- **中文回答，精简，不要开场白和铺垫。**
