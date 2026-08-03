@@ -122,6 +122,38 @@ await page.click('#oiPlayBtn');
 console.log('\n  播放中日期:', playing);
 check('回放仍正常', /\d+\/\d+/.test(playing), playing);
 
+// ── 5. cotDual 金价 dataset 非 null 点数 ───────────────────────────────
+// 守 index.html:1255 的 gold_price.json 读取点。该点的失败性质是**静默退化**
+// 而非崩溃：读到信封形状（非数组）时 index.html:466 的 Array.isArray(goldData)
+// 会退化成空 map，goldD 变全 null，金价线整条消失而 pageerror 为空 ——
+// 现有断言无一条会红。
+//
+// 阈值 N=40 的依据：采集层 validate_gold 的 MAX_MISSING_RATIO=0.2 保证
+// 52 周里至多 20% 对齐失败，即非 null 至少 42 个；取 40 留 2 个余量应对
+// cot weekly 条数不足 52 的情形。实测当前 52/52 全部非 null（余量 +12）。
+// 退化时是 0 个，与 40 之间有整个量级的距离，不会误判。
+const GOLD_MIN_POINTS = 40;
+console.log('\n[5] cotDual 金价 dataset');
+const gold = await page.evaluate(() => {
+  const c = Chart.getChart('cotDualChart');
+  if (!c) return { chartMissing: true };
+  const ds = c.data.datasets.find(d => /金价/.test(d.label || ''));
+  if (!ds) return { dsMissing: true, labels: c.data.datasets.map(d => d.label) };
+  const nonNull = ds.data.filter(v => v !== null && v !== undefined);
+  return {
+    label: ds.label,
+    len: ds.data.length,
+    nonNull: nonNull.length,
+    min: nonNull.length ? Math.min(...nonNull) : null,
+    max: nonNull.length ? Math.max(...nonNull) : null,
+  };
+});
+console.log(`  ${JSON.stringify(gold)}`);
+check('cotDualChart 已建起', !gold.chartMissing, gold);
+check('金价 dataset 存在', !gold.dsMissing, gold);
+check(`金价 dataset 非 null 点数 >= ${GOLD_MIN_POINTS}`,
+      (gold.nonNull ?? 0) >= GOLD_MIN_POINTS, gold);
+
 // 截图
 await page.evaluate(() => {
   const s = document.getElementById('oiPlaySlider');
