@@ -166,6 +166,38 @@ stocks 校验闸注入后报 exit=0，第一反应若是「闸坏了」就会去
 
 这与「验证护栏靠注入破坏确认」是同一类陷阱：不注入就不会发现读到的是假码。
 
+### 执行侧陷阱：用哪个 shell / 哪个解释器启动会静默改变结果
+
+上一节讲的是「传字符串」，覆盖不住已发生的全部形态。更一般的根因是：
+**同一条命令，从 PowerShell 启动、从 Git Bash 启动、从 WSL 启动，或经
+`bash -c` 包一层，结果可以不同 —— 而且红绿两个方向都能错。**
+一个「假绿」让你以为验证过了，一个「假红」让你去改本来正确的代码。
+
+三种实测形态：
+
+| 形态 | 表现 | 错的方向 |
+|---|---|---|
+| Windows 侧 `python` / `python3` | 命中 Microsoft Store 存根，打印安装提示后退出，**脚本静默不执行**。源文件从未被修改，注入恒不落地，被测对象照旧 —— 断言仍绿 | **假绿**（假「已验证」） |
+| `bash -c "... ; echo $?"` 包装取码 | `$?` 取到包装层里某条中间命令的退出码，不是解释器的。实测 `derive --test` 明明打印 `1 failed`，取证报 `exit=0` | **假绿** |
+| WSL bash 跑 `.mjs` | Playwright 的 `executablePath` 是 Windows 路径（`C:\Users\...\ms-playwright\...\chrome.exe`），WSL 里不存在 → `browserType.launch` 抛 `executable doesn't exist`，`exit 1` | **假红** |
+
+第一种最危险：它同时骗过注入与断言。注入脚本"跑完"没报错，被测文件其实
+一个字节没变，于是"注入后仍绿"被读成"这个破坏无影响"——**而真相是破坏
+从未发生**。本仓踩过两次，一次是反转 X 轴断言时（改回旧口径后两条断言仍绿），
+一次是早期 `ZZZ99` 注入（结论已重验，见下文该字段的护栏说明）。
+
+**硬规则：**
+
+- **前端 verify（`.mjs`）必须从 PowerShell 原生调 `node`**，不经 bash、不经 WSL
+- **Python 取证必须 `wsl -d Ubuntu-22.04 -- python3 ...`**，不经 `bash -c` 包装
+- **任何注入必须以 `git diff` 确认改动真的落地**（贴出 diff 行）；
+  **未落地则整条取证作废重做**，不许拿"跑完没报错"当落地
+- **exit code 直接取自解释器**，不取包装层：
+  `wsl -d Ubuntu-22.04 --cd "$(pwd)" -- python3 x.py > log 2>&1` 然后读 `$?`
+
+推论：**「注入后无变化」只有在落地已被 `git diff` 证实的前提下才是证据。**
+否则它什么都不证明，包括那些据此写进本文件的结论 —— 换执行侧后都要重验一次。
+
 ## 数据规则
 
 ### 合约列表 = 全序列 window_months 并集，不按持仓阈值也不按存续过滤
@@ -371,6 +403,24 @@ contracts」不等于「未经过滤」** —— 拆筛子要拆到原始 `month
 实测注入幽灵合约 `ZZZ99` 到某帧的 `unreliable_chg`：`pageerror` 0 条、
 X 轴标签数不变、DOM 文本不含 `ZZZ99`、三图全存活 —— 页面与基线逐项一致。
 **该字段怎么错都不会有页面症状**，所以指望前端 verify 兜底是空的。
+
+**该结论已按执行侧硬规则重验（2026-08-03）**，早先那次注入可能命中 Store 存根
+从未落地，"无变化"本来什么都不证明。重验做法与结果：
+
+- 注入器经 `wsl -- python3` 执行，写盘用 `separators=(",",":")` 与 io_utils 同格式
+- `git diff` 确认落地：`1 1` 行，`"unreliable_chg":null` →
+  `"unreliable_chg":["ZZZ99"]`（帧 12 / `2026-07-15`）
+- **确认浏览器真的吃到那份文件**：静态服务器记录送出的 series
+  `{bytes:14917, hasGhost:true}`，页面内 `fetch` 复查 `rawHasGhost:true`、
+  `framesWithGhost:[{i:12,date:"2026-07-15",u:["ZZZ99"]}]`
+- 六个前端 verify 从 PowerShell 原生调 `node`：全部 exit 0，通过数与基线逐项相同
+- 页面症状：`pageerror` 0、`console error` 0、X 轴 15 列不含 `ZZZ99`、
+  DOM 文本与 outerHTML 均不含、三图存活、KPI 与基线一致；
+  逐帧扫全部 25 帧 DOM 文本，`ZZZ99` 命中 0
+- 全仓静态读取点只有两处，均非消费：`js/playback.js:169`（降级 mock 的字面量，
+  写非读）、`tools/verify-gapframe.mjs:26`（把它置 `null` 用来造断层帧）
+
+结论成立：无前端消费端、六个前端 verify 对它 0 条断言。护栏只能在 Python 侧。
 
 两条断言守着：
 
