@@ -796,6 +796,14 @@ def run_tests(records: list[dict]) -> None:
     # 抽查 2：2026-07-24 —— CME 未修订，diff 必须与 stored 完全一致
     # 前提是它仍是中段帧：窗口滚动到它成为首帧时无前驱可差分，oi_chg 全 None
     # 是正确行为，此时比对 stored 会得到一堆假失败。
+    #
+    # 比对范围 = 该帧 window_months（derive 实际计算过 oi_chg 的范围），
+    # 不是 contracts（展示列位）。contracts 是全序列各帧 window_months 的并集，
+    # 含从未进入本帧窗口的月份 —— 那些格子 derive 根本没算，值是 None，代表
+    # 「未计算」而非「算错」。拿 contracts 当校验范围会把前者误判成后者：
+    # 实测 07-24 的 contracts 15 列 vs 该帧窗口 13 个，差集 ['JUN26','AUG27']，
+    # AUG27 有列位却不在窗口内（stored=+11 / computed=None）。
+    # 同一个列表不得同时充当展示范围与校验范围。
     f24 = get_frame("2026-07-24")
     r24 = next((r for r in records if r["date"] == "2026-07-24"), None)
     first_date = result["frames"][0]["date"] if result["frames"] else None
@@ -804,21 +812,34 @@ def run_tests(records: list[dict]) -> None:
     elif f24["date"] == first_date:
         print("  SKIP  真实数据抽查 2：2026-07-24 已成为序列首帧（无前驱）")
     else:
+        window24 = {m["month"] for m in window_months(r24.get("months") or [])}
         stored = {m["month"]: m.get("oi_chg") for m in r24.get("months", []) if "oi_chg" in m}
+        checked = 0
         mismatches = []
         for contract, stored_val in stored.items():
             if stored_val is None:
                 continue
+            # 校验范围跟计算范围对齐：窗口外的合约 derive 未计算，不参与对账
+            if contract not in window24:
+                continue
             ci = contract_idx.get(contract)
             if ci is None:
                 continue
+            checked += 1
             computed = f24["oi_chg"][ci]
             if computed != stored_val:
                 mismatches.append(f"    {contract}: stored={stored_val:+d}  computed={computed}")
-        if mismatches:
+        if not checked:
+            errors.append(
+                "抽查 2 自身失效：2026-07-24 窗口内无一条 stored oi_chg 可对账 "
+                f"（窗口 {len(window24)} 个月份，stored {len(stored)} 条）"
+            )
+        elif mismatches:
             errors.append("MISMATCH 2026-07-24:\n" + "\n".join(mismatches))
         else:
-            print(f"  PASS  2026-07-24: {len(stored)} oi_chg values match CME stored")
+            print(f"  PASS  2026-07-24: 窗口内 {checked} 条 oi_chg 与 CME stored 相符"
+                  f"（窗口 {len(window24)} 个月份，stored 共 {len(stored)} 条，"
+                  f"窗口外 {len(stored) - checked} 条未计算不参与对账）")
 
     # 抽查 3：2026-07-27 —— CME 盘后修订了前一日存量，这 4 个合约必须被标记
     # 同抽查 2：它成为首帧时无前驱可差分，unreliable_chg 为空是正确行为
