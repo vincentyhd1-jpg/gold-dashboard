@@ -593,6 +593,22 @@ def derive(records: list[dict]) -> dict:
 
 # ── Unit tests ───────────────────────────────────────────────────────────────
 
+_PASS_COUNT = 0
+
+
+def _ok(msg: str) -> None:
+    """
+    打印一条 PASS 并计数。
+
+    通过数必须和失败数一起报：真实数据抽查会在日期滑出窗口时静默跳过
+    （见 run_tests 文档），只报 "0 failed" 的话，用例从 17 条掉到 3 条
+    也照样全绿 —— 看不出来。
+    """
+    global _PASS_COUNT
+    _PASS_COUNT += 1
+    print(msg)
+
+
 def run_tests(records: list[dict]) -> None:
     """
     两部分：
@@ -636,7 +652,7 @@ def run_tests(records: list[dict]) -> None:
     if any(v is not None for v in f1["oi_chg"]):
         errors.append(f"FIXTURE day1: 首帧应全 None，得到 {f1['oi_chg']}")
     else:
-        print("  PASS  fixture day1: 首帧 oi_chg 全 None")
+        _ok("  PASS  fixture day1: 首帧 oi_chg 全 None")
 
     want2 = {"FEB26": 1000, "APR26": -1000, "JUN26": 500}
     bad2 = {c: f2["oi_chg"][fx_idx[c]] for c, w in want2.items()
@@ -644,7 +660,7 @@ def run_tests(records: list[dict]) -> None:
     if bad2 or f2["unreliable_chg"]:
         errors.append(f"FIXTURE day2: 差分不符 {bad2}，unreliable={f2['unreliable_chg']}")
     else:
-        print("  PASS  fixture day2: 差分与 CME 值一致，无 unreliable 标记")
+        _ok("  PASS  fixture day2: 差分与 CME 值一致，无 unreliable 标记")
 
     want3 = {"FEB26": 1500, "APR26": -1000, "JUN26": 500}
     bad3 = {c: f3["oi_chg"][fx_idx[c]] for c, w in want3.items()
@@ -655,7 +671,7 @@ def run_tests(records: list[dict]) -> None:
         errors.append(f"FIXTURE day3: unreliable_chg 应为 ['FEB26']，"
                       f"得到 {f3['unreliable_chg']}")
     else:
-        print("  PASS  fixture day3: 修订合约取 diff 并标记 unreliable_chg")
+        _ok("  PASS  fixture day3: 修订合约取 diff 并标记 unreliable_chg")
 
     # ── 1b. 移仓进度 fixture ─────────────────────────────────────────────
     # 构造一次完整的 FEB26 -> APR26 移仓：到期月持仓流出、承接月流入，
@@ -704,13 +720,13 @@ def run_tests(records: list[dict]) -> None:
         errors.append(f"ROLL fixture: 末帧 front_remaining 应 < 0.1（移仓近尾声），"
                       f"得到 {rolls[-1]}")
     else:
-        print(f"  PASS  roll fixture: front_remaining {rolls[0]} -> {rolls[-1]} 单调递减")
+        _ok(f"  PASS  roll fixture: front_remaining {rolls[0]} -> {rolls[-1]} 单调递减")
 
     # front 应在交叉点切换到承接月，而 roll_from 不跟着切 —— 两者确实解耦
     if fronts != ["FEB26", "FEB26", "APR26", "APR26", "APR26"]:
         errors.append(f"ROLL fixture: front 应在 day3 交叉点切到 APR26，得到 {fronts}")
     else:
-        print("  PASS  roll fixture: front 随持仓交叉切换，roll_from 保持不动")
+        _ok("  PASS  roll fixture: front 随持仓交叉切换，roll_from 保持不动")
 
     # 无承接月：roll_to 为 None，但 front_remaining 仍应算得出来 ——
     # 它只依赖到期月自身，不需要承接月。这正是换定义带来的好处。
@@ -725,7 +741,7 @@ def run_tests(records: list[dict]) -> None:
         errors.append(f"ROLL fixture: 无承接月时 front_remaining 应为 1.0（单帧即峰值），"
                       f"得到 {s0['front_remaining']}")
     else:
-        print("  PASS  roll fixture: 无承接月 → roll_to=None 但 front_remaining 仍有值")
+        _ok("  PASS  roll fixture: 无承接月 → roll_to=None 但 front_remaining 仍有值")
 
     # ── 1c. 跨周期趋势鲁棒性 ─────────────────────────────────────────────
     # 窗口保留 730 条（约两年），会跨越多个移仓周期。若主力月判定依赖跨时间的
@@ -769,7 +785,7 @@ def run_tests(records: list[dict]) -> None:
         errors.append("TREND fixture: 主力月判定受持仓量级影响 —— "
                       + "；".join(trend_bad))
     else:
-        print(f"  PASS  trend fixture: {len(TRENDS)} 种趋势场景（涨 20x ~ 跌 1/20）"
+        _ok(f"  PASS  trend fixture: {len(TRENDS)} 种趋势场景（涨 20x ~ 跌 1/20）"
               f"均无失效帧")
 
     # ── 2. 真实数据抽查 ──────────────────────────────────────────────────
@@ -791,7 +807,7 @@ def run_tests(records: list[dict]) -> None:
                 f"FAIL {f0['date']}: 首帧应全 None，得到 {len(non_null)} 个非 None"
             )
         else:
-            print(f"  PASS  {f0['date']}: 首帧 oi_chg 全 None")
+            _ok(f"  PASS  {f0['date']}: 首帧 oi_chg 全 None")
 
     # 抽查 2：2026-07-24 —— CME 未修订，diff 必须与 stored 完全一致
     # 前提是它仍是中段帧：窗口滚动到它成为首帧时无前驱可差分，oi_chg 全 None
@@ -837,7 +853,7 @@ def run_tests(records: list[dict]) -> None:
         elif mismatches:
             errors.append("MISMATCH 2026-07-24:\n" + "\n".join(mismatches))
         else:
-            print(f"  PASS  2026-07-24: 窗口内 {checked} 条 oi_chg 与 CME stored 相符"
+            _ok(f"  PASS  2026-07-24: 窗口内 {checked} 条 oi_chg 与 CME stored 相符"
                   f"（窗口 {len(window24)} 个月份，stored 共 {len(stored)} 条，"
                   f"窗口外 {len(stored) - checked} 条未计算不参与对账）")
 
@@ -858,7 +874,7 @@ def run_tests(records: list[dict]) -> None:
                 f"FAIL 2026-07-27: 修订合约未被标记 unreliable: {missing}"
             )
         else:
-            print("  PASS  2026-07-27: 修订合约已正确标记 unreliable_chg")
+            _ok("  PASS  2026-07-27: 修订合约已正确标记 unreliable_chg")
 
     # ── 2b. KPI 算术 fixture ─────────────────────────────────────────────
     # 冻结数据：AUG26=4000.0 / DEC26=4122.0，间隔 122 天。
@@ -904,7 +920,7 @@ def run_tests(records: list[dict]) -> None:
         errors.append(f"KPI fixture: 年化似被舍入到 2 位（{kf['spread_annualized_pct']!r}）"
                       f"—— 计算层应落全精度")
     else:
-        print(f"  PASS  KPI fixture: total_oi=200000（B2 只含 ever_front）"
+        _ok(f"  PASS  KPI fixture: total_oi=200000（B2 只含 ever_front）"
               f" spread=122.0 gap=122天 "
               f"年化={kf['spread_annualized_pct']!r}（全精度）")
 
@@ -926,7 +942,7 @@ def run_tests(records: list[dict]) -> None:
         errors.append(f"KPI fixture: 无承接月时 total_oi 仍应算，"
                       f"应为 100000（B2 只含 ever_front），得到 {kf2['total_oi']}")
     else:
-        print("  PASS  KPI fixture: 无承接月 → 价差三字段 None，"
+        _ok("  PASS  KPI fixture: 无承接月 → 价差三字段 None，"
               "total_oi=100000 仍有值")
 
     # B2 口径专项：未坐正的末端承接月不得计入 total_oi。
@@ -967,7 +983,7 @@ def run_tests(records: list[dict]) -> None:
     else:
         # FEB27 在 major_months 里（承接月补位）但不在 total_oi 里 ——
         # 这正是两者口径有意不同的证据
-        print("  PASS  B2 fixture: total_oi=270000 只含已坐正主角"
+        _ok("  PASS  B2 fixture: total_oi=270000 只含已坐正主角"
               "（FEB27 在 major_months 却不计入 total_oi）")
 
     # ── 2c. roll_noise 全精度 fixture ────────────────────────────────────
@@ -1013,7 +1029,7 @@ def run_tests(records: list[dict]) -> None:
         errors.append(f"NOISE fixture: roll_noise_ma 似被舍入到 4 位"
                       f"（{nf['roll_noise_ma']!r}）—— 应落全精度")
     else:
-        print(f"  PASS  NOISE fixture: roll_noise={nf['roll_noise']!r}"
+        _ok(f"  PASS  NOISE fixture: roll_noise={nf['roll_noise']!r}"
               f" 全精度（未舍入到 4 位）")
 
     # ── 2b. WINDOW fixture：窗口外的修订合约必须被标记 ────────────────────
@@ -1063,7 +1079,7 @@ def run_tests(records: list[dict]) -> None:
             f"WINDOW fixture: unreliable_chg 应只含 DEC27，得到 {w_unrel!r}"
             f" —— 其余三个合约 stored 与差分一致，不该被标记")
     else:
-        print(f"  PASS  WINDOW fixture: 窗口外修订合约 DEC27 已标记"
+        _ok(f"  PASS  WINDOW fixture: 窗口外修订合约 DEC27 已标记"
               f"（窗口={w_window}，contracts={wres['contracts']}）")
 
     # ── 2c. _round_floats：落盘精度 ──────────────────────────────────────
@@ -1098,7 +1114,7 @@ def run_tests(records: list[dict]) -> None:
     elif _round_floats(rf) != rf:
         errors.append("ROUND fixture: 不幂等 —— 对已 round 的值再 round 应无变化")
     else:
-        print(f"  PASS  ROUND fixture: float→12 位、int/bool/None/str 原样、"
+        _ok(f"  PASS  ROUND fixture: float→12 位、int/bool/None/str 原样、"
               f"嵌套递归、幂等")
 
     # ── 3. 信封契约 ──────────────────────────────────────────────────────
@@ -1151,20 +1167,21 @@ def run_tests(records: list[dict]) -> None:
             if not up or up[0]["source"] != "cme_section62":
                 errors.append(f"ENVELOPE: derived_from 未记录上游 oi.json，得到 {up}")
             else:
-                print(f"  PASS  信封: {len(REQUIRED)} 个字段齐全，"
+                _ok(f"  PASS  信封: {len(REQUIRED)} 个字段齐全，"
                       f"data 与 derive() 逐字段一致，schema_version=0")
 
     if errors:
         print("\nFAILURES:")
         for e in errors:
             print(" ", e)
-        # 末尾打印总条数：只看 FAILURES 段落容易漏掉「有几条」，
-        # 多行 FAIL（如 MISMATCH 一条含多个合约）逐行数会数错。
-        print(f"\n{len(errors)} failed")
+    # 通过数与失败数一起报，且只走一条路径 —— 全绿时也照此格式输出。
+    #
+    # 只报失败数会漏掉「用例静默减少」：真实数据抽查在日期滑出 730 条窗口时
+    # 转 SKIP（见本函数文档），条数从 17 掉到 3 也是 "0 failed" 全绿。
+    # 通过数是唯一能看出这件事的量。
+    print(f"\n{_PASS_COUNT} passed, {len(errors)} failed")
+    if errors:
         sys.exit(1)
-    else:
-        print("\n0 failed")
-        print("All tests passed.\n")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
