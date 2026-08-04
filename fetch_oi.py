@@ -88,6 +88,17 @@ MONTH_RE = re.compile(r'^([A-Z]{3}\d{2})\b')
 # 留够看清 WAF 挑战页到底说了什么，又不至于把整个 PDF 塞进 JSON。
 RAW_BODY_LIMIT = 20000
 
+# 首页文本片段的截取长度。只为观测上游公报的头部元信息（Trade Date 附近，
+# 可能带 Preliminary / Final / Revised 或公报号），不是为了留完整证据 ——
+# 完整 PDF 在失败时由 quarantine_raw 存。500 字节足以覆盖标题区。
+#
+# 为什么正常路径也记：早退分支按 date 判重不比内容，若 CME 重发同一 Trade
+# Date 的修订公报，新数字会被丢弃且无从知晓。仓库 29 次提交里 oi/settle
+# 真实变化 0 条，但那既可能是「CME 从没重发」，也可能是「重发了但被拦掉」——
+# 两者在现有数据下不可区分。只在失败时记片段答不了这个问题，因为被早退拦掉
+# 的那次根本不算失败。攒几周的正常路径片段才能分辨。
+HEADER_SNIPPET_LIMIT = 500
+
 # PDF 魔数。CME 的 WAF 挑战页是 200 + text/html，靠 status 分不出来，
 # 只能看内容首字节 —— 少了这道检查，HTML 会一路走到 pdfplumber.open()
 # 抛未捕获异常，以 exit 1 + traceback 收场：既没有隔离产物，也把上游侧
@@ -213,6 +224,7 @@ def parse(content: bytes) -> dict:
 
     date_str = None
     month_rows: list[dict] = []
+    header_snippet = None      # 首页文本片段，纯观测，不参与任何判据
 
     in_gc = False
     done  = False
@@ -223,6 +235,11 @@ def parse(content: bytes) -> dict:
                 break
             text  = page.extract_text(x_tolerance=3, y_tolerance=3) or ""
             lines = text.splitlines()
+
+            # 首页头部原样留一段。extract_text() 的结果原先用完即弃，
+            # 连「公报带不带版本标记」都没有数据可查。
+            if header_snippet is None and text:
+                header_snippet = text[:HEADER_SNIPPET_LIMIT]
 
             if date_str is None:
                 m = re.search(
@@ -265,6 +282,12 @@ def parse(content: bytes) -> dict:
     entry = {"date": date_str, "months": month_rows}
     if date_unparsed:
         entry["date_unparsed"] = True
+    # 观测字段，**不是业务数据**：main() 会在用 entry 之前 pop 出去，转记进
+    # 信封的 info。留在 entry 里会随 records 落进 data，既改变帧的形状，
+    # 又会进幂等比对（片段每天不同 → 每天都判为"内容变了"而写盘）。
+    # run_tests 有一条断言守着「data 各帧不含此键」。
+    if header_snippet:
+        entry["header_snippet"] = header_snippet
     return entry
 
 
@@ -490,7 +513,8 @@ def quarantine_raw(*, meta: dict, content: bytes | None,
 
 
 def build_envelope(records: list[dict] | None,
-                   warnings: list[str] | None = None) -> dict:
+                   warnings: list[str] | None = None,
+                   header_snippet: str | None = None) -> dict:
     """
     包信封。records 为 None → data:null + coverage:null。
 
@@ -500,7 +524,14 @@ def build_envelope(records: list[dict] | None,
     coverage 必须与 data 同步失效：data 为 null 时留着 coverage_of([]) 给的
     {first:None,last:None,count:0} 等于宣称「空但有效」，而这里要表达的是
     「无效」。显式覆盖成 None。
+
+    header_snippet 是上游公报首页文本片段，进 info（信封元数据），不进 data ——
+    它是「这次抓到的 PDF 长什么样」的观测，不是业务数据，也因此不参与幂等比对。
     """
+    info = [f"CME Daily Bulletin Section 62 (Metals Futures Products): {PDF_URL}"]
+    if header_snippet:
+        info.append(f"Section 62 首页文本片段（前 {HEADER_SNIPPET_LIMIT} 字节，"
+                    f"纯观测）：{header_snippet}")
     payload = envelope(
         source="cme_section62",
         freq="daily",
@@ -509,16 +540,19 @@ def build_envelope(records: list[dict] | None,
         date_field="date",
         derived_from=[],
         warnings=warnings or [],
-        info=[f"CME Daily Bulletin Section 62 (Metals Futures Products): {PDF_URL}"],
+        info=info,
     )
     if records is None:
         payload["coverage"] = None
     return payload
 
 
-def write_null(failures: list[str]) -> None:
+def write_null(failures: list[str],
+               header_snippet: str | None = None) -> None:
     """d) 校验不过：落 data:null + coverage:null，原因进 warnings。"""
-    atomic_write_json(OUT_PATH, build_envelope(None, warnings=failures),
+    atomic_write_json(OUT_PATH,
+                      build_envelope(None, warnings=failures,
+                                     header_snippet=header_snippet),
                       compact=False)
 
 
@@ -581,6 +615,10 @@ def main():
         print(reason, file=sys.stderr)
         sys.exit(1)
 
+    # 观测片段在这里就摘出去：entry 之后会进 records → data，留着会改变帧的
+    # 形状并污染幂等比对。pop 而非读取，保证不会有第二条路径漏带它进 data。
+    header_snippet = entry.pop("header_snippet", None)
+
     months = entry["months"]
     total_oi = sum(r["oi"] for r in months)
     front    = max(months, key=lambda r: r["oi"])
@@ -600,7 +638,7 @@ def main():
         path = quarantine(entry, content, failures)
         # d)「拿到了但不可用」→ 落 data:null。与 a/b/c 的「没拿到东西」不同，
         # 那三条仍然完全不动 oi.json（详见模块 docstring）。
-        write_null(failures)
+        write_null(failures, header_snippet=header_snippet)
         print("  校验失败，已隔离，data/oi.json 落 data:null + coverage:null：")
         for f in failures:
             print(f"    - {f}")
@@ -653,7 +691,9 @@ def main():
         return
 
     # 原子写：崩在中途只留临时文件，oi.json 保持完整旧版
-    atomic_write_json(OUT_PATH, build_envelope(records), compact=False)
+    atomic_write_json(OUT_PATH,
+                      build_envelope(records, header_snippet=header_snippet),
+                      compact=False)
     print(f"  已写入 {OUT_PATH}，共 {len(records)} 条记录（信封格式）")
 
 
@@ -929,6 +969,41 @@ def run_tests():
            _env["coverage"]["count"]) == ("2026-07-30", "2026-07-31", 2),
           _env["coverage"])
     check("unwrap 取回原帧数组", unwrap(_env) == _recs)
+
+    # ── 首页文本片段：只进 info，不进 data ────────────────────────────────
+    # 这几条守的是「观测不污染业务数据」。片段每天不同，一旦漏进 data 就会
+    # 让幂等判断每天都判为「内容变了」，天天写盘、天天刷 generated_at。
+    print("\n[首页文本片段]")
+    _snip = "COMEX Daily Bulletin\nTue, Aug 04, 2026\nPRELIMINARY"
+    _envs = build_envelope(_recs, header_snippet=_snip)
+    _assert_env(_envs)
+    check("片段进 info", any(_snip in s for s in _envs["info"]), _envs["info"])
+    check("info 标明是纯观测",
+          any("纯观测" in s for s in _envs["info"]), _envs["info"])
+    check("片段不进 data（各帧键集不含 header_snippet）",
+          all("header_snippet" not in r for r in _envs["data"]),
+          [sorted(r) for r in _envs["data"]])
+    check("data 与不带片段时逐字段相同（不污染业务数据）",
+          _envs["data"] == build_envelope(_recs)["data"])
+    # 幂等口径：比的是 unwrap 出来的 data，info 不参与 —— 片段变了也不该写盘
+    check("片段变化不影响幂等比对（unwrap 结果相同）",
+          unwrap(build_envelope(_recs, header_snippet="AAA"))
+          == unwrap(build_envelope(_recs, header_snippet="BBB")))
+    check("不给片段时 info 只有 PDF URL 一条",
+          len(build_envelope(_recs)["info"]) == 1,
+          build_envelope(_recs)["info"])
+    check("片段截断到 HEADER_SNIPPET_LIMIT",
+          HEADER_SNIPPET_LIMIT == 500, HEADER_SNIPPET_LIMIT)
+    # d) 路径也要带片段：校验不过时同样想知道上游给的是什么版本
+    _envn2 = build_envelope(None, warnings=["x"], header_snippet=_snip)
+    check("data:null 路径也记片段",
+          any(_snip in s for s in _envn2["info"]), _envn2["info"])
+
+    # parse() 把片段挂在 entry 上，main() 必须 pop 掉再用 —— 断言这条契约
+    # 在源码里成立，而不是靠人记得。
+    _src = open(__file__, encoding="utf-8").read()
+    check("main() 用 pop 摘片段（不是读取后遗留在 entry）",
+          'entry.pop("header_snippet"' in _src)
 
     # data:null 路径：coverage 必须同步失效，否则宣称「覆盖 N 天」而 data 里
     # 一条都没有。空但有效（count:0）与无效（null）是两种语义。
