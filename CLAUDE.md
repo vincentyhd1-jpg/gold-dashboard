@@ -12,7 +12,7 @@ fetch_stocks.py   CME 库存             → data/stocks.json
 fetch_oi.py       CME Section 62 PDF   → data/oi.json        （含 4 项写入前校验）
 derive_term_structure.py                → data/derived/term-structure-series.json
 index.html        期限结构回放 + 各图表
-term-3d.html      Plotly 3D 曲面页，**直接读 data/oi.json**（不经派生层）
+term-3d.html      Plotly 3D 曲面页，**已从导航移除**（无运行时入口，见下方专节）
 trading_calendar.py  交易日历，采集层与派生层共用一份假日表
 data_envelope.py  统一落盘信封 + write_json 单点落盘
 tools/*.mjs       Playwright 验证脚本
@@ -106,17 +106,21 @@ tools/*.mjs       Playwright 验证脚本
   `verify-contract-contango` 另有一条专门的反舍入断言：落盘值若恰等于自身 2 位
   舍入、而独立复算的真值不是，即判定精度在派生层就丢了。
 
-### 改 oi.json 结构时必须同步检查 term-3d.html
+### term-3d.html 已从导航移除，不再是生产读取点
 
-`term-3d.html` 绕过派生层直接 `fetch('data/oi.json')`，且**没有任何 verify
-脚本覆盖它** —— 5 个 Playwright 脚本全都只测 `index.html`。
+`index.html` 里那个「3D 曲面 ↗」链接已删除，`term-3d.html` 文件保留但无任何
+运行时入口引用它（全仓仅文档与注释提及）。它不再是 `oi.json` 的生产读取点，
+改 `oi.json` 结构时不必再顾及这一页。
 
-它依赖的字段：`r.date`、`r.months[]`、`m.month`、`m.settle`、`m.oi`
-（见 term-3d.html 的 `windowMonths()` 与 X/Y/Z 轴构造）。
+**若要重新启用，先把复刻的计算下沉到 derive。** 该页 `:122-146` 有三段
+`windowMonths()` / `monthIndex()` / `sortedUnionLabels()`，是 derive 里
+`window_months()` / `month_key()` / `contracts` 并集口径的 JS 复刻。实测两边
+当前输出一致（各 15 列，集合与顺序均相同），但那是巧合而非契约 —— 两份实现
+各自演化，口径一改就会分叉，且该页**无任何 verify 覆盖**（Playwright 脚本
+全都只测 `index.html`），分叉不会有任何测试变红。
 
-改动 `oi.json` 的结构（换字段名、改嵌套、加落盘模板）时若只跑现有 verify，
-全绿也不代表这一页没坏 —— 它会静默变成空白或错图，而 CI 与本地测试都不会
-报错。改完手动打开 `term-3d.html` 看一眼，或给它补一个 verify 脚本。
+重新启用的前置条件：让它读派生产物的 `contracts` / `frames`，而不是自己
+从 `oi.json` 重算一遍窗口与并集。
 
 本地 Python 被 Application Control 拦截（`python`/`python3` 是 Store 占位符）。
 用 WSL 跑：`wsl -d Ubuntu-22.04 -- bash -c "cd /mnt/d/VScode/test/gold-dashboard && python3 ..."`
