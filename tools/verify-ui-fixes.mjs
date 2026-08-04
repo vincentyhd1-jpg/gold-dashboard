@@ -154,6 +154,29 @@ check('金价 dataset 存在', !gold.dsMissing, gold);
 check(`金价 dataset 非 null 点数 >= ${GOLD_MIN_POINTS}`,
       (gold.nonNull ?? 0) >= GOLD_MIN_POINTS, gold);
 
+// ── 6. 期限结构历史图 dataset 数 == oi.json 帧数 ───────────────────────
+// 守 index.html:1269 的 data/oi.json 读取点。失败性质同金价那条：**静默退化**。
+// 读到信封形状（非数组）时，:1103 的 Array.isArray(oiData) 退化成 []，
+// :1106 的 `if (!records.length) return` 直接返回 —— 图整张消失，
+// 而 pageerror / console error 都是空的，六个 verify 无一条会红。
+//
+// 判据用相对值（== 帧数）而非固定下界：帧数随时间增长，固定 N 会逐渐
+// 衰减成恒真。金价那条的 N=40 之所以成立，是靠采集层 MAX_MISSING_RATIO
+// 反推出的硬下界，oi 这边没有等价闸门。严格相等还能顺带盯住「少画了几帧」
+// 这类部分失败 —— 那种情况下固定下界同样看不出来。
+console.log('\n[6] 期限结构历史图 dataset 数');
+const oiRaw = await fetch('http://localhost:3001/data/oi.json').then(r => r.json());
+const expectedFrames = Array.isArray(oiRaw) ? oiRaw.length : (oiRaw?.data?.length ?? null);
+const hist = await page.evaluate(() => {
+  const c = Chart.getChart('oiHistChart');
+  if (!c) return { chartMissing: true };
+  return { datasets: c.data.datasets.length, labels: c.data.labels.length };
+});
+console.log(`  oi.json 帧数=${expectedFrames}  ${JSON.stringify(hist)}`);
+check('oiHistChart 已建起', !hist.chartMissing, hist);
+check(`历史图 dataset 数 == oi.json 帧数 (${expectedFrames})`,
+      hist.datasets === expectedFrames, { got: hist.datasets, want: expectedFrames });
+
 // 截图
 await page.evaluate(() => {
   const s = document.getElementById('oiPlaySlider');
