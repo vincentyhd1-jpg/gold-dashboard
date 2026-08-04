@@ -3,13 +3,28 @@
 从 CME Section 62 PDF 提取 COMEX GC 各交割月明细：月份、结算价、持仓，
 追加到 data/oi.json（保留近 730 条）。
 
-oi.json 格式（每天一条）：
-[{"date":"2026-06-26","months":[{"month":"AUG26","settle":4096.30,"oi":272518},...]},...]
+oi.json 为信封格式，业务数据在 data 键下（每天一条）：
+{"schema_version":0,"source":"cme_section62",...,
+ "data":[{"date":"2026-06-26","months":[{"month":"AUG26","settle":4096.30,"oi":272518},...]},...]}
 
-写入前有四条校验（见 validate()），任一命中则：
-  - 坏数据 + 原始 PDF 存入 data/quarantine/
-  - 不覆盖 data/oi.json（保留上一份可用数据）
-  - exit 1
+落盘走 io_utils 骨架：sweep_stale_tmp → 校验 → 幂等比对 → atomic_write_json。
+
+退出码与 oi.json 的关系分两类，这条区分是有意的：
+
+  a) 下载失败       → exit 2，**oi.json 完全不动**
+  b) 响应非 PDF     → exit 2，**oi.json 完全不动**
+  c) PDF 解析失败   → exit 1，**oi.json 完全不动**
+  d) 四条校验不过   → exit 1，落 data:null + coverage:null + warnings 记原因
+
+a/b/c 是「没拿到东西」—— 手上没有任何本次的观测，写 data:null 等于用「这次没
+数据」覆盖掉上一份好数据，而事实是我们根本没看到今天的盘。保持不动才对。
+
+d 是「拿到了但不可用」—— 确实看到了今天的 PDF，只是内容不可信。此时若沿用旧
+行为（拒绝落盘、停在上一份好数据），下游无从区分「今天持仓确实没变」与「今天
+采集坏了」，页面照常画出完整的期限结构，陈旧多久都看不出来。落显式 data:null
+之后，读取端拿到的是「这次没有数据」这个事实本身。
+
+两类都仍然存隔离区产物，quarantine 行为不变。
 
 拦截点放在采集层而非派生层：坏数据一旦进 oi.json，既会显示在页面上，也会成为
 下一交易日差分（oi[t] - oi[t-1]）的输入，把错误传播到后续所有帧。
@@ -26,6 +41,8 @@ from trading_calendar import (
     prev_trading_day, latest_trading_day_on_or_before,
     trading_days_between,
 )
+from data_envelope import envelope, unwrap
+from io_utils import atomic_write_json, read_json_or, sweep_stale_tmp
 
 PDF_URL  = "https://www.cmegroup.com/daily_bulletin/current/Section62_Metals_Futures_Products.pdf"
 OUT_PATH = os.path.join(os.path.dirname(__file__), "data", "oi.json")
@@ -252,10 +269,16 @@ def parse(content: bytes) -> dict:
 
 
 def load_existing() -> list[dict]:
-    if os.path.exists(OUT_PATH):
-        with open(OUT_PATH, encoding="utf-8") as f:
-            return json.load(f)
-    return []
+    """
+    读上一份帧数组。裸格式与信封格式都能读，data:null 与文件不存在同归 []。
+
+    这是**追加的基底**，不只是幂等比对的对象：读不出来就会把 730 天历史
+    悄悄截成今天一条 —— 且写盘照常成功、退出码为 0，没有任何一层会红。
+    """
+    raw = read_json_or(OUT_PATH, None)
+    if raw is None:
+        return []
+    return unwrap(raw) or []
 
 
 # ── 采集层数据校验 ────────────────────────────────────────────────────────────
@@ -466,10 +489,48 @@ def quarantine_raw(*, meta: dict, content: bytes | None,
     return json_path
 
 
+def build_envelope(records: list[dict] | None,
+                   warnings: list[str] | None = None) -> dict:
+    """
+    包信封。records 为 None → data:null + coverage:null。
+
+    derived_from=[]：oi 从 CME PDF 直抓，仓库内没有上游文件。空列表是「确实
+    没有仓库内上游」，与 gold 的 [upstream_ref(cot)] 是两种事实，不是省略。
+
+    coverage 必须与 data 同步失效：data 为 null 时留着 coverage_of([]) 给的
+    {first:None,last:None,count:0} 等于宣称「空但有效」，而这里要表达的是
+    「无效」。显式覆盖成 None。
+    """
+    payload = envelope(
+        source="cme_section62",
+        freq="daily",
+        data=records,
+        dates=[r["date"] for r in (records or [])],
+        date_field="date",
+        derived_from=[],
+        warnings=warnings or [],
+        info=[f"CME Daily Bulletin Section 62 (Metals Futures Products): {PDF_URL}"],
+    )
+    if records is None:
+        payload["coverage"] = None
+    return payload
+
+
+def write_null(failures: list[str]) -> None:
+    """d) 校验不过：落 data:null + coverage:null，原因进 warnings。"""
+    atomic_write_json(OUT_PATH, build_envelope(None, warnings=failures),
+                      compact=False)
+
+
 def main():
     if "--test" in sys.argv:
         run_tests()
         return
+
+    # 清理上次崩溃留下的临时文件（只清 oi.json 自己的，见 basename 隔离）
+    swept = sweep_stale_tmp(OUT_PATH)
+    if swept:
+        print(f"  清理上次残留的临时文件 {len(swept)} 个")
 
     print("正在下载 CME Section 62 PDF...")
     content, meta = download()
@@ -535,14 +596,18 @@ def main():
     failures = validate(entry, records)
     if failures:
         # 文件名以 PDF 自身日期为键：同一份坏文件反复抓到时覆盖而非堆积
+        # 文件名以 PDF 自身日期为键：同一份坏文件反复抓到时覆盖而非堆积
         path = quarantine(entry, content, failures)
-        print("  校验失败，已隔离，data/oi.json 保持上一份可用数据：")
+        # d)「拿到了但不可用」→ 落 data:null。与 a/b/c 的「没拿到东西」不同，
+        # 那三条仍然完全不动 oi.json（详见模块 docstring）。
+        write_null(failures)
+        print("  校验失败，已隔离，data/oi.json 落 data:null + coverage:null：")
         for f in failures:
             print(f"    - {f}")
         print(f"  隔离区：{path}")
         # GitHub Actions 注释：红灯时无需翻日志即可看清是哪一层挂了
         print(f"::error title=OI 采集校验失败::"
-              f"{entry['date']} 数据未通过校验，已隔离；oi.json 未更新。"
+              f"{entry['date']} 数据未通过校验，已隔离；oi.json 已落 data:null。"
               f"原因：{'；'.join(failures)}")
         sys.exit(1)
     print("  4 项校验通过（Trade Date / 重复比对 / 合约数量 / 主力月持仓）")
@@ -552,6 +617,11 @@ def main():
         idx = existing[entry["date"]]
         existing_months = records[idx].get("months") or []
         if existing_months:
+            # 附注（本轮不改）：这条按**日期**早退，不比内容。CME 重发同一
+            # Trade Date 的修订公报时，新数字会在这里被静默丢弃 —— 实测预置
+            # 最新帧 oi=7,908、抓到真实值 oi=2,908，落盘仍是 7,908，exit 0。
+            # 校验 b) 的重复比对管的是「与**前一交易日**相同」，不覆盖这条。
+            # 要改成按内容判断属于行为变更，需独立一轮 + 先补断言。
             print(f"  {entry['date']} 已存在，跳过写入")
             return
         records[idx] = entry
@@ -561,10 +631,30 @@ def main():
 
     records = sorted(records, key=lambda r: r["date"])[-730:]
 
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
-    print(f"  已写入 {OUT_PATH}，共 {len(records)} 条记录")
+    # ── 幂等：业务数据与磁盘上完全相同则不写盘 ─────────────────────────────
+    #
+    # 只比 data 数组，信封元数据全部排除：generated_at 自比自永远不等；
+    # coverage/derived_from 由 data 派生，比它等于重复比 data；warnings/info
+    # 是本次运行的旁注。
+    #
+    # 比**整个 records**（全量 730 条）而非最新一帧，且 dict/list 的 == 是
+    # 结构化递归比较，逐字段严格相等，无容差。
+    #
+    # 注意实际到达这里的只有「records 相对磁盘确有增减」的情形：上面那条
+    # date 早退分支（已存在且有明细 → return）先把同日重复运行拦掉了，而
+    # 走到这里的两条路（append 新日期 / 补一条无明细记录）都必然改变 records。
+    # 所以本判断当前是一道**冗余闸**，不是唯一的幂等来源 —— 留着是因为它
+    # 才是「内容没变就不写盘」这件事的正确口径：日期相同不等于内容相同，
+    # 而 date 早退分支恰恰把同日修订也一并跳过了（见下方附注）。
+    if load_existing() == records:
+        # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
+        print(f"  {entry['date']} 业务数据与磁盘上逐字段相同，跳过写入"
+              f"（generated_at 不刷新）")
+        return
+
+    # 原子写：崩在中途只留临时文件，oi.json 保持完整旧版
+    atomic_write_json(OUT_PATH, build_envelope(records), compact=False)
+    print(f"  已写入 {OUT_PATH}，共 {len(records)} 条记录（信封格式）")
 
 
 # ── 校验逻辑单元测试 ──────────────────────────────────────────────────────────
@@ -815,6 +905,79 @@ def run_tests():
     _sig = _ins.signature(download)
     check("download() 返回类型标注为 tuple",
           "tuple" in str(_sig.return_annotation), _sig.return_annotation)
+
+    # ── 信封形状 ──────────────────────────────────────────────────────────
+    print("\n[信封形状]")
+    from data_envelope import assert_envelope as _assert_env
+
+    _recs = [{"date": "2026-07-30", "months": [{"month": "DEC26",
+                                                "settle": 4100.0, "oi": 250000}]},
+             {"date": "2026-07-31", "months": [{"month": "DEC26",
+                                                "settle": 4110.0, "oi": 251000}]}]
+    _env = build_envelope(_recs)
+    _assert_env(_env)
+    check("source=cme_section62", _env["source"] == "cme_section62", _env["source"])
+    check("freq=daily", _env["freq"] == "daily", _env["freq"])
+    # derived_from=[] 是「确实没有仓库内上游」这一事实，不是忘了填
+    check("derived_from 为空列表（PDF 直抓，无仓库内上游）",
+          _env["derived_from"] == [], _env["derived_from"])
+    check("info 记 PDF URL", any(PDF_URL in s for s in _env["info"]), _env["info"])
+    check("info 记 Section 62",
+          any("Section 62" in s for s in _env["info"]), _env["info"])
+    check("coverage 首末为帧日期范围",
+          (_env["coverage"]["first"], _env["coverage"]["last"],
+           _env["coverage"]["count"]) == ("2026-07-30", "2026-07-31", 2),
+          _env["coverage"])
+    check("unwrap 取回原帧数组", unwrap(_env) == _recs)
+
+    # data:null 路径：coverage 必须同步失效，否则宣称「覆盖 N 天」而 data 里
+    # 一条都没有。空但有效（count:0）与无效（null）是两种语义。
+    print("\n[data:null 落盘形状]")
+    _null = build_envelope(None, warnings=["Trade Date 不在可接受区间"])
+    _assert_env(_null)
+    check("data 为 None", _null["data"] is None, _null["data"])
+    check("coverage 为 None（不是 count:0）", _null["coverage"] is None,
+          _null["coverage"])
+    check("warnings 非空且记录原因", bool(_null["warnings"]), _null["warnings"])
+    check("unwrap(data:null) 得 None（读取端可辨）", unwrap(_null) is None)
+
+    # ── 幂等比对口径 ──────────────────────────────────────────────────────
+    # 只比 data，不含信封元数据。比全量而非最新帧：CME 重发修订公报时，老帧
+    # 变了而最新帧没动，只比最新帧会把真实修订静默跳过。
+    print("\n[幂等比对口径]")
+    check("同一份 data → 判定相同", unwrap(build_envelope(_recs)) == _recs)
+
+    _touched = json.loads(json.dumps(_recs))
+    _touched[0]["months"][0]["oi"] += 1          # 改**老帧**，最新帧不动
+    check("仅老帧 oi 改 1 手 → 判定不同（修订不被跳过）",
+          unwrap(build_envelope(_touched)) != _recs)
+
+    _resettled = json.loads(json.dumps(_recs))
+    _resettled[0]["months"][0]["settle"] += 0.01  # 无容差：0.01 也算不同
+    check("仅老帧 settle 改 0.01 → 判定不同（无容差）",
+          unwrap(build_envelope(_resettled)) != _recs)
+
+    # load_existing 是**追加的基底**，读不出来会把 730 天历史截成今天一条，
+    # 且写盘照常成功、exit 0 —— 没有任何一层会红。
+    print("\n[load_existing 容双形状]")
+    _real_out = OUT_PATH
+    _tmpd = _tf.mkdtemp()
+    try:
+        globals()["OUT_PATH"] = os.path.join(_tmpd, "oi.json")
+        with open(OUT_PATH, "w", encoding="utf-8") as _f:
+            json.dump(_recs, _f)
+        check("读裸数组", load_existing() == _recs)
+        with open(OUT_PATH, "w", encoding="utf-8") as _f:
+            json.dump(build_envelope(_recs), _f)
+        check("读信封", load_existing() == _recs)
+        with open(OUT_PATH, "w", encoding="utf-8") as _f:
+            json.dump(build_envelope(None, warnings=["x"]), _f)
+        check("读 data:null → []（与文件不存在同归）", load_existing() == [])
+        os.remove(OUT_PATH)
+        check("文件不存在 → []", load_existing() == [])
+    finally:
+        globals()["OUT_PATH"] = _real_out
+        _sh.rmtree(_tmpd, ignore_errors=True)
 
     print(f"\n{passed} passed, {failed} failed")
     if failed:
