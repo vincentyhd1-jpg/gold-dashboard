@@ -1266,7 +1266,15 @@ Promise.all([
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(p => p?.data ?? p)
     .catch(() => []),
-  fetch('data/oi.json?_=' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => []),
+  // oi.json 过渡期兼容两种形状。判据是「有没有 data 字段」，不是「data 真不真」——
+  // 写成 p?.data ?? p 会在写入端落 data:null 时把整个信封 dict 当业务数据交出去，
+  // 于是 :1103 的 Array.isArray 又退化成 []，回到静默消失那条老路。
+  // 失败性质是静默退化（图整张消失、pageerror 为空），由 verify-ui-fixes 的
+  // 「历史图 dataset 数 == oi.json 帧数」守。
+  fetch('data/oi.json?_=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(p => (p && typeof p === 'object' && 'data' in p) ? p.data : p)
+    .catch(() => []),
   fetch('data/derived/term-structure-series.json?_=' + Date.now())
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => null),
 ])

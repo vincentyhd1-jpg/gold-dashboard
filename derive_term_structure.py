@@ -1309,8 +1309,12 @@ def check_upstream_nonempty(records) -> str | None:
 def main():
     run_test_mode = "--test" in sys.argv
 
+    # 经 unwrap 读：oi.json 信封化前后都取到同一份帧数组。
+    # 直读 json.load() 的返回值会在写入端信封化那天崩在这里 —— 且症状是
+    # check_upstream_nonempty 命中「a) 顶层不是 list」→ exit 1 保留上一份派生，
+    # 看起来像上游没数据，而实际上数据好着，只是形状变了。
     with open(IN_PATH, encoding="utf-8") as f:
-        records = json.load(f)
+        records = unwrap(json.load(f))
     print(f"Loaded {len(records)} records from {IN_PATH}")
 
     if run_test_mode:
