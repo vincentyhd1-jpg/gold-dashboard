@@ -23,8 +23,8 @@ import json, os, sys, re
 from datetime import date
 
 from trading_calendar import trading_days_between
-from data_envelope import envelope, upstream_ref
-from io_utils import atomic_write_json, sweep_stale_tmp
+from data_envelope import envelope, upstream_ref, unwrap
+from io_utils import atomic_write_json, read_json_or, sweep_stale_tmp
 
 IN_PATH  = os.path.join(os.path.dirname(__file__), "data", "oi.json")
 OUT_DIR  = os.path.join(os.path.dirname(__file__), "data", "derived")
@@ -1249,15 +1249,36 @@ def main():
     # _round_floats 只包在 data 上，且在此处（写盘前最后一刻）才调用 ——
     # derive() 的返回值仍是全精度，roll_noise_ma 的 3 帧滚动用的是未 round
     # 的 roll_noise，算完才在这里统一 round。
+    data = _round_floats({
+        "dates":     result["dates"],
+        "contracts": result["contracts"],
+        "frames":    result["frames"],
+        "scale":     result["scale"],
+    })
+
+    # ── 幂等跳过：业务数据逐字段相同则不写盘 ────────────────────────────
+    #
+    # 只比 data，不含任何信封元数据 —— generated_at 每次都不同，带进来比
+    # 永不相等，幂等等于没做。
+    #
+    # 可以逐字段相等比较、不需要容差：落盘前已过 _round_floats(12 位)，
+    # 跨平台 1 ULP 的差异在第 13 位以后，round 之后消失。实测依据 ——
+    # a31cdcb（round12）之后连续三次 data-bot 跑动 44ca17e / bed4445 /
+    # 247bcb6 的 roll_noise_ma 翻转帧数均为 0；247bcb6 里 25 帧业务数据
+    # 一字未变，整文件唯一变动的叶子是顶层 generated_at。
+    #
+    # 引容差是禁止的：CFTC/CME 的历史修订可能只差几个单位，容差会把真实的
+    # 微小变化也判成没变。
+    prev = unwrap(read_json_or(OUT_PATH, None))
+    if prev == data:
+        print(f"业务数据与上一份逐字段相同，跳过写入"
+              f"（generated_at 不刷新，git 无 diff）")
+        return
+
     payload = envelope(
         source="cme_section62_term_structure",
         freq="daily",
-        data=_round_floats({
-            "dates":     result["dates"],
-            "contracts": result["contracts"],
-            "frames":    result["frames"],
-            "scale":     result["scale"],
-        }),
+        data=data,
         dates=result["dates"],
         derived_from=[upstream_ref(IN_PATH, "cme_section62")],
         warnings=result["warnings"],
