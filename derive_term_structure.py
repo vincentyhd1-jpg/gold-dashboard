@@ -1170,6 +1170,68 @@ def run_tests(records: list[dict]) -> None:
                 _ok(f"  PASS  信封: {len(REQUIRED)} 个字段齐全，"
                       f"data 与 derive() 逐字段一致，schema_version=0")
 
+    # ── 4. 上游非空闸门 ──────────────────────────────────────────────────
+    #
+    # derive() 对空输入是宽容的（:377-378 的 `if records else set()` 兜住空
+    # 列表不崩），空上游会算出 frames=0 / contracts=0 的空派生并照常落盘，
+    # 把好产物覆盖掉且全绿无声。这五条守着那道闸。
+    #
+    # 前四条测「该拒时拒」，第五条测「不误伤」—— 只有前四条的话，把闸门写成
+    # 无条件 return 也能全绿。
+    GATE_CASES = [
+        ("空数组 []",              [],                                    "b)"),
+        ("空对象 {}",              {},                                    "a)"),
+        ("非 list（字符串）",       "oops",                                "a)"),
+        ("单帧但 months 为空",      [{"date": "2026-07-31", "months": []}], "c)"),
+        ("多帧 months 全为空",      [{"date": "2026-07-30", "months": []},
+                                    {"date": "2026-07-31", "months": []}], "c)"),
+    ]
+    gate_bad = []
+    for label, payload, want_prefix in GATE_CASES:
+        got = check_upstream_nonempty(payload)
+        if got is None:
+            gate_bad.append(f"{label}: 应被拒绝，实际放行")
+        elif not got.startswith(want_prefix):
+            gate_bad.append(f"{label}: 应命中判据 {want_prefix}，实际 {got!r}")
+    if gate_bad:
+        errors.append("GATE: 上游非空闸门漏放 —— " + "；".join(gate_bad))
+    else:
+        _ok(f"  PASS  上游非空闸门: {len(GATE_CASES)} 种空上游全部拒绝"
+            f"（判据 a/b/c 分别命中）")
+
+    # 不误伤：真实 records 必须放行。records 为空时（oi.json 本身空）跳过 ——
+    # 那种情况下这条断言无数据可测，报 SKIP 而非假绿。
+    if not records:
+        print("  SKIP  上游非空闸门: oi.json 为空，无法测「不误伤」")
+    else:
+        gate_real = check_upstream_nonempty(records)
+        if gate_real is not None:
+            errors.append(f"GATE: 闸门误伤真实数据（{len(records)} 帧）—— "
+                          f"命中 {gate_real!r}")
+        else:
+            _ok(f"  PASS  上游非空闸门: {len(records)} 帧真实数据放行（不误伤）")
+
+    # 边界：只要有一帧有 months 就该放行 —— 判据 c) 是「全部为空」，
+    # 不是「任一为空」。写成 any() 会把「某天数据缺失」误判成上游整体为空。
+    partial = [{"date": "2026-07-30", "months": []},
+               {"date": "2026-07-31", "months": [
+                   {"month": "AUG26", "settle": 4000.0, "oi": 100}]}]
+    if check_upstream_nonempty(partial) is not None:
+        errors.append("GATE: 部分帧有 months 时被误拒 —— 判据 c) 应为"
+                      " all() 而非 any()")
+    else:
+        _ok("  PASS  上游非空闸门: 部分帧空、至少一帧有合约 → 放行")
+
+    # 闸门自身可证伪：把判据换成无条件放行，上面五条必须变红。
+    # 这里不改代码，只断言「五条用例确实各有判据命中」，即闸门不是空壳。
+    prefixes = {check_upstream_nonempty(p)[:2]
+                for _, p, _ in GATE_CASES}
+    if prefixes != {"a)", "b)", "c)"}:
+        errors.append(f"GATE: 三条判据未全部被覆盖，实际命中 {sorted(prefixes)}"
+                      f" —— 有判据从未被任何用例触发，等于没测")
+    else:
+        _ok("  PASS  上游非空闸门: 三条判据 a/b/c 均被用例覆盖")
+
     if errors:
         print("\nFAILURES:")
         for e in errors:
@@ -1218,6 +1280,32 @@ def _round_floats(o):
     return o
 
 
+def check_upstream_nonempty(records) -> str | None:
+    """
+    上游非空闸门。返回命中的判据描述；None 表示通过。
+
+    为什么需要这道闸：derive() 对空输入是「宽容」的 —— :377-378 的
+    `if records else set()` 兜住空列表不崩，于是空上游会算出 frames=0 /
+    contracts=0 的空派生，照常 exit 0 落盘，把好的产物覆盖掉且全绿无声。
+    派生数据本可重算，但重算的前提是上游还在；上游空了还去覆盖产物，
+    等于把「这次没读到数据」变成「历史数据不存在」。
+
+    exit 1 而非 exit 2：oi.json 文件存在却内容为空，不是「上游未更新」
+    （那由 fetch_oi 判定，它拿不到 PDF 时 exit 0 且不动 oi.json），
+    而是文件被写坏或被清空 —— 需人工介入。
+    """
+    if not isinstance(records, list):
+        return (f"a) 顶层不是 list（得到 {type(records).__name__}）"
+                f" —— oi.json 应为帧数组")
+    if len(records) == 0:
+        return "b) records 长度为 0 —— 无任何帧"
+    if all(not (r.get("months") if isinstance(r, dict) else None)
+           for r in records):
+        return (f"c) 全部 {len(records)} 帧的 months 均为空"
+                f" —— 无任何合约行")
+    return None
+
+
 def main():
     run_test_mode = "--test" in sys.argv
 
@@ -1228,6 +1316,16 @@ def main():
     if run_test_mode:
         run_tests(records)
         return
+
+    # 上游非空闸门：拒绝用空产物覆盖好数据。必须在 derive() 之前 ——
+    # derive() 对空输入不抛错，放过去就会落盘。
+    empty_reason = check_upstream_nonempty(records)
+    if empty_reason is not None:
+        print(f"上游 oi 无数据，保留上一份派生：{empty_reason}", file=sys.stderr)
+        print(f"::error title=派生层上游为空::"
+              f"oi.json 无可用数据，term-structure-series.json 未更新。"
+              f"命中判据：{empty_reason}", file=sys.stderr)
+        sys.exit(1)
 
     # 清理上次崩溃留下的临时文件（只清本文件自己的，见 basename 隔离）
     swept = sweep_stale_tmp(OUT_PATH)
