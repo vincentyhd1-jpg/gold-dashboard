@@ -129,14 +129,18 @@ jobs:
             fail "校验器自检" "fetch_oi.py --test 或 derive_term_structure.py --test 失败 —— 校验逻辑本身有问题，本次采集的校验结果不可信"
           [ "${{ steps.cot.outcome }}"    = "failure" ] && \
             fail "采集层：COT" "fetch_cot.py 失败或未通过 5 项校验 —— 坏数据已隔离到 data/quarantine/，cot.json 保持上一份。详见该步骤日志"
-          # 金价按 exit code 三态分开处理（与库存同形）：
-          #   1 = 5 项校验失败，坏数据已隔离，需人工介入 → 红
-          #   2 = 两源皆不可达／cot.json 无 weekly，重跑可能自愈 → 只告警
+          # 金价按 exit code 两态处理。**gold 不产生 exit 2**：
+          #   1 = 需人工介入（5 项校验失败／两源皆不可达／cot.json 无 weekly）。
+          #       这三种都已落 data:null + coverage:null，三段证据在
+          #       data/quarantine/gold-*.json（raw / parse / align）
+          #   0 = 正常落盘，含幂等跳过（data 逐条相同 → 不写盘、不刷 generated_at）
+          # 原先有一条 2) 只告警的分支，随 fetch_gold 落 data:null 一并删除 ——
+          # 「保持上一份」这个行为已不存在，留着那条分支会让读 yml 的人
+          # 以为该状态仍可能出现（永不命中的分支比没有分支更误导）。
           case "${{ steps.gold.outputs.code }}" in
-            1) fail "采集层：金价" "fetch_gold.py 未通过 5 项校验 —— 坏数据已隔离到 data/quarantine/，gold_price.json 保持上一份。详见该步骤日志" ;;
-            2) echo "::warning title=采集层：金价::价格源不可达或 cot.json 无 weekly，本次未更新，gold_price.json 保持上一份（非异常）" ;;
+            1) fail "采集层：金价" "fetch_gold.py 需人工介入 —— 已落 data:null + coverage:null，三段证据在 data/quarantine/gold-*.json。页面金价线会整条消失（这是有意的显式失败，不是静默陈旧）。详见该步骤日志" ;;
             0|"") : ;;
-            *) fail "采集层：金价" "fetch_gold.py 以未预期的 exit code ${{ steps.gold.outputs.code }} 退出" ;;
+            *) fail "采集层：金价" "fetch_gold.py 以未预期的 exit code ${{ steps.gold.outputs.code }} 退出（gold 只应产生 0 或 1）" ;;
           esac
           # 库存按 exit code 三态分开处理：
           #   1 = 校验失败，坏数据已隔离，需人工介入 → 红
