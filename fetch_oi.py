@@ -67,14 +67,51 @@ HEADERS = {
 
 MONTH_RE = re.compile(r'^([A-Z]{3}\d{2})\b')
 
+# quarantine raw 段保留的响应体上限（与 fetch_gold.RAW_BODY_LIMIT 同值）。
+# 留够看清 WAF 挑战页到底说了什么，又不至于把整个 PDF 塞进 JSON。
+RAW_BODY_LIMIT = 20000
 
-def download() -> bytes | None:
+# PDF 魔数。CME 的 WAF 挑战页是 200 + text/html，靠 status 分不出来，
+# 只能看内容首字节 —— 少了这道检查，HTML 会一路走到 pdfplumber.open()
+# 抛未捕获异常，以 exit 1 + traceback 收场：既没有隔离产物，也把上游侧
+# 故障（给错东西）记成了我方处理失败。
+PDF_MAGIC = b"%PDF-"
+
+
+def download() -> tuple[bytes | None, dict]:
+    """
+    下载 Section 62 PDF，返回 (content, meta)。
+
+    content=None 表示没拿到东西（非 200 或连接异常），此时 meta["failure"]
+    说明是哪一种 —— 原先只返回 None，main() 无从区分「403 被 WAF 拦」与
+    「DNS 挂了」，日志里都只有一句「下载失败，跳过更新」。
+
+    meta 的形状与 fetch_gold 的 raw_meta 一致（source/requested_url/
+    final_url/status/body），非 PDF 时直接进 quarantine 的 raw 段。
+    """
+    meta = {"source": "cmegroup.com", "requested_url": PDF_URL,
+            "final_url": None, "status": None, "failure": None}
     try:
         from curl_cffi import requests as cffi
         print("  curl_cffi (Chrome TLS 指纹)")
-        r = cffi.Session(impersonate="chrome124").get(PDF_URL, headers=HEADERS, timeout=30)
+        try:
+            r = cffi.Session(impersonate="chrome124").get(
+                PDF_URL, headers=HEADERS, timeout=30)
+        except Exception as e:
+            # curl_cffi 装了但请求本身炸了（超时/TLS/DNS）—— 不能让它冒泡成
+            # 未捕获异常 exit 1，那会把上游侧故障记成我方处理失败。
+            print(f"  连接异常：{type(e).__name__}: {e}")
+            meta["failure"] = f"连接异常（curl_cffi）：{type(e).__name__}: {e}"
+            return None, meta
+        meta["status"] = r.status_code
+        meta["final_url"] = str(getattr(r, "url", None) or PDF_URL)
         print(f"  HTTP {r.status_code}  {len(r.content):,} bytes")
-        return r.content if r.status_code == 200 else None
+        if r.status_code != 200:
+            meta["failure"] = f"HTTP {r.status_code}"
+            meta["body"] = r.content[:RAW_BODY_LIMIT].decode(
+                "utf-8", errors="replace")
+            return None, meta
+        return r.content, meta
     except ImportError:
         pass
     import urllib.request
@@ -83,11 +120,28 @@ def download() -> bytes | None:
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             data = r.read()
-        print(f"  HTTP 200  {len(data):,} bytes")
-        return data
+            meta["status"] = r.status
+            meta["final_url"] = r.geturl()
+        print(f"  HTTP {meta['status']}  {len(data):,} bytes")
+        return data, meta
+    except urllib.error.HTTPError as e:
+        # HTTPError 有 status 与 body，比裸异常信息多得多 —— 403 挑战页的
+        # 正文往往就写着为什么被拦。
+        body = b""
+        try:
+            body = e.read()
+        except Exception:
+            pass
+        meta["status"] = e.code
+        meta["final_url"] = getattr(e, "url", None) or PDF_URL
+        meta["body"] = body[:RAW_BODY_LIMIT].decode("utf-8", errors="replace")
+        meta["failure"] = f"HTTP {e.code}"
+        print(f"  下载失败：HTTP {e.code}")
+        return None, meta
     except Exception as e:
+        meta["failure"] = f"连接异常：{type(e).__name__}: {e}"
         print(f"  下载失败：{e}")
-        return None
+        return None, meta
 
 
 def _parse_month_row(line: str) -> dict | None:
@@ -369,19 +423,103 @@ def quarantine(entry: dict, pdf_bytes: bytes, failures: list[str]) -> str:
     return json_path
 
 
+def quarantine_raw(*, meta: dict, content: bytes | None,
+                   failures: list[str], kind: str) -> str:
+    """
+    下载/解析阶段的隔离：还没有 entry 可存，留的是原始响应本身。
+
+    与 quarantine() 分开是因为两者证据不同 —— 那个存「解析出来但校验不过
+    的结构化数据」，这个存「压根没解析成的原始字节」。归因看的东西也不同：
+    raw 段的 status / final_url / body 前若干字节能直接看出返回的是不是
+    PDF、是不是挑战页，不必靠 exit code 反推。
+
+    kind 进文件名（not-pdf / parse-error），同一天两种故障不互相覆盖。
+    """
+    os.makedirs(QUARANTINE_DIR, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    head = (content or b"")[:RAW_BODY_LIMIT]
+    json_path = os.path.join(QUARANTINE_DIR, f"oi-{kind}-{stamp}.json")
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "quarantined_at": datetime.now(timezone.utc).isoformat(),
+            "reason": failures,
+            "raw": {
+                **{k: v for k, v in meta.items() if k != "body"},
+                "bytes": len(content or b""),
+                # 首字节单独列出：一眼看出是 %PDF- 还是 <!DOCTYPE html>
+                "head_hex": head[:16].hex(),
+                "head_text": head[:400].decode("utf-8", errors="replace"),
+                "is_pdf": bool(content) and content.startswith(PDF_MAGIC),
+                "body": meta.get("body") or head.decode("utf-8",
+                                                        errors="replace"),
+            },
+        }, f, ensure_ascii=False, indent=2)
+
+    # 拿到的确是 PDF 但解析失败时，原始 PDF 也要留 —— CME 无历史归档，
+    # 这份字节是事后唯一能复现 parse() 为什么挂的凭据。
+    if content and content.startswith(PDF_MAGIC):
+        pdf_path = os.path.join(QUARANTINE_DIR, f"section62-{kind}-{stamp}.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(content)
+
+    return json_path
+
+
 def main():
     if "--test" in sys.argv:
         run_tests()
         return
 
     print("正在下载 CME Section 62 PDF...")
-    content = download()
+    content, meta = download()
+
+    # ── a) 没拿到东西 → exit 2（上游未更新）────────────────────────────────
+    # 原先 exit 0，把「被 WAF 拦」当成正常态，workflow 静默绿灯 —— 与
+    # fetch_stocks 的处理对齐（那边同样的洞已在 :419-425 补过）。
+    # oi.json 保持不动的现有行为不变。
     if content is None:
-        print("  下载失败，跳过更新")
-        sys.exit(0)
+        reason = meta.get("failure") or "未知原因"
+        print(f"  下载失败，跳过更新（oi.json 保持不变）：{reason}")
+        print(f"::warning title=OI PDF 下载失败::"
+              f"{reason}；oi.json 未更新", file=sys.stderr)
+        print(f"下载失败：{reason}", file=sys.stderr)
+        sys.exit(2)
+
+    # ── b) 拿到了但不是 PDF → exit 2 + 隔离原始响应 ────────────────────────
+    # WAF 挑战页是 200 + text/html，status 分不出来，只能看魔数。
+    # 归上游侧（exit 2）：源站给错了东西，不是我方解析能力问题。
+    if not content.startswith(PDF_MAGIC):
+        head = content[:16].hex()
+        reason = (f"响应非 PDF（首字节 {head}，"
+                  f"HTTP {meta.get('status')}，{len(content):,} bytes）")
+        path = quarantine_raw(meta=meta, content=content,
+                              failures=[reason], kind="not-pdf")
+        print(f"  {reason}")
+        print(f"  隔离区：{path}")
+        print(f"::warning title=OI PDF 响应非 PDF::"
+              f"{reason}；已隔离，oi.json 未更新", file=sys.stderr)
+        print(f"响应非 PDF：{reason}", file=sys.stderr)
+        sys.exit(2)
 
     print("解析中...")
-    entry = parse(content)
+    # ── c) 确是 PDF 但解析失败 → exit 1 + 隔离原始 PDF ─────────────────────
+    # 归我方侧（exit 1）：类型对了却处理不了 —— PDF 版式变更、pdfplumber
+    # 行为变化、正则失配都落在这里，需人工介入改 parse()。
+    # 原先无捕获，以 traceback + exit 1 收场，没有隔离产物可供排查。
+    try:
+        entry = parse(content)
+    except Exception as e:
+        reason = f"PDF 解析失败：{type(e).__name__}: {e}"
+        path = quarantine_raw(meta=meta, content=content,
+                              failures=[reason], kind="parse-error")
+        print(f"  {reason}")
+        print(f"  隔离区：{path}（含原始 PDF）")
+        print(f"::error title=OI PDF 解析失败::"
+              f"{reason}；已隔离原始 PDF，oi.json 未更新", file=sys.stderr)
+        print(reason, file=sys.stderr)
+        sys.exit(1)
+
     months = entry["months"]
     total_oi = sum(r["oi"] for r in months)
     front    = max(months, key=lambda r: r["oi"])
@@ -615,6 +753,68 @@ def run_tests():
     # 空库（首次运行）：b) c) 无从比对，但不应因此失败
     f = validate(entry_at(GOOD_DATE, good_months), [], now)
     check("首次运行（库为空）→ 无失败", f == [], f)
+
+    # ── 下载/解析阶段的失败分支 ───────────────────────────────────────────
+    #
+    # 这几条守的是 exit code 归属，不是校验逻辑。区分原则：
+    #   上游给的东西对不对 → exit 2；我方处理不了 → exit 1。
+    # 原先 a) 是 exit 0（把被 WAF 拦当正常态），b)/c) 是未捕获异常
+    # exit 1 + traceback、无隔离产物 —— 三种上游侧故障混在一个颜色里。
+    print("\n[下载/解析失败分支] 魔数判别与 raw 隔离")
+
+    # PDF 魔数：WAF 挑战页是 200 + text/html，status 分不出来，只能看首字节
+    check("魔数: %PDF- 开头 → 认作 PDF",
+          b"%PDF-1.4\n...".startswith(PDF_MAGIC))
+    check("魔数: HTML 挑战页 → 判非 PDF",
+          not b"<!DOCTYPE html><html>".startswith(PDF_MAGIC))
+    check("魔数: 空响应 → 判非 PDF",
+          not b"".startswith(PDF_MAGIC))
+    # 前导空白不能宽容：真 PDF 必须严格以 %PDF- 起头，容了就等于放 HTML 过关
+    check("魔数: 前导空格 + %PDF- → 仍判非 PDF（不宽容）",
+          not b"  %PDF-1.4".startswith(PDF_MAGIC))
+
+    # quarantine_raw 的 raw 段必须能独立看出"拿到的是什么"，
+    # 不必靠 exit code 反推。这几个字段是归因的最小集。
+    import shutil as _sh
+    import tempfile as _tf
+    _real_quar = QUARANTINE_DIR
+    try:
+        for _kind, _body, _want_pdf in [
+            ("not-pdf", b"<!DOCTYPE html><html>Access Denied</html>", False),
+            ("parse-error", b"%PDF-1.4\nbroken\x00garbage", True),
+        ]:
+            _d = _tf.mkdtemp(prefix="oitest_")
+            globals()["QUARANTINE_DIR"] = _d
+            _meta = {"source": "cmegroup.com", "requested_url": PDF_URL,
+                     "final_url": PDF_URL, "status": 200, "failure": None}
+            _p = quarantine_raw(meta=_meta, content=_body,
+                                failures=[f"test {_kind}"], kind=_kind)
+            with open(_p, encoding="utf-8") as _f:
+                _q = json.load(_f)
+            _raw = _q.get("raw", {})
+            check(f"quarantine_raw({_kind}): is_pdf={_want_pdf}",
+                  _raw.get("is_pdf") is _want_pdf, _raw.get("is_pdf"))
+            check(f"quarantine_raw({_kind}): raw 段字段齐全",
+                  {"status", "final_url", "bytes", "head_hex", "head_text",
+                   "is_pdf", "body"} <= set(_raw), sorted(_raw))
+            check(f"quarantine_raw({_kind}): head_hex 对得上首字节",
+                  _raw.get("head_hex") == _body[:16].hex(),
+                  _raw.get("head_hex"))
+            # 原始 PDF 只在确是 PDF 时留 —— HTML 挑战页没必要存成 .pdf
+            _pdfs = [x for x in os.listdir(_d) if x.endswith(".pdf")]
+            check(f"quarantine_raw({_kind}): "
+                  f"{'留' if _want_pdf else '不留'}原始 PDF",
+                  bool(_pdfs) is _want_pdf, _pdfs)
+            _sh.rmtree(_d, ignore_errors=True)
+    finally:
+        globals()["QUARANTINE_DIR"] = _real_quar
+
+    # download() 的返回契约：必须是二元组，且失败时 meta 带得动归因信息。
+    # 单返回 None 的旧签名下，main() 无从区分 403 与 DNS 失败。
+    import inspect as _ins
+    _sig = _ins.signature(download)
+    check("download() 返回类型标注为 tuple",
+          "tuple" in str(_sig.return_annotation), _sig.return_annotation)
 
     print(f"\n{passed} passed, {failed} failed")
     if failed:

@@ -72,9 +72,17 @@ jobs:
 
       # 采集层校验（Trade Date / 重复比对 / 合约数量 / 主力月持仓）在这一步内。
       # 校验失败时坏数据进 data/quarantine/，data/oi.json 保持上一份可用数据。
+      #
+      # exit code 三态：0 正常 / 1 需人工介入（校验不过，或拿到 PDF 却解析失败）
+      # / 2 上游未更新（下载失败，或响应不是 PDF —— WAF 挑战页是 200+HTML）。
+      # 与 gold/stocks 同一写法，理由见其注释。
       - name: Run fetch_oi.py
         id: oi
-        run: python fetch_oi.py
+        run: |
+          set +e
+          python fetch_oi.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
         continue-on-error: true
 
       # 派生数据可从 oi.json 随时重算，失败不阻断提交
@@ -151,8 +159,19 @@ jobs:
             0|"") : ;;
             *) fail "采集层：库存" "fetch_stocks.py 以未预期的 exit code ${{ steps.stocks.outputs.code }} 退出" ;;
           esac
-          [ "${{ steps.oi.outcome }}"     = "failure" ] && \
-            fail "采集层：期限结构" "fetch_oi.py 失败或未通过 4 项校验 —— 坏数据已隔离到 data/quarantine/，oi.json 保持上一份。详见该步骤日志中的具体校验项"
+          # 期限结构按 exit code 三态分开处理（与 stocks 同构）：
+          #   1 = 需人工介入 —— 4 项校验不过，或拿到 PDF 却解析不了
+          #       （版式变更 / pdfplumber 行为变化）。证据在 data/quarantine/
+          #   2 = 上游未更新 —— 下载失败，或响应根本不是 PDF（WAF 挑战页是
+          #       200 + text/html，靠 status 分不出来，看魔数才知道）。属正常
+          # 原先只看 outcome，1 和 2 都被 continue-on-error 记成 failure，
+          # 于是「CME 拦了我们」和「PDF 版式变了」在闸门上同一个颜色。
+          case "${{ steps.oi.outputs.code }}" in
+            1) fail "采集层：期限结构" "fetch_oi.py 需人工介入 —— 未通过 4 项校验，或拿到 PDF 但解析失败。坏数据／原始 PDF 已隔离到 data/quarantine/，oi.json 保持上一份。详见该步骤日志中的具体校验项" ;;
+            2) echo "::warning title=采集层：期限结构::CME 未返回可用 PDF（下载失败或响应非 PDF），oi.json 保持上一份（非异常）" ;;
+            0|"") : ;;
+            *) fail "采集层：期限结构" "fetch_oi.py 以未预期的 exit code ${{ steps.oi.outputs.code }} 退出" ;;
+          esac
           [ "${{ steps.derive.outcome }}" = "failure" ] && \
             fail "派生层" "derive_term_structure.py 失败 —— term-structure-series.json 保持上一版，页面回放停留在旧数据。原始数据已落盘，修好后重跑即可重算"
           [ "${{ steps.commit.outcome }}" = "failure" ] && \
