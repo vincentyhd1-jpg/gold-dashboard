@@ -193,10 +193,10 @@ check('oiHistChart 已建起', !hist.chartMissing, hist);
 check(`历史图 dataset 数 == oi.json 帧数 (${expectedFrames})`,
       hist.datasets === expectedFrames, { got: hist.datasets, want: expectedFrames });
 
-// ── 7. 移仓进度分段：roll_from 切换处断开 ──────────────────────────────
+// ── 7. 近月剩余分段：roll_from 切换处断开 ──────────────────────────────
 // 0.0571→0.9205 那类跳变是分母换合约（AUG26 峰值 → DEC26 峰值），不是市场
-// 变化，连成一条线会被读成单日移仓进度暴涨。切换处线段必须透明断开。
-console.log('\n[7] 移仓进度 roll_from 切换处断开');
+// 变化，连成一条线会被读成单日剩余仓位暴涨。切换处线段必须透明断开。
+console.log('\n[7] 近月剩余 roll_from 切换处断开');
 const seriesRaw = await fetch('http://localhost:3001/data/derived/term-structure-series.json').then(r => r.json());
 const seriesFrames = seriesRaw.data.frames;
 const boundaries = [];
@@ -207,7 +207,7 @@ while (boundaries.includes(normalIdx)) normalIdx++;
 console.log('  切换点:', boundaries.map(i => `${i}(${seriesFrames[i - 1].roll_from}→${seriesFrames[i].roll_from})`).join(' ') || '无');
 const seg = await page.evaluate(([bs, ni]) => {
   const c = Chart.getChart('oiRollChart');
-  const ds = c.data.datasets.find(d => /移仓进度/.test(d.label || ''));
+  const ds = c.data.datasets.find(d => /近月剩余/.test(d.label || ''));
   if (!ds) return { dsMissing: true };
   const f = ds.segment && ds.segment.borderColor;
   if (typeof f !== 'function') return { noSegment: true };

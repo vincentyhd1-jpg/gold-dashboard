@@ -200,7 +200,7 @@ function _initCharts(series) {
     }
   });
 
-  // ── 移仓进度面板 ────────────────────────────────────────────────────────
+  // ── 近月剩余面板 ────────────────────────────────────────────────────────
   const rollCanvas = document.getElementById('oiRollChart');
   const rollDates = series.dates.map(d => d.slice(5).replace('-', '/'));
   _oiRollChart = new Chart(rollCanvas, {
@@ -231,7 +231,7 @@ function _initCharts(series) {
         // 画「近月剩余」= 到期月当前 OI / 其历史峰值 OI，从满到空（1→0）。
         // 不画旧的 roll_to/(roll_from+roll_to) —— 那是迁移占比，会随承接月
         // 换月跳变。这条线只是背景参考，不加交互与标记。
-        label: '移仓进度',
+        label: '近月剩余',
         data: series.frames.map(f => f.front_remaining),
         borderColor: '#a78bfa',
         backgroundColor: 'rgba(167,139,250,0.12)',
@@ -287,7 +287,7 @@ function _initCharts(series) {
           ticks: { font:{size:9}, color:'#6e7681', maxTicksLimit:3,
             callback: v => Math.round(v*100)+'%' },
           grid: { color:'#21262d' },
-          title: { display:true, text:'移仓', color:'#6e7681', font:{size:9} },
+          title: { display:true, text:'剩余', color:'#6e7681', font:{size:9} },
           afterFit: _afterFitRight
         }
       }
