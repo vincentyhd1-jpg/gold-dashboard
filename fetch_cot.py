@@ -274,7 +274,7 @@ def main():
     # 信封元数据全部排除：generated_at 自比自永远不等；coverage/derived_from
     # 由 data 派生，比它等于重复比 data；warnings/info 是本次运行的旁注。
     raw = read_json_or(OUT_PATH, None) if os.path.exists(OUT_PATH) else None
-    old = unwrap(raw) if raw is not None else None
+    old = unwrap(raw, strict=True) if raw is not None else None
     old_is_envelope = is_envelope(raw) if raw is not None else False
 
     if old == data:

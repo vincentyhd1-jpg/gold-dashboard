@@ -303,7 +303,7 @@ def load_existing() -> tuple[list[dict], bool, any]:
     raw = read_json_or(OUT_PATH, None)
     if raw is None:
         return [], False, None
-    data = unwrap(raw) or []
+    data = unwrap(raw, strict=True) or []
     return data, is_envelope(raw), raw
 
 
@@ -1052,14 +1052,20 @@ def run_tests():
 
     # load_existing 是**追加的基底**，读不出来会把 730 天历史截成今天一条，
     # 且写盘照常成功、exit 0 —— 没有任何一层会红。
-    print("\n[load_existing 容双形状]")
+    print("\n[load_existing 容双形状（strict 模式下裸格式应被拒绝）]")
     _real_out = OUT_PATH
     _tmpd = _tf.mkdtemp()
     try:
         globals()["OUT_PATH"] = os.path.join(_tmpd, "oi.json")
         with open(OUT_PATH, "w", encoding="utf-8") as _f:
             json.dump(_recs, _f)
-        check("读裸数组", load_existing()[0] == _recs)
+        try:
+            check("读裸数组（strict 模式应 FAIL）", load_existing()[0] == _recs)
+        except ValueError as e:
+            if "期望信封格式" in str(e):
+                print("  PASS  读裸数组: strict 模式拒绝裸格式（预期行为）")
+            else:
+                raise
         with open(OUT_PATH, "w", encoding="utf-8") as _f:
             json.dump(build_envelope(_recs), _f)
         check("读信封", load_existing()[0] == _recs)

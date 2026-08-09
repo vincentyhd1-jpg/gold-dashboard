@@ -1314,7 +1314,7 @@ def main():
     # check_upstream_nonempty 命中「a) 顶层不是 list」→ exit 1 保留上一份派生，
     # 看起来像上游没数据，而实际上数据好着，只是形状变了。
     with open(IN_PATH, encoding="utf-8") as f:
-        records = unwrap(json.load(f))
+        records = unwrap(json.load(f), strict=True)
     print(f"Loaded {len(records)} records from {IN_PATH}")
 
     if run_test_mode:
@@ -1371,7 +1371,7 @@ def main():
     #
     # 引容差是禁止的：CFTC/CME 的历史修订可能只差几个单位，容差会把真实的
     # 微小变化也判成没变。
-    prev = unwrap(read_json_or(OUT_PATH, None))
+    prev = unwrap(read_json_or(OUT_PATH, None), strict=True)
     if prev == data:
         print(f"业务数据与上一份逐字段相同，跳过写入"
               f"（generated_at 不刷新，git 无 diff）")

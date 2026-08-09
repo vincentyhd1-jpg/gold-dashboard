@@ -106,13 +106,16 @@ def run_injected(script, patch_code, expect_exit, target_json,
     target = os.path.join(DATA, target_json)
     before = sha(target)
 
-    # 记录注入前的隔离区文件，用于判断是否新增
-    quar_before = set(os.listdir(QUAR)) if os.path.isdir(QUAR) else set()
+    # 隔离区指向 tmpdir，避免污染 data/quarantine/
+    tmpdir = tempfile.mkdtemp()
+    quar_tmp = os.path.join(tmpdir, "quarantine")
+    os.makedirs(quar_tmp, exist_ok=True)
 
     runner = f"""
 import sys, json
 sys.path.insert(0, {ROOT!r})
 import {script} as mod
+mod.QUARANTINE_DIR = {quar_tmp!r}
 {patch_code}
 try:
     mod.main()
@@ -123,9 +126,8 @@ sys.exit(0)
     r = subprocess.run([sys.executable, "-c", runner],
                        capture_output=True, text=True, cwd=ROOT)
     after = sha(target)
-    quar_after = set(os.listdir(QUAR)) if os.path.isdir(QUAR) else set()
-    new_quar = [f for f in (quar_after - quar_before)
-                if f.startswith(quar_prefix)]
+    quar_files = os.listdir(quar_tmp) if os.path.isdir(quar_tmp) else []
+    new_quar = [f for f in quar_files if f.startswith(quar_prefix)]
 
     print(f"\n--- {label} ---")
     print(f"    exit={r.returncode}（期望 {expect_exit}）")
@@ -142,9 +144,9 @@ sys.exit(0)
                        cwd=ROOT, capture_output=True)
     if expect_exit == 1:
         check(f"{label}: 生成隔离文件", bool(new_quar), f"新增={new_quar}")
-        # 清理本次注入产生的隔离文件，避免污染仓库
-        for f in quar_after - quar_before:
-            os.remove(os.path.join(QUAR, f))
+
+    # 清理 tmpdir
+    shutil.rmtree(tmpdir, ignore_errors=True)
     return r
 
 
@@ -164,7 +166,7 @@ run_injected(
 
 # 正常数据应放行（用真实 cot.json 的 weekly 反推成 API 行）
 with open(os.path.join(DATA, "cot.json"), encoding="utf-8") as f:
-    real_cot = unwrap(json.load(f))
+    real_cot = unwrap(json.load(f), strict=True)
 GOOD_ROWS = json.dumps([
     {"report_date_as_yyyy_mm_dd": w["date"],
      "m_money_positions_long_all": str(max(w["mf_net"], 0) + 100000),
@@ -246,10 +248,9 @@ check("三个 gold 用例 warnings 两两不同",
 print("\n===== fetch_stocks =====")
 
 # 经 unwrap 读：stocks.json 信封化前后都取到同一份业务数据（日频数组）。
-# 直读 real_st[-1] 会在下次 Actions 把 stocks.json 变成信封时崩 —— 且这个
-# 断裂本地不暴露（磁盘上现在还是 Array，本地全绿），要等 CI 才炸。
+# 直读 real_st[-1] 会在信封化后崩成 KeyError。
 with open(os.path.join(DATA, "stocks.json"), encoding="utf-8") as f:
-    real_st = unwrap(json.load(f))
+    real_st = unwrap(json.load(f), strict=True)
 LATEST = real_st[-1]
 
 # 最小仓库静默归零
@@ -288,14 +289,28 @@ run_injected(
 )
 
 # 无 depositories 字段 → d) SKIP，正常放行
+# strict 模式下，注入测试前需预置信封格式文件
 no_dep = json.loads(json.dumps(LATEST))
 no_dep["date"] = "2026-07-30"
 del no_dep["depositories"]
+
+# 预置完整信封格式文件到临时路径
+import tempfile
+test_stocks_tmpdir = tempfile.mkdtemp()
+test_stocks_path = os.path.join(test_stocks_tmpdir, "stocks.json.injectiontest")
+with open(test_stocks_path, "w", encoding="utf-8") as f:
+    from data_envelope import envelope
+    json.dump(envelope(
+        source="cme_gold_stocks",
+        freq="daily",
+        data=[LATEST]
+    ), f)
+
 run_injected(
     "fetch_stocks",
     f"mod.download = lambda: b'x'\n"
     f"mod.parse = lambda c: json.loads({json.dumps(no_dep)!r})\n"
-    f"mod.OUT_PATH = mod.OUT_PATH + '.injectiontest'",
+    f"mod.OUT_PATH = {test_stocks_path!r}",
     0, "stocks.json", "stocks-",
     "无 depositories 字段 → d) 跳过，exit 0 不误杀",
 )

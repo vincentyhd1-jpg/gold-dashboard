@@ -1251,20 +1251,16 @@ Promise.all([
   // cot.latest / cot.generated_at 读，一份代码同时吃裸格式与信封。
   fetch('data/cot.json?_=' + Date.now())
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(p => p?.data ? { ...p.data, generated_at: p.generated_at } : p),
-  // gold_price.json 仍是裸数组，写入端信封化后这里要吃 data。只解包，不像 cot
-  // 那样提 generated_at —— 页面时间戳只认 cot.json，goldData 只被 renderAll
-  // 当数组遍历（:466 Array.isArray）。读到信封而不解包的失败是**静默退化**：
-  // 退化成空 map、金价线整条消失，pageerror 为空。由 verify-ui-fixes 的
-  // 「金价 dataset 非 null 点数 >= 40」守。
+    .then(p => (p && typeof p === 'object' && 'data' in p) ? { ...p.data, generated_at: p.generated_at } : (() => { throw new Error('cot.json: 期望信封格式'); })()),
+  // gold_price.json 已信封化：取 data。页面时间戳只认 cot.json，goldData 只被
+  // renderAll 当数组遍历（:466 Array.isArray）。
   fetch('data/gold_price.json?_=' + Date.now())
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(p => p?.data ?? p),
-  // stocks.json 已信封化：取 data。其余三个仍是裸格式，迁移后同样解包。
-  // 过渡期用 payload?.data ?? payload 兼容两种形状，与 initOIPlayback 同一处理。
+    .then(p => (p && typeof p === 'object' && 'data' in p) ? p.data : (() => { throw new Error('gold_price.json: 期望信封格式'); })()),
+  // stocks.json 已信封化：取 data。
   fetch('data/stocks.json?_=' + Date.now())
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(p => p?.data ?? p)
+    .then(p => (p && typeof p === 'object' && 'data' in p) ? p.data : (() => { throw new Error('stocks.json: 期望信封格式'); })())
     .catch(() => []),
   // oi.json 过渡期兼容两种形状。判据是「有没有 data 字段」，不是「data 真不真」——
   // 写成 p?.data ?? p 会在写入端落 data:null 时把整个信封 dict 当业务数据交出去，

@@ -49,6 +49,16 @@ tools/*.mjs       Playwright 验证脚本
 三个读 `cot.json` 的地方都已容双形状（`fetch_gold.py`、
 `tools/verify-fetch-gates.py`、`index.html`），所以写入端切换不会开破窗。
 
+## 常见陷阱
+
+### cwd 陷阱
+
+外壳 cwd 与 wsl 内路径不同源；`cd /mnt/...` 在外壳会失败；cwd 漂到父目录后相对路径 `grep/ls` 静默返回 No such file，看起来像「文件无改动」——文档类改动前先 `pwd + ls` 确认。
+
+### 测试基线表
+
+测试条数变化必须同 commit 更新 `docs/handover-technical.md` 基线表。
+
 **TODO（四源全迁完后）**：统一 `unwrap(strict=True)` + 删前端双形状兼容
 （`payload?.data ?? payload`、cot 的 `p?.data ? {...} : p`）+ 删 `generated_at
 ?? updated_at` 的 `updated_at` 分支。**过渡期兼容不许永久化** —— 双形状分支

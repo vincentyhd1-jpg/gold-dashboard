@@ -276,7 +276,7 @@ def load_existing() -> tuple[list[dict], bool, any]:
     宁可拒绝也不静默按旧格式解析出错的业务数据。
     """
     raw = read_json_or(OUT_PATH, [])
-    rows = unwrap(raw)
+    rows = unwrap(raw, strict=True)
     data = rows if isinstance(rows, list) else []
     return data, is_envelope(raw), raw
 

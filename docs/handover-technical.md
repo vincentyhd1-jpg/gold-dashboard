@@ -135,14 +135,16 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 
 ### 常规护栏
 
+**本表须与测试条数变化在同一 commit 内更新。**
+
 | 护栏 | exit | 结果 |
 |---|---|---|
-| `derive_term_structure.py --test` | 0 | **17 PASS / 0 failed**（无 SKIP） |
+| `derive_term_structure.py --test` | 0 | 21 passed, 0 failed |
 | `fetch_cot.py --test` | 0 | 26 passed, 0 failed |
-| `fetch_gold.py --test` | 0 | 12 passed, 0 failed |
-| `fetch_oi.py --test` | 0 | 23 passed, 0 failed |
+| `fetch_gold.py --test` | 0 | 38 passed, 0 failed |
+| `fetch_oi.py --test` | 0 | 62 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 22 passed, 0 failed |
-| `tools/verify-fetch-gates.py` | 0 | 24 passed, 0 failed |
+| `tools/verify-fetch-gates.py` | 0 | 37 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 100 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 13 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |

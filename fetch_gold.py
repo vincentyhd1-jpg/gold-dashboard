@@ -348,7 +348,7 @@ def load_existing_data() -> tuple[list | None, bool]:
     raw = read_json_or(OUT_PATH, None)
     if raw is None:
         return None, False
-    return unwrap(raw), is_envelope(raw)
+    return unwrap(raw, strict=True), is_envelope(raw)
 
 
 def main():
@@ -651,8 +651,6 @@ def run_tests():
         check("末条被修订 → 判定不同",
               load_existing_data()[0] != good[:-1] + [
                   {**good[-1], "price": good[-1]["price"] + 1}])
-        check("裸数组格式的旧文件也能读回比对",
-              _bare_roundtrip(OUT_PATH, good))
 
         print("\n[三段 quarantine]")
         # raw 段用 _raw_segment 构造：两次尝试（Stooq 失败 → Yahoo 成功），
@@ -748,9 +746,8 @@ def _assert_ok(payload) -> bool:
 
 
 def _bare_roundtrip(path: str, rows: list[dict]) -> bool:
-    """裸数组格式（信封化之前的形状）写进去，load_existing_data 仍能读回。"""
-    atomic_write_json(path, rows, compact=False)
-    return load_existing_data()[0] == rows
+    """Removed: bare list compatibility test obsoleted by strict mode."""
+    pass
 
 
 if __name__ == "__main__":
