@@ -43,13 +43,20 @@ console.log('\n破坏 schema（模拟回归）：');
 const a = await probe('data 键缺失', p => { const q = { ...p }; delete q.data; return q; });
 // 2. data 存在但 frames 空
 const b = await probe('data.frames 为空数组', p => ({ ...p, data: { ...p.data, frames: [] } }));
-// 3. 退回旧的平铺格式（兼容路径应吃下）
-const c = await probe('旧平铺格式（应兼容）', p => p.data);
+// 3. 退回旧的平铺格式（strict 下应拒绝：四源+派生全部信封化后兼容分支已删）
+const c = await probe('旧平铺格式（应拒绝）', p => p.data);
 
 console.log('\n判定：');
+let failed = 0;
 const dead = s => s.charts.every(x => !x);
-console.log('  data 缺失      →', dead(a) ? '图表未建起 → 四脚本的几何断言必然失败（不会静默通过）' : '图表仍建起 ← 需查是否静默通过');
-console.log('  frames 空      →', dead(b) ? '图表未建起 → 断言失败' : `图表建起但 labels=${b.labels} → 几何/合约列表断言会失败`);
-console.log('  旧平铺格式     →', c.charts.every(x => x) && c.labels === base.labels ? '正常渲染 → 双形状兼容生效' : '未能兼容 ← 兼容逻辑有问题');
+const judge = (name, ok, okMsg, badMsg) => {
+  console.log(`  ${name} →`, ok ? okMsg : badMsg);
+  if (!ok) failed++;
+};
+judge('data 缺失     ', dead(a), '图表未建起 → 四脚本的几何断言必然失败（不会静默通过）', '图表仍建起 ← 需查是否静默通过');
+judge('frames 空     ', dead(b), '图表未建起 → 断言失败', `图表建起但 labels=${b.labels} → 几何/合约列表断言会失败`);
+judge('旧平铺格式    ', dead(c), '抛错/图表未建起 → strict 拒绝裸格式生效', `图表仍建起（labels=${c.labels}）← strict 未生效，兼容分支仍在`);
 
 await browser.close();
+console.log(`\n${3 - failed} passed, ${failed} failed`);
+process.exit(failed ? 1 : 0);

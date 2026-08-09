@@ -87,13 +87,10 @@ function _initPlaybarControls(series) {
 
 // ── 公开入口 ──────────────────────────────────────────────────────────────────
 function initOIPlayback(payload) {
-  // 过渡期双形状兼容：新格式是信封 { schema_version, ..., data: {frames,...} }，
-  // 旧格式是业务数据平铺在顶层。在入口解包一次，其余代码零改动。
-  //
-  // 【可删除条件】等所有派生文件都迁到信封格式后，这行改成 payload.data 即可。
-  // 目前只有 term-structure-series.json 迁完；四个采集脚本产出的原始文件
-  // （cot/gold_price/stocks/oi.json）仍是裸格式，但它们不走这个入口。
-  const series = payload?.data ?? payload;
+  // term-structure-series.json 已信封化：取 data，裸格式抛错（与 index.html 四处一致）。
+  const series = (payload && typeof payload === 'object' && 'data' in payload)
+    ? payload.data
+    : (() => { throw new Error('term-structure-series.json: 期望信封格式'); })();
 
   if (!series || !series.frames || !series.frames.length) return;
   _play.series = series;

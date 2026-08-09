@@ -146,12 +146,16 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_stocks.py --test` | 0 | 22 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 37 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 100 passed, 0 failed |
-| `tools/verify-ui-fixes.mjs` | 0 | 13 passed, 0 failed；page errors: none |
+| `tools/verify-ui-fixes.mjs` | 0 | 18 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
 | `tools/verify-gapframe.mjs` | 0 | page errors: none |
 | `tools/verify-isolation.mjs` | 0 | 37 passed, 0 failed |
-| `tools/verify-schema-coupling.mjs` | 0 | 双形状兼容生效 |
+| `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
+
+前端 verify 中仅 ui-fixes(18)/contract-contango(29)/isolation(37)/
+schema-coupling(3) 有计数；playback/gapframe 无 passed/failed 累加器，
+仅凭 exit code，清点全绿时不构成计数证据。
 
 `verify-ui-fixes` 与 `verify-contract-contango` 的通过数各 +1（12→13 / 28→29）：
 `44aecf2` 反转了那条编码旧口径的断言（「JUN26 已到期已剔除」→「已到期合约仍保留
