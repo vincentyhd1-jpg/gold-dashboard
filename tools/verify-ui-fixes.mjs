@@ -26,6 +26,22 @@ const check = (name, ok, detail = '') => {
   else { fail++; console.log(`  FAIL  ${name}  ${JSON.stringify(detail)}`); }
 };
 
+// 结算价线像素落位读取器（[8] 用）
+const readSettlePts = () => page.evaluate(() => {
+  const c = Chart.getChart('oiChart');
+  const meta = c.getDatasetMeta(1);
+  const pts = c.data.datasets[1].data.map((v, i) => ({ i, v }))
+    .filter(p => p.v != null)
+    .map(p => ({ i: p.i, y: Math.round(meta.data[p.i].getProps(['y'], true).y) }));
+  return { top: Math.round(c.chartArea.top), bottom: Math.round(c.chartArea.bottom), pts };
+});
+// scale min 是 settle_min*0.995,合法点永远够不到 bottom;-1 像素防 round
+const inArea = s => s.pts.length > 0 &&
+  s.pts.every(p => p.y >= s.top && p.y < s.bottom - 1);
+// [8]a 取样必须在任何回放交互之前 —— [4] 会点播放,动画路径会把 line 元素
+// 落位,之后再测「首帧状态」就恒绿,注入也无法证伪。断言在 [8] 统一报。
+const settleFirstPaint = await readSettlePts();
+
 // ── 1. 柱心对齐 ────────────────────────────────────────────────────────
 console.log('[1] 柱心 vs 标签心对齐');
 const align = await page.evaluate(() => {
@@ -204,6 +220,27 @@ check('roll_from 切换处线段透明（断开）',
       seg.atBoundary.every(v => v === 'transparent'), seg);
 check('非切换处线段未断开',
       !seg.dsMissing && !seg.noSegment && seg.atNormal === undefined, seg);
+
+// ── 8. 结算价线落位 ────────────────────────────────────────────────────
+// 守 playback.js 初始化末尾那次补充 update('none')：Chart.js 建图后第一次
+// update('none') 不会让 line 元素从 null 初值落位（bar 不受影响），
+// 删掉那行 → 结算价线首屏贴底（全部点 y == chartArea.bottom）。
+console.log('\n[8] 结算价线落位');
+console.log(`  首帧取样: ${JSON.stringify(settleFirstPaint)}`);
+check('[8]a 首帧结算价点全部落在绘图区内（不贴底）',
+      inArea(settleFirstPaint), settleFirstPaint);
+// b) 滑块 update('none') 路径 —— 回归护栏,当前恒绿:实测元素一旦存在,
+// 后续每次 'none' 都正常落位。不可被「剥离修复行」的注入证伪,
+// 清点时勿计作在守首帧 bug 的断言。
+await page.evaluate(() => {
+  const s = document.getElementById('oiPlaySlider');
+  s.value = 0; s.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await page.waitForTimeout(500);
+const settleDrag = await readSettlePts();
+console.log(`  拖至 frame 0: ${JSON.stringify(settleDrag)}`);
+check('[8]b 拖滑块后结算价点落位（回归护栏,当前恒绿）',
+      inArea(settleDrag), settleDrag);
 
 // 截图
 await page.evaluate(() => {

@@ -146,14 +146,14 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_stocks.py --test` | 0 | 22 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 37 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 100 passed, 0 failed |
-| `tools/verify-ui-fixes.mjs` | 0 | 20 passed, 0 failed；page errors: none |
+| `tools/verify-ui-fixes.mjs` | 0 | 22 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
 | `tools/verify-gapframe.mjs` | 0 | page errors: none |
 | `tools/verify-isolation.mjs` | 0 | 37 passed, 0 failed |
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
 
-前端 verify 中仅 ui-fixes(20)/contract-contango(29)/isolation(37)/
+前端 verify 中仅 ui-fixes(22)/contract-contango(29)/isolation(37)/
 schema-coupling(3) 有计数；playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 

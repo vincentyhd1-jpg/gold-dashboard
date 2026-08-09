@@ -83,6 +83,13 @@ function _initPlaybarControls(series) {
   // 默认停在最新帧，reduced-motion 禁用自动播放
   _play.frameIdx = series.frames.length - 1;
   _renderFrame(_play.frameIdx, false);
+  // Chart.js:建图后第一次 update('none') 不会让 line 元素从 null 初值落位
+  // （bar 不受影响）;需再补一次 update('none') 才设终态。零动画代价。
+  // 必须延后到初始 responsive resize 之后 —— 同步补会被 resize 重置回基线
+  // （实测 earliest=193,而 resize 后任何一次 'none' 都永久生效）。
+  // 这是 workaround 非根因修复。删除此行 → 结算价线首屏贴底,
+  // 由 verify-ui-fixes [8]a 守。
+  setTimeout(() => _oiChart.update('none'), 0);
 }
 
 // ── 公开入口 ──────────────────────────────────────────────────────────────────

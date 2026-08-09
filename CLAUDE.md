@@ -587,6 +587,10 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 
 - Y 轴 min/max 全部取自派生 JSON 的 `scale`，回放期间 Chart.js 不自动缩放，
   帧间柱高可直接比较
+- 升级 Chart.js 或改动 `_initCharts` 初始化路径时，必须复跑
+  `verify-ui-fixes` 的 [8]a —— 首屏 update 时序依赖 `setTimeout(…,0)`
+  排在初始 responsive resize 之后（playback.js 初始化末尾那次补充
+  `update('none')`），该假设不受任何契约保证
 - 三面板共用 X 轴对齐：主图 `afterLayout` 写 `window._oiChartArea`，
   下方两图 `beforeLayout` 同步 `padding.left`、右轴 `afterFit` 钳制 `width`
 - 移仓面板横轴是**日期**（上两图是交割月），必须显示刻度 + 分隔线，
