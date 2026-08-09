@@ -21,7 +21,7 @@ from io_utils import (
     upsert_by_key, apply_retention, quarantine_write,
     KEEP_OLD, TAKE_NEW,
 )
-from data_envelope import envelope, unwrap
+from data_envelope import envelope, unwrap, is_envelope
 
 GOLD_PAGE  = "https://www.cmegroup.com/markets/metals/precious/gold.html"
 REPORT_URL = "https://www.cmegroup.com/delivery_reports/Gold_Stocks.xls"
@@ -265,9 +265,11 @@ def parse(content: bytes) -> dict:
 
 # ── Storage ───────────────────────────────────────────────────────────────────
 
-def load_existing() -> list[dict]:
+def load_existing() -> tuple[list[dict], bool, any]:
     """
     读已有记录。信封格式取 data，裸格式原样返回（过渡期两种都能读）。
+
+    返回 (业务数据, 是否信封格式, raw)。
 
     read_json_or 的 default 是 [] —— 文件不存在或解析失败时返回空列表，
     不抛。unwrap 会对坏信封（未知 schema_version 等）抛错，那是有意的：
@@ -275,7 +277,8 @@ def load_existing() -> list[dict]:
     """
     raw = read_json_or(OUT_PATH, [])
     rows = unwrap(raw)
-    return rows if isinstance(rows, list) else []
+    data = rows if isinstance(rows, list) else []
+    return data, is_envelope(raw), raw
 
 
 # ── 采集层校验 ────────────────────────────────────────────────────────────────
@@ -435,7 +438,7 @@ def main():
     print("  各仓库明细（depositories）：")
     print(json.dumps(entry.get("depositories", []), ensure_ascii=False, indent=4))
 
-    records = load_existing()
+    records, old_is_envelope, raw_old = load_existing()
 
     # ── 校验：坏数据不得写入 stocks.json ───────────────────────────────
     # 必须在幂等判断之前 —— 坏数据即使日期重复也该被隔离，
@@ -461,11 +464,18 @@ def main():
         records, entry, key="date", merge=merge_stocks)
 
     if action == KEEP_OLD:
-        # 数据逐字段相同 → 文件完全不变、git 无 diff。
-        # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
-        print(f"  {entry['date']} 与已有记录逐字段相同，跳过写入"
-              f"（generated_at 不刷新）")
-        return
+        if old_is_envelope:
+            # 数据逐字段相同 → 文件完全不变、git 无 diff。
+            # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
+            print(f"  {entry['date']} 与已有记录逐字段相同，跳过写入"
+                  f"（generated_at 不刷新）")
+            return
+        else:
+            # 格式迁移：旧文件是裸格式，业务数据相同但仍需写一次以升级到信封
+            old_shape = "bare dict" if isinstance(raw_old, dict) else "bare list"
+            migration_info = f"Format migration: upgraded from {old_shape} to envelope (business data unchanged)"
+            info.append(migration_info)
+            print(f"  {entry['date']} 格式迁移：{old_shape} → envelope（业务数据未变）")
 
     if action == TAKE_NEW:
         prev = next((r for r in records if r.get("date") == entry["date"]), None)

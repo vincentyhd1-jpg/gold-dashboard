@@ -42,7 +42,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-from data_envelope import envelope, unwrap, upstream_ref, coverage_of
+from data_envelope import envelope, unwrap, upstream_ref, coverage_of, is_envelope
 from io_utils import atomic_write_json, read_json_or, quarantine_write, sweep_stale_tmp
 
 COT_PATH = os.path.join(os.path.dirname(__file__), "data", "cot.json")
@@ -336,17 +336,19 @@ def write_null(failures: list[str], info: list[str]) -> None:
     atomic_write_json(OUT_PATH, payload, compact=False)
 
 
-def load_existing_data() -> list | None:
+def load_existing_data() -> tuple[list | None, bool]:
     """
     读上一份的业务数据供幂等比对。裸格式与信封格式都能读。
+
+    返回 (业务数据, 是否信封格式)。
 
     default=None：文件不存在与「文件存在但 data:null」在幂等语义上同类 ——
     都表示「上一份没有可比的数据」，一律视为不同，照常写盘。
     """
     raw = read_json_or(OUT_PATH, None)
     if raw is None:
-        return None
-    return unwrap(raw)
+        return None, False
+    return unwrap(raw), is_envelope(raw)
 
 
 def main():
@@ -476,10 +478,18 @@ def main():
     # 逐条比对而非只看最新一期：源站会修订历史周的收盘价，只比末条会漏掉
     # 中间某周被改的情形。相同则不写盘、不刷 generated_at ——
     # generated_at 表示「数据这次真变了」，不是「脚本跑了」。
-    if load_existing_data() == result:
-        print(f"  {len(result)} 条数据与已有记录逐条相同，跳过写入"
-              f"（generated_at 不刷新，git 无 diff）")
-        return
+    old_data, old_is_envelope = load_existing_data()
+
+    if old_data == result:
+        if old_is_envelope:
+            print(f"  {len(result)} 条数据与已有记录逐条相同，跳过写入"
+                  f"（generated_at 不刷新，git 无 diff）")
+            return
+        else:
+            # 格式迁移：旧文件是裸格式，业务数据相同但仍需写一次以升级到信封
+            migration_info = "Format migration: upgraded from bare list to envelope (business data unchanged)"
+            info.append(migration_info)
+            print(f"  {len(result)} 条数据格式迁移：bare list → envelope（业务数据未变）")
 
     payload = envelope(
         source="gold_price",
@@ -624,22 +634,22 @@ def run_tests():
 
         # 幂等比对：上一份是 data:null 时视为「无可比数据」，不该判相同
         check("load_existing_data() 读 data:null 得 None",
-              load_existing_data() is None)
+              load_existing_data()[0] is None)
         check("data:null 与真实序列不相等（不会误判幂等跳过）",
-              load_existing_data() != good)
+              load_existing_data()[0] != good)
 
         print("\n[幂等比对]")
         atomic_write_json(OUT_PATH, envelope(
             source="gold_price", freq="weekly", data=good,
             dates=[r["date"] for r in good]), compact=False)
         check("逐条相同 → 判定相同（跳过写入）",
-              load_existing_data() == good)
+              load_existing_data()[0] == good)
         revised = [dict(r) for r in good]
         revised[10]["price"] = revised[10]["price"] + 0.01
         check("历史第 11 周被修订 → 判定不同（只比末条会漏）",
-              load_existing_data() != revised)
+              load_existing_data()[0] != revised)
         check("末条被修订 → 判定不同",
-              load_existing_data() != good[:-1] + [
+              load_existing_data()[0] != good[:-1] + [
                   {**good[-1], "price": good[-1]["price"] + 1}])
         check("裸数组格式的旧文件也能读回比对",
               _bare_roundtrip(OUT_PATH, good))
@@ -740,7 +750,7 @@ def _assert_ok(payload) -> bool:
 def _bare_roundtrip(path: str, rows: list[dict]) -> bool:
     """裸数组格式（信封化之前的形状）写进去，load_existing_data 仍能读回。"""
     atomic_write_json(path, rows, compact=False)
-    return load_existing_data() == rows
+    return load_existing_data()[0] == rows
 
 
 if __name__ == "__main__":
