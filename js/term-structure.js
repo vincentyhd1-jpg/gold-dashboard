@@ -241,6 +241,14 @@ function _initCharts(series) {
         tension: 0.3,
         fill: true,
         spanGaps: true,
+        // roll_from 切换处断开：分母换了合约（如 AUG26 峰值 → DEC26 峰值），
+        // 0.0571→0.9205 那类跳变不是市场变化，连线会被读成单日进度暴涨
+        segment: {
+          borderColor: ctx =>
+            series.frames[ctx.p1DataIndex].roll_from !==
+            series.frames[ctx.p0DataIndex].roll_from
+              ? 'transparent' : undefined,
+        },
       }]
     },
     options: {
@@ -256,8 +264,9 @@ function _initCharts(series) {
             title: items => items[0]?.label || '',
             label: ctx => {
               const v = ctx.parsed.y;
-              return v == null ? '  近月剩余: --'
-                : '  近月剩余: ' + (v * 100).toFixed(1) + '%';
+              const rf = series.frames[ctx.dataIndex]?.roll_from;
+              if (v == null || !rf) return '  近月剩余: --';
+              return `  ${rf} 剩余 ${(v * 100).toFixed(1)}%（占其峰值 OI）`;
             }
           }
         }
