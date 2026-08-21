@@ -367,6 +367,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
      两者都是普通脚本（非 module），共享全局作用域，与下方内联脚本一致。
      加载顺序无依赖：函数在 DOMContentLoaded 后才被调用，届时两个文件都已就绪。
      （原先 contango.js 提供 _monthGapDays 构成顺序依赖，该算术已下沉到 derive） -->
+<script src="js/data-helpers.js"></script>
 <script src="js/term-structure.js"></script>
 <script src="js/playback.js"></script>
 
@@ -1249,26 +1250,17 @@ Promise.all([
   // cot 的时间戳在信封元数据里、业务数据在 data 里，两者都要 —— 所以不是单纯
   // 解包，而是把 generated_at 提到业务对象上，renderAll 仍按 cot.weekly /
   // cot.latest / cot.generated_at 读，一份代码同时吃裸格式与信封。
-  fetch('data/cot.json?_=' + Date.now())
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(p => (p && typeof p === 'object' && 'data' in p) ? { ...p.data, generated_at: p.generated_at } : (() => { throw new Error('cot.json: 期望信封格式'); })()),
+  loadJson('data/cot.json?_=' + Date.now(), { name: 'cot.json', map: p => ({ ...p.data, generated_at: p.generated_at }) }),
   // gold_price.json 已信封化：取 data。页面时间戳只认 cot.json，goldData 只被
   // renderAll 当数组遍历（:466 Array.isArray）。
-  fetch('data/gold_price.json?_=' + Date.now())
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(p => (p && typeof p === 'object' && 'data' in p) ? p.data : (() => { throw new Error('gold_price.json: 期望信封格式'); })()),
+  loadJson('data/gold_price.json?_=' + Date.now(), { name: 'gold_price.json' }),
   // stocks.json 已信封化：取 data。
-  fetch('data/stocks.json?_=' + Date.now())
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(p => (p && typeof p === 'object' && 'data' in p) ? p.data : (() => { throw new Error('stocks.json: 期望信封格式'); })())
+  loadJson('data/stocks.json?_=' + Date.now(), { name: 'stocks.json' })
     .catch(() => []),
   // oi.json 已信封化：取 data。
-  fetch('data/oi.json?_=' + Date.now())
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(p => (p && typeof p === 'object' && 'data' in p) ? p.data : (() => { throw new Error('oi.json: 期望信封格式'); })())
+  loadJson('data/oi.json?_=' + Date.now(), { name: 'oi.json' })
     .catch(() => []),
-  fetch('data/derived/term-structure-series.json?_=' + Date.now())
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(() => null),
+  loadJson('data/derived/term-structure-series.json?_=' + Date.now(), { name: 'term-structure-series.json', unwrap: false }).catch(() => null),
 ])
   .then(([cotData, goldData, stocksData, oiData, seriesData]) => {
     document.getElementById('footerNote').textContent =

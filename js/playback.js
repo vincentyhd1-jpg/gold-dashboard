@@ -94,10 +94,8 @@ function _initPlaybarControls(series) {
 
 // ── 公开入口 ──────────────────────────────────────────────────────────────────
 function initOIPlayback(payload) {
-  // term-structure-series.json 已信封化：取 data，裸格式抛错（与 index.html 四处一致）。
-  const series = (payload && typeof payload === 'object' && 'data' in payload)
-    ? payload.data
-    : (() => { throw new Error('term-structure-series.json: 期望信封格式'); })();
+  // term-structure-series.json 入口仍保留 strict 严检：只接受信封；公共 helper 只负责复用。
+  const series = unwrapEnvelope(payload, 'term-structure-series.json', true);
 
   if (!series || !series.frames || !series.frames.length) return;
   _play.series = series;

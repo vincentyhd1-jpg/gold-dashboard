@@ -493,6 +493,10 @@ WINDOW fixture 必须是**合成数据**：当前 24 帧的修订合约恰好全
 `screenshots/diag-cot-timestamp-injection.mjs` 有一条反恒真注入守着：把兜底
 改回 `new Date()`，「显示未知」那条断言必须变红。不变红说明断言只是碰巧成立。
 
+### 宏观 d 类阈值待实测后确定
+
+新增 FRED 宏观数据时，d 类硬失败先只保留可确定性判断：CPI 指数 ≤ 0、coverage 计算与实际数据点数不一致、同一序列内日期重复。有效点数下限、滞后天数上限、利率值域只写 warnings，不触发 d 类、不写 data:null。没有真实运行样本前不要拍阈值，避免误用 data:null 覆盖好数据；攒几周后再决定哪些 warning 升级成闸门。
+
 ### warning 不刷 `generated_at`，要持久化就走单独日志
 
 数据未变但本次运行产生了新 warning 时：**跳过写盘**，warning 打 stdout。

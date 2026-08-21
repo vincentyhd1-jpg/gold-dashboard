@@ -152,9 +152,12 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-gapframe.mjs` | 0 | page errors: none |
 | `tools/verify-isolation.mjs` | 0 | 37 passed, 0 failed |
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
+| `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 5 passed, 0 failed |
+| `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
 
-前端 verify 中仅 ui-fixes(22)/contract-contango(29)/isolation(37)/
-schema-coupling(3) 有计数；playback/gapframe 无 passed/failed 累加器，
+前端 verify 中 ui-fixes(22)/contract-contango(29)/isolation(37)/
+schema-coupling(3)/envelope-helper-raw-inputs(5)/cot-sentinel-strict(4) 有计数；
+playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
 `verify-ui-fixes` 与 `verify-contract-contango` 的通过数各 +1（12→13 / 28→29）：
