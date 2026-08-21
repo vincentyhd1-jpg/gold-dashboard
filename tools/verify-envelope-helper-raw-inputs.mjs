@@ -1,23 +1,29 @@
 import { chromium } from 'playwright';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { findChromiumExecutable } from './_browser.mjs';
 
-const execPath = String.raw`C:\Users\vince\AppData\Local\ms-playwright\chromium-1234\chrome-win64\chrome.exe`;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const execPath = findChromiumExecutable();
+if (!execPath) throw new Error('找不到 Playwright Chromium chrome.exe');
 const browser = await chromium.launch({ headless: true, executablePath: execPath });
 
 const page = await browser.newPage();
 await page.setContent('<!doctype html>');
-await page.addScriptTag({ path: 'd:/VScode/test/gold-dashboard/js/data-helpers.js' });
+await page.addScriptTag({ path: path.join(__dirname, '..', 'js', 'data-helpers.js') });
 
-const cases = [
-  ['cot.json', p => window.unwrapEnvelope(p, 'cot.json', true, q => ({ ...q.data, generated_at: q.generated_at }))],
-  ['gold_price.json', p => window.unwrapEnvelope(p, 'gold_price.json', true)],
-  ['stocks.json', p => window.unwrapEnvelope(p, 'stocks.json', true)],
-  ['oi.json', p => window.unwrapEnvelope(p, 'oi.json', true)],
-  ['term-structure-series.json', p => window.unwrapEnvelope(p, 'term-structure-series.json', true)],
+const names = [
+  'cot.json',
+  'gold_price.json',
+  'stocks.json',
+  'oi.json',
+  'term-structure-series.json',
 ];
 
 let pass = 0;
 let fail = 0;
-for (const [name, fn] of cases) {
+for (const name of names) {
   const result = await page.evaluate(([name]) => {
     const payload = { SENTINEL: true };
     const cases = {

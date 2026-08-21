@@ -3,6 +3,27 @@
 COMEX 黄金持仓仪表盘。数据每交易日由 GitHub Actions 采集，前端为单文件
 `index.html`（Chart.js via CDN），无构建步骤。
 
+
+## 报告输出
+
+每轮执行完毕后，把完整输出保存为 markdown 报告：
+
+- 路径：`reports/YYYYMMDD_HHMMSS_<主题>.md`
+- 主题用短横线连接的英文小写，如 `macro-commit1-helper-extract`
+- 示例：`reports/20260821_143022_macro-commit1-helper-extract.md`
+
+报告必须包含：
+
+- 本轮执行的指令摘要（一两句）
+- 完整 git diff 原文（不省略、不概括）
+- 全部验证输出（逐条 PASS/FAIL + 计数，不写“全绿”了事）
+- 未做的项目，显式写「未做」
+- 遇到的中间态、返工、计划外改动，如实记录
+
+聊天里仍按原规则只贴关键片段（diff + 验证输出）；报告文件是完整存档，两者不互相替代。
+
+`reports/` 是过程存档，不是产物，不入库；与 `screenshots/` 里的一次性注入脚本同类处置。
+
 ## 架构
 
 ```
@@ -17,6 +38,8 @@ trading_calendar.py  交易日历，采集层与派生层共用一份假日表
 data_envelope.py  统一落盘信封 + write_json 单点落盘
 tools/*.mjs       Playwright 验证脚本
 ```
+
+**TODO（verify 启动方式统一）**：本轮只抽公共 `tools/_browser.mjs` 供两个新增基线脚本使用；六个旧 Playwright verify 脚本仍保留各自的 `execPath + chromium.launch(...)` 写法，后续单独统一，避免和本轮 helper 边界回归混在一起。
 
 ### 落盘统一信封（schema_version = 0）
 
