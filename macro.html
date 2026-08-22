@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宏观数据 · 黄金市场分析仪表盘</title>
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/data-helpers.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+
+/* header */
+header{background:#161b22;border-bottom:1px solid #30363d;padding:16px 32px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:10}
+.h-left{display:flex;align-items:center;gap:12px}
+.gi{width:36px;height:36px;background:linear-gradient(135deg,#f5c842,#d4a017);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+header h1{font-size:18px;font-weight:700;color:#f0f6fc}
+header .sub{font-size:12px;color:#8b949e;margin-top:1px}
+.top-nav{display:flex;align-items:center;gap:8px;margin-left:auto}
+.top-nav a{color:#8b949e;text-decoration:none;font-size:12px;padding:6px 10px;border:1px solid transparent;border-radius:6px}
+.top-nav a:hover,.top-nav a[aria-current="page"]{color:#f5c842;border-color:#6e5520;background:rgba(245,200,66,.08)}
+
+/* layout */
+main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
+.intro{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.intro h2{font-size:22px;font-weight:700;color:#f0f6fc}
+.intro p{font-size:13px;color:#8b949e;margin-top:6px;line-height:1.6}
+.release{font-size:12px;color:#d4a84b;border:1px solid #6e5520;background:rgba(245,200,66,.07);border-radius:8px;padding:10px 14px}
+
+/* 图表卡片 */
+.charts-section{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:800px){.charts-section{grid-template-columns:1fr}}
+.card{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px 24px}
+.card.full{grid-column:1/-1}
+.card-title{font-size:14px;font-weight:600;color:#f0f6fc;margin-bottom:4px}
+.card-sub{font-size:11px;color:#8b949e;margin-bottom:16px}
+.chart-wrap{position:relative;height:260px}
+.card.full .chart-wrap{height:300px}
+
+/* 状态行 */
+.status{font-size:12px;color:#8b949e;min-height:18px}
+.status.err{color:#f85149}
+
+footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1px solid #21262d;margin-top:8px}
+@media(max-width:640px){header{padding:14px 16px}main{padding:20px 16px}.top-nav{margin-left:0;width:100%}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-left">
+    <div class="gi">&#128200;</div>
+    <div>
+      <h1>宏观数据</h1>
+      <p class="sub">美债收益率 &middot; 联邦基金利率 &middot; CPI 同比 &middot; FRED 数据</p>
+    </div>
+  </div>
+  <nav class="top-nav" aria-label="主导航">
+    <a href="index.html">黄金仪表盘</a>
+    <a href="macro.html" aria-current="page">宏观数据</a>
+  </nav>
+</header>
+
+<main>
+
+  <div class="intro">
+    <div>
+      <h2>利率与通胀</h2>
+      <p>数据来自 FRED，读取派生文件 data/derived/macro_rates.json 与 data/derived/macro_cpi.json。缺失值保持为空。</p>
+    </div>
+    <div class="release" id="cpiRelease">CPI 最新参考期 --，发布日：当前采集未保存</div>
+  </div>
+
+  <div class="charts-section">
+
+    <div class="card full">
+      <div class="card-title">美国国债收益率</div>
+      <div class="card-sub">2 年期（蓝）· 10 年期（金）· 30 年期（红）— 单位同为 %，共用一条 Y 轴</div>
+      <div class="chart-wrap"><canvas id="ustChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">联邦基金利率</div>
+      <div class="card-sub">目标区间上下限（红，区间带）· 有效联邦基金利率 DFF（蓝）</div>
+      <div class="chart-wrap"><canvas id="fedChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">CPI 同比</div>
+      <div class="card-sub">CPIAUCSL（金）· CPILFESL 核心（蓝）— 按月度参考期，右端空白是真实发布延迟</div>
+      <div class="chart-wrap"><canvas id="cpiChart"></canvas></div>
+    </div>
+
+  </div>
+
+  <div class="status" id="status" role="status">正在加载宏观数据…</div>
+
+</main>
+
+<footer id="footerNote">数据来源：Federal Reserve Bank of St. Louis (FRED) · 每日自动更新 · zhangtongxue.com</footer>
+
+<script>
+const COLORS = {
+  gold:  '#f5c842',
+  blue:  '#58a6ff',
+  red:   '#f85149',
+  muted: '#8b949e',
+  grid:  '#21262d',
+};
+
+// 三张图共用同一份轴/图例/tooltip 配置：单位都是 %，且每张图只有一条 Y 轴。
+const BASE_OPTIONS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: {
+      position: 'bottom',
+      labels: { color: COLORS.muted, font: { size: 10 }, boxWidth: 20, boxHeight: 2, padding: 12 },
+    },
+    tooltip: {
+      callbacks: {
+        label: ctx => ctx.parsed.y === null
+          ? '  ' + ctx.dataset.label + ': --'
+          : '  ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + '%',
+      },
+    },
+  },
+  scales: {
+    x: {
+      ticks: { font: { size: 10 }, color: COLORS.muted, maxTicksLimit: 12 },
+      grid:  { color: COLORS.grid },
+    },
+    y: {
+      ticks: { font: { size: 10 }, color: COLORS.muted, callback: v => v + '%' },
+      grid:  { color: COLORS.grid },
+      title: { display: true, text: '%', color: COLORS.muted, font: { size: 10 } },
+    },
+  },
+};
+
+function chartOptions() {
+  return JSON.parse(JSON.stringify(BASE_OPTIONS));
+}
+
+function lineDataset(label, data, color, extra = {}) {
+  return {
+    label,
+    data,
+    borderColor: color,
+    backgroundColor: color,
+    borderWidth: 2,
+    pointRadius: 0,
+    tension: 0.2,
+    // spanGaps:false —— 上游是外连接，缺的日期落 null。跨过 null 连线等于前向
+    // 填充，会把"这天没数据"画成"这天和上一天一样"。
+    spanGaps: false,
+    fill: false,
+    ...extra,
+  };
+}
+
+function makeChart(id, labels, datasets) {
+  return new Chart(document.getElementById(id), {
+    type: 'line',
+    data: { labels, datasets },
+    options: chartOptions(),
+  });
+}
+
+function renderUST(ust) {
+  makeChart('ustChart', ust.map(r => r.date), [
+    lineDataset('UST 2Y',  ust.map(r => r.dgs2),  COLORS.blue),
+    lineDataset('UST 10Y', ust.map(r => r.dgs10), COLORS.gold),
+    lineDataset('UST 30Y', ust.map(r => r.dgs30), COLORS.red),
+  ]);
+}
+
+function renderFed(fed) {
+  makeChart('fedChart', fed.map(r => r.date), [
+    lineDataset('目标区间上限', fed.map(r => r.target_upper), COLORS.red, {
+      borderWidth: 1.5,
+      // fill:'+1' —— 上限填充到下一个 dataset（下限），两条线之间即目标区间带。
+      // 不画中值：中值是构造出来的数，FRED 只发布上下限。
+      fill: '+1',
+      backgroundColor: 'rgba(248,81,73,.16)',
+    }),
+    lineDataset('目标区间下限', fed.map(r => r.target_lower), COLORS.red, { borderWidth: 1.5 }),
+    lineDataset('DFF 有效利率', fed.map(r => r.dff), COLORS.blue),
+  ]);
+}
+
+function renderCPI(rows) {
+  // CPI 同比是百分比变化、月度频率，与利率的绝对水平不同量纲 —— 单独一图，
+  // 不塞进利率图配第二条 Y 轴：双 Y 轴两条线的相对位置由各自缩放决定，
+  // 会读出不存在的相关性。
+  makeChart('cpiChart', rows.map(r => r.ref_period), [
+    lineDataset('CPI 同比',     rows.map(r => r.cpiaucsl_yoy === null ? null : r.cpiaucsl_yoy * 100), COLORS.gold),
+    lineDataset('核心 CPI 同比', rows.map(r => r.cpilfesl_yoy === null ? null : r.cpilfesl_yoy * 100), COLORS.blue),
+  ]);
+}
+
+// 渲染异常不能伪装成"数据文件未找到"：单张图出错只影响自己，异常照常打到控制台。
+function _safeRender(name, fn) {
+  try {
+    fn();
+  } catch (err) {
+    console.error('[render] ' + name + ' 渲染失败：', err);
+  }
+}
+
+// 兜底：任何未处理的 promise 异常至少留下痕迹
+window.addEventListener('unhandledrejection', e => {
+  console.error('[unhandled] ', e.reason);
+});
+
+Promise.all([
+  // 两个派生文件都已信封化：解包走 js/data-helpers.js 的 loadJson，
+  // 页面不自己判断裸格式/信封，也不自己写 fetch。
+  loadJson('data/derived/macro_rates.json?_=' + Date.now(), { name: 'macro_rates.json' }),
+  loadJson('data/derived/macro_cpi.json?_=' + Date.now(),   { name: 'macro_cpi.json' }),
+])
+  .then(([rates, cpi]) => {
+    const ust  = rates.ust || [];
+    const fed  = rates.fed || [];
+    const rows = cpi.cpi   || [];
+    const meta = cpi.meta  || {};
+
+    _safeRender('美债收益率', () => renderUST(ust));
+    _safeRender('联邦基金利率', () => renderFed(fed));
+    _safeRender('CPI 同比', () => renderCPI(rows));
+
+    // 发布日采集层没存，页面照实说"未保存"，不拿参考期冒充发布日。
+    document.getElementById('cpiRelease').textContent =
+      'CPI 最新参考期 ' + (meta.cpi_latest_ref_period || '--') + '，发布日：当前采集未保存';
+    document.getElementById('status').textContent =
+      '已加载 ' + ust.length + ' 条日度利率记录、' + rows.length + ' 条月度 CPI 参考期。';
+  })
+  .catch(err => {
+    console.error('[fetch] 宏观数据加载失败：', err);
+    const el = document.getElementById('status');
+    el.textContent = '宏观数据加载失败：' + err.message;
+    el.className = 'status err';
+  });
+</script>
+</body>
+</html>

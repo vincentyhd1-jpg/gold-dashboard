@@ -1,0 +1,1186 @@
+{
+  "schema_version": 0,
+  "source": "derived_macro_cpi",
+  "freq": "monthly",
+  "generated_at": "2026-08-22T05:26:16Z",
+  "date_field": "date",
+  "coverage": {
+    "first": "2016-01-01",
+    "last": "2026-07-01",
+    "count": 126
+  },
+  "derived_from": [
+    {
+      "source": "FRED",
+      "generated_at": "2026-08-22T03:38:52Z",
+      "coverage": {
+        "first": "2016-01-01",
+        "last": "2026-07-01",
+        "count": 126
+      },
+      "envelope": true
+    },
+    {
+      "source": "FRED",
+      "generated_at": "2026-08-22T03:38:54Z",
+      "coverage": {
+        "first": "2016-01-01",
+        "last": "2026-07-01",
+        "count": 126
+      },
+      "envelope": true
+    }
+  ],
+  "warnings": [],
+  "info": [
+    "cpiaucsl_coverage=2016-01-01..2026-07-01 count=126",
+    "cpilfesl_coverage=2016-01-01..2026-07-01 count=126",
+    "date_alignment=outer_join",
+    "missing_values=null",
+    "yoy=exact_prior_year_month",
+    "published_at=not_collected"
+  ],
+  "data": {
+    "cpi": [
+      {
+        "date": "2016-01-01",
+        "ref_period": "2016-01",
+        "cpiaucsl": 237.652,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 244.955,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-02-01",
+        "ref_period": "2016-02",
+        "cpiaucsl": 237.336,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 245.51,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-03-01",
+        "ref_period": "2016-03",
+        "cpiaucsl": 238.08,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 245.913,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-04-01",
+        "ref_period": "2016-04",
+        "cpiaucsl": 238.992,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 246.551,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-05-01",
+        "ref_period": "2016-05",
+        "cpiaucsl": 239.557,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 247.137,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-06-01",
+        "ref_period": "2016-06",
+        "cpiaucsl": 240.222,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 247.54,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-07-01",
+        "ref_period": "2016-07",
+        "cpiaucsl": 240.101,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 247.829,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-08-01",
+        "ref_period": "2016-08",
+        "cpiaucsl": 240.545,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 248.423,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-09-01",
+        "ref_period": "2016-09",
+        "cpiaucsl": 241.176,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 248.842,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-10-01",
+        "ref_period": "2016-10",
+        "cpiaucsl": 241.741,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 249.142,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-11-01",
+        "ref_period": "2016-11",
+        "cpiaucsl": 242.026,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 249.481,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2016-12-01",
+        "ref_period": "2016-12",
+        "cpiaucsl": 242.637,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 249.92,
+        "cpilfesl_yoy": null,
+        "published_at": null
+      },
+      {
+        "date": "2017-01-01",
+        "ref_period": "2017-01",
+        "cpiaucsl": 243.618,
+        "cpiaucsl_yoy": 0.025103933482571117,
+        "cpilfesl": 250.467,
+        "cpilfesl_yoy": 0.022502092221020176,
+        "published_at": null
+      },
+      {
+        "date": "2017-02-01",
+        "ref_period": "2017-02",
+        "cpiaucsl": 244.006,
+        "cpiaucsl_yoy": 0.028103616813294208,
+        "cpilfesl": 250.998,
+        "cpilfesl_yoy": 0.022353468290497336,
+        "published_at": null
+      },
+      {
+        "date": "2017-03-01",
+        "ref_period": "2017-03",
+        "cpiaucsl": 243.892,
+        "cpiaucsl_yoy": 0.0244119623655914,
+        "cpilfesl": 250.944,
+        "cpilfesl_yoy": 0.02045845481938735,
+        "published_at": null
+      },
+      {
+        "date": "2017-04-01",
+        "ref_period": "2017-04",
+        "cpiaucsl": 244.193,
+        "cpiaucsl_yoy": 0.02176223471915395,
+        "cpilfesl": 251.227,
+        "cpilfesl_yoy": 0.018965650108902388,
+        "published_at": null
+      },
+      {
+        "date": "2017-05-01",
+        "ref_period": "2017-05",
+        "cpiaucsl": 244.004,
+        "cpiaucsl_yoy": 0.018563431667619756,
+        "cpilfesl": 251.43,
+        "cpilfesl_yoy": 0.017370931912259246,
+        "published_at": null
+      },
+      {
+        "date": "2017-06-01",
+        "ref_period": "2017-06",
+        "cpiaucsl": 244.163,
+        "cpiaucsl_yoy": 0.01640565809959127,
+        "cpilfesl": 251.746,
+        "cpilfesl_yoy": 0.01699119334249022,
+        "published_at": null
+      },
+      {
+        "date": "2017-07-01",
+        "ref_period": "2017-07",
+        "cpiaucsl": 244.243,
+        "cpiaucsl_yoy": 0.017251073506566073,
+        "cpilfesl": 251.985,
+        "cpilfesl_yoy": 0.016769627444729984,
+        "published_at": null
+      },
+      {
+        "date": "2017-08-01",
+        "ref_period": "2017-08",
+        "cpiaucsl": 245.183,
+        "cpiaucsl_yoy": 0.0192812155729698,
+        "cpilfesl": 252.535,
+        "cpilfesl_yoy": 0.016552412618799472,
+        "published_at": null
+      },
+      {
+        "date": "2017-09-01",
+        "ref_period": "2017-09",
+        "cpiaucsl": 246.435,
+        "cpiaucsl_yoy": 0.021805652303711787,
+        "cpilfesl": 252.812,
+        "cpilfesl_yoy": 0.015953898457655935,
+        "published_at": null
+      },
+      {
+        "date": "2017-10-01",
+        "ref_period": "2017-10",
+        "cpiaucsl": 246.626,
+        "cpiaucsl_yoy": 0.02020757753132485,
+        "cpilfesl": 253.526,
+        "cpilfesl_yoy": 0.017596390813271245,
+        "published_at": null
+      },
+      {
+        "date": "2017-11-01",
+        "ref_period": "2017-11",
+        "cpiaucsl": 247.284,
+        "cpiaucsl_yoy": 0.02172493864295566,
+        "cpilfesl": 253.816,
+        "cpilfesl_yoy": 0.017376072726981162,
+        "published_at": null
+      },
+      {
+        "date": "2017-12-01",
+        "ref_period": "2017-12",
+        "cpiaucsl": 247.805,
+        "cpiaucsl_yoy": 0.021299307195522532,
+        "cpilfesl": 254.344,
+        "cpilfesl_yoy": 0.01770166453265043,
+        "published_at": null
+      },
+      {
+        "date": "2018-01-01",
+        "ref_period": "2018-01",
+        "cpiaucsl": 248.859,
+        "cpiaucsl_yoy": 0.02151318868063945,
+        "cpilfesl": 255.204,
+        "cpilfesl_yoy": 0.018912671130328462,
+        "published_at": null
+      },
+      {
+        "date": "2018-02-01",
+        "ref_period": "2018-02",
+        "cpiaucsl": 249.529,
+        "cpiaucsl_yoy": 0.02263468931091861,
+        "cpilfesl": 255.711,
+        "cpilfesl_yoy": 0.0187770420481439,
+        "published_at": null
+      },
+      {
+        "date": "2018-03-01",
+        "ref_period": "2018-03",
+        "cpiaucsl": 249.577,
+        "cpiaucsl_yoy": 0.023309497646499366,
+        "cpilfesl": 256.271,
+        "cpilfesl_yoy": 0.021227843662331214,
+        "published_at": null
+      },
+      {
+        "date": "2018-04-01",
+        "ref_period": "2018-04",
+        "cpiaucsl": 250.227,
+        "cpiaucsl_yoy": 0.024709963021052994,
+        "cpilfesl": 256.63,
+        "cpilfesl_yoy": 0.02150644636125887,
+        "published_at": null
+      },
+      {
+        "date": "2018-05-01",
+        "ref_period": "2018-05",
+        "cpiaucsl": 250.792,
+        "cpiaucsl_yoy": 0.02781921607842497,
+        "cpilfesl": 257.145,
+        "cpilfesl_yoy": 0.02272998448872432,
+        "published_at": null
+      },
+      {
+        "date": "2018-06-01",
+        "ref_period": "2018-06",
+        "cpiaucsl": 251.018,
+        "cpiaucsl_yoy": 0.028075506935940187,
+        "cpilfesl": 257.399,
+        "cpilfesl_yoy": 0.022455173071270318,
+        "published_at": null
+      },
+      {
+        "date": "2018-07-01",
+        "ref_period": "2018-07",
+        "cpiaucsl": 251.214,
+        "cpiaucsl_yoy": 0.02854124785561929,
+        "cpilfesl": 257.699,
+        "cpilfesl_yoy": 0.02267595293370639,
+        "published_at": null
+      },
+      {
+        "date": "2018-08-01",
+        "ref_period": "2018-08",
+        "cpiaucsl": 251.663,
+        "cpiaucsl_yoy": 0.026429238568742575,
+        "cpilfesl": 257.891,
+        "cpilfesl_yoy": 0.021208941334864617,
+        "published_at": null
+      },
+      {
+        "date": "2018-09-01",
+        "ref_period": "2018-09",
+        "cpiaucsl": 252.182,
+        "cpiaucsl_yoy": 0.02332055105808828,
+        "cpilfesl": 258.368,
+        "cpilfesl_yoy": 0.021976804898501623,
+        "published_at": null
+      },
+      {
+        "date": "2018-10-01",
+        "ref_period": "2018-10",
+        "cpiaucsl": 252.772,
+        "cpiaucsl_yoy": 0.02492032470218053,
+        "cpilfesl": 258.917,
+        "cpilfesl_yoy": 0.02126409125691242,
+        "published_at": null
+      },
+      {
+        "date": "2018-11-01",
+        "ref_period": "2018-11",
+        "cpiaucsl": 252.594,
+        "cpiaucsl_yoy": 0.02147328577667773,
+        "cpilfesl": 259.439,
+        "cpilfesl_yoy": 0.022153843729315836,
+        "published_at": null
+      },
+      {
+        "date": "2018-12-01",
+        "ref_period": "2018-12",
+        "cpiaucsl": 252.767,
+        "cpiaucsl_yoy": 0.020023809043401064,
+        "cpilfesl": 260.063,
+        "cpilfesl_yoy": 0.022485295505299874,
+        "published_at": null
+      },
+      {
+        "date": "2019-01-01",
+        "ref_period": "2019-01",
+        "cpiaucsl": 252.561,
+        "cpiaucsl_yoy": 0.014875893578291333,
+        "cpilfesl": 260.766,
+        "cpilfesl_yoy": 0.021794329242488475,
+        "published_at": null
+      },
+      {
+        "date": "2019-02-01",
+        "ref_period": "2019-02",
+        "cpiaucsl": 253.319,
+        "cpiaucsl_yoy": 0.015188615351321877,
+        "cpilfesl": 261.186,
+        "cpilfesl_yoy": 0.021410889637129227,
+        "published_at": null
+      },
+      {
+        "date": "2019-03-01",
+        "ref_period": "2019-03",
+        "cpiaucsl": 254.277,
+        "cpiaucsl_yoy": 0.018831863513063984,
+        "cpilfesl": 261.567,
+        "cpilfesl_yoy": 0.0206656235001228,
+        "published_at": null
+      },
+      {
+        "date": "2019-04-01",
+        "ref_period": "2019-04",
+        "cpiaucsl": 255.233,
+        "cpiaucsl_yoy": 0.020005834702090608,
+        "cpilfesl": 261.997,
+        "cpilfesl_yoy": 0.020913377235709074,
+        "published_at": null
+      },
+      {
+        "date": "2019-05-01",
+        "ref_period": "2019-05",
+        "cpiaucsl": 255.296,
+        "cpiaucsl_yoy": 0.017959105553606136,
+        "cpilfesl": 262.217,
+        "cpilfesl_yoy": 0.0197242800754438,
+        "published_at": null
+      },
+      {
+        "date": "2019-06-01",
+        "ref_period": "2019-06",
+        "cpiaucsl": 255.213,
+        "cpiaucsl_yoy": 0.01671194894390049,
+        "cpilfesl": 262.739,
+        "cpilfesl_yoy": 0.020746001344216447,
+        "published_at": null
+      },
+      {
+        "date": "2019-07-01",
+        "ref_period": "2019-07",
+        "cpiaucsl": 255.802,
+        "cpiaucsl_yoy": 0.01826331335037068,
+        "cpilfesl": 263.28,
+        "cpilfesl_yoy": 0.021657049503490455,
+        "published_at": null
+      },
+      {
+        "date": "2019-08-01",
+        "ref_period": "2019-08",
+        "cpiaucsl": 256.036,
+        "cpiaucsl_yoy": 0.017376412106666406,
+        "cpilfesl": 263.877,
+        "cpilfesl_yoy": 0.02321135673598529,
+        "published_at": null
+      },
+      {
+        "date": "2019-09-01",
+        "ref_period": "2019-09",
+        "cpiaucsl": 256.43,
+        "cpiaucsl_yoy": 0.016844977040391562,
+        "cpilfesl": 264.388,
+        "cpilfesl_yoy": 0.023300099083477743,
+        "published_at": null
+      },
+      {
+        "date": "2019-10-01",
+        "ref_period": "2019-10",
+        "cpiaucsl": 257.155,
+        "cpiaucsl_yoy": 0.017339736996186295,
+        "cpilfesl": 264.97,
+        "cpilfesl_yoy": 0.023378148209658223,
+        "published_at": null
+      },
+      {
+        "date": "2019-11-01",
+        "ref_period": "2019-11",
+        "cpiaucsl": 257.879,
+        "cpiaucsl_yoy": 0.020922903948629168,
+        "cpilfesl": 265.548,
+        "cpilfesl_yoy": 0.023546960942649298,
+        "published_at": null
+      },
+      {
+        "date": "2019-12-01",
+        "ref_period": "2019-12",
+        "cpiaucsl": 258.63,
+        "cpiaucsl_yoy": 0.023195274699624457,
+        "cpilfesl": 266.02,
+        "cpilfesl_yoy": 0.022905988164406255,
+        "published_at": null
+      },
+      {
+        "date": "2020-01-01",
+        "ref_period": "2020-01",
+        "cpiaucsl": 259.127,
+        "cpiaucsl_yoy": 0.02599767976845202,
+        "cpilfesl": 266.716,
+        "cpilfesl_yoy": 0.022817391837892886,
+        "published_at": null
+      },
+      {
+        "date": "2020-02-01",
+        "ref_period": "2020-02",
+        "cpiaucsl": 259.25,
+        "cpiaucsl_yoy": 0.023413166797595197,
+        "cpilfesl": 267.37,
+        "cpilfesl_yoy": 0.023676613601035346,
+        "published_at": null
+      },
+      {
+        "date": "2020-03-01",
+        "ref_period": "2020-03",
+        "cpiaucsl": 258.076,
+        "cpiaucsl_yoy": 0.014940399642909163,
+        "cpilfesl": 267.054,
+        "cpilfesl_yoy": 0.02097741687598198,
+        "published_at": null
+      },
+      {
+        "date": "2020-04-01",
+        "ref_period": "2020-04",
+        "cpiaucsl": 256.032,
+        "cpiaucsl_yoy": 0.003130472940411133,
+        "cpilfesl": 265.746,
+        "cpilfesl_yoy": 0.014309324152566472,
+        "published_at": null
+      },
+      {
+        "date": "2020-05-01",
+        "ref_period": "2020-05",
+        "cpiaucsl": 255.802,
+        "cpiaucsl_yoy": 0.001982013035848551,
+        "cpilfesl": 265.412,
+        "cpilfesl_yoy": 0.012184564692601985,
+        "published_at": null
+      },
+      {
+        "date": "2020-06-01",
+        "ref_period": "2020-06",
+        "cpiaucsl": 257.042,
+        "cpiaucsl_yoy": 0.007166562831830481,
+        "cpilfesl": 265.849,
+        "cpilfesl_yoy": 0.011836841884912408,
+        "published_at": null
+      },
+      {
+        "date": "2020-07-01",
+        "ref_period": "2020-07",
+        "cpiaucsl": 258.352,
+        "cpiaucsl_yoy": 0.009968647625897997,
+        "cpilfesl": 267.389,
+        "cpilfesl_yoy": 0.015606958371315871,
+        "published_at": null
+      },
+      {
+        "date": "2020-08-01",
+        "ref_period": "2020-08",
+        "cpiaucsl": 259.316,
+        "cpiaucsl_yoy": 0.012810698495523853,
+        "cpilfesl": 268.422,
+        "cpilfesl_yoy": 0.017223933878284248,
+        "published_at": null
+      },
+      {
+        "date": "2020-09-01",
+        "ref_period": "2020-09",
+        "cpiaucsl": 259.997,
+        "cpiaucsl_yoy": 0.013910228912373812,
+        "cpilfesl": 268.933,
+        "cpilfesl_yoy": 0.01719064405343662,
+        "published_at": null
+      },
+      {
+        "date": "2020-10-01",
+        "ref_period": "2020-10",
+        "cpiaucsl": 260.319,
+        "cpiaucsl_yoy": 0.012303863428671624,
+        "cpilfesl": 269.306,
+        "cpilfesl_yoy": 0.01636411669245552,
+        "published_at": null
+      },
+      {
+        "date": "2020-11-01",
+        "ref_period": "2020-11",
+        "cpiaucsl": 260.911,
+        "cpiaucsl_yoy": 0.011757452138405844,
+        "cpilfesl": 269.981,
+        "cpilfesl_yoy": 0.016693780408814973,
+        "published_at": null
+      },
+      {
+        "date": "2020-12-01",
+        "ref_period": "2020-12",
+        "cpiaucsl": 262.045,
+        "cpiaucsl_yoy": 0.013204191315779434,
+        "cpilfesl": 270.341,
+        "cpilfesl_yoy": 0.01624313961356294,
+        "published_at": null
+      },
+      {
+        "date": "2021-01-01",
+        "ref_period": "2021-01",
+        "cpiaucsl": 262.687,
+        "cpiaucsl_yoy": 0.013738437137002402,
+        "cpilfesl": 270.387,
+        "cpilfesl_yoy": 0.013763703714812836,
+        "published_at": null
+      },
+      {
+        "date": "2021-02-01",
+        "ref_period": "2021-02",
+        "cpiaucsl": 263.579,
+        "cpiaucsl_yoy": 0.016698167791706853,
+        "cpilfesl": 270.793,
+        "cpilfesl_yoy": 0.012802483449900981,
+        "published_at": null
+      },
+      {
+        "date": "2021-03-01",
+        "ref_period": "2021-03",
+        "cpiaucsl": 264.961,
+        "cpiaucsl_yoy": 0.026678187820641908,
+        "cpilfesl": 271.459,
+        "cpilfesl_yoy": 0.016494791315614155,
+        "published_at": null
+      },
+      {
+        "date": "2021-04-01",
+        "ref_period": "2021-04",
+        "cpiaucsl": 266.614,
+        "cpiaucsl_yoy": 0.04133077115360573,
+        "cpilfesl": 273.66,
+        "cpilfesl_yoy": 0.029780316542864504,
+        "published_at": null
+      },
+      {
+        "date": "2021-05-01",
+        "ref_period": "2021-05",
+        "cpiaucsl": 268.383,
+        "cpiaucsl_yoy": 0.04918257089467626,
+        "cpilfesl": 275.465,
+        "cpilfesl_yoy": 0.03787696110198491,
+        "published_at": null
+      },
+      {
+        "date": "2021-06-01",
+        "ref_period": "2021-06",
+        "cpiaucsl": 270.654,
+        "cpiaucsl_yoy": 0.05295632620349999,
+        "cpilfesl": 277.651,
+        "cpilfesl_yoy": 0.04439362194328367,
+        "published_at": null
+      },
+      {
+        "date": "2021-07-01",
+        "ref_period": "2021-07",
+        "cpiaucsl": 271.903,
+        "cpiaucsl_yoy": 0.05245169381309234,
+        "cpilfesl": 278.648,
+        "cpilfesl_yoy": 0.042107192143281846,
+        "published_at": null
+      },
+      {
+        "date": "2021-08-01",
+        "ref_period": "2021-08",
+        "cpiaucsl": 272.676,
+        "cpiaucsl_yoy": 0.05152015301793966,
+        "cpilfesl": 278.997,
+        "cpilfesl_yoy": 0.039396919775577244,
+        "published_at": null
+      },
+      {
+        "date": "2021-09-01",
+        "ref_period": "2021-09",
+        "cpiaucsl": 273.91,
+        "cpiaucsl_yoy": 0.05351215590949132,
+        "cpilfesl": 279.698,
+        "cpilfesl_yoy": 0.04002855729865806,
+        "published_at": null
+      },
+      {
+        "date": "2021-10-01",
+        "ref_period": "2021-10",
+        "cpiaucsl": 276.55,
+        "cpiaucsl_yoy": 0.06235042390298062,
+        "cpilfesl": 281.668,
+        "cpilfesl_yoy": 0.045903173341849124,
+        "published_at": null
+      },
+      {
+        "date": "2021-11-01",
+        "ref_period": "2021-11",
+        "cpiaucsl": 278.919,
+        "cpiaucsl_yoy": 0.06901970403700863,
+        "cpilfesl": 283.406,
+        "cpilfesl_yoy": 0.04972572143965692,
+        "published_at": null
+      },
+      {
+        "date": "2021-12-01",
+        "ref_period": "2021-12",
+        "cpiaucsl": 280.845,
+        "cpiaucsl_yoy": 0.07174340285065539,
+        "cpilfesl": 285.18,
+        "cpilfesl_yoy": 0.05488993530393094,
+        "published_at": null
+      },
+      {
+        "date": "2022-01-01",
+        "ref_period": "2022-01",
+        "cpiaucsl": 282.543,
+        "cpiaucsl_yoy": 0.07558805726967832,
+        "cpilfesl": 286.757,
+        "cpilfesl_yoy": 0.060542851542418896,
+        "published_at": null
+      },
+      {
+        "date": "2022-02-01",
+        "ref_period": "2022-02",
+        "cpiaucsl": 284.5,
+        "cpiaucsl_yoy": 0.07937278766517819,
+        "cpilfesl": 288.273,
+        "cpilfesl_yoy": 0.06455115161765645,
+        "published_at": null
+      },
+      {
+        "date": "2022-03-01",
+        "ref_period": "2022-03",
+        "cpiaucsl": 287.674,
+        "cpiaucsl_yoy": 0.08572204966013852,
+        "cpilfesl": 289.056,
+        "cpilfesl_yoy": 0.06482378554404167,
+        "published_at": null
+      },
+      {
+        "date": "2022-04-01",
+        "ref_period": "2022-04",
+        "cpiaucsl": 288.561,
+        "cpiaucsl_yoy": 0.08231750770777224,
+        "cpilfesl": 290.514,
+        "cpilfesl_yoy": 0.06158737119052837,
+        "published_at": null
+      },
+      {
+        "date": "2022-05-01",
+        "ref_period": "2022-05",
+        "cpiaucsl": 291.298,
+        "cpiaucsl_yoy": 0.08538171195642064,
+        "cpilfesl": 292.063,
+        "cpilfesl_yoy": 0.060254478790408905,
+        "published_at": null
+      },
+      {
+        "date": "2022-06-01",
+        "ref_period": "2022-06",
+        "cpiaucsl": 294.957,
+        "cpiaucsl_yoy": 0.08979361103105798,
+        "cpilfesl": 294.05,
+        "cpilfesl_yoy": 0.05906335651591377,
+        "published_at": null
+      },
+      {
+        "date": "2022-07-01",
+        "ref_period": "2022-07",
+        "cpiaucsl": 294.913,
+        "cpiaucsl_yoy": 0.08462576727730098,
+        "cpilfesl": 295.088,
+        "cpilfesl_yoy": 0.05899916740834321,
+        "published_at": null
+      },
+      {
+        "date": "2022-08-01",
+        "ref_period": "2022-08",
+        "cpiaucsl": 295.097,
+        "cpiaucsl_yoy": 0.08222579178218825,
+        "cpilfesl": 296.535,
+        "cpilfesl_yoy": 0.06286089097732228,
+        "published_at": null
+      },
+      {
+        "date": "2022-09-01",
+        "ref_period": "2022-09",
+        "cpiaucsl": 296.349,
+        "cpiaucsl_yoy": 0.08192106896425821,
+        "cpilfesl": 298.226,
+        "cpilfesl_yoy": 0.06624287624509306,
+        "published_at": null
+      },
+      {
+        "date": "2022-10-01",
+        "ref_period": "2022-10",
+        "cpiaucsl": 298.007,
+        "cpiaucsl_yoy": 0.07758813957693,
+        "cpilfesl": 299.399,
+        "cpilfesl_yoy": 0.06294999786983246,
+        "published_at": null
+      },
+      {
+        "date": "2022-11-01",
+        "ref_period": "2022-11",
+        "cpiaucsl": 298.786,
+        "cpiaucsl_yoy": 0.07122856456533988,
+        "cpilfesl": 300.325,
+        "cpilfesl_yoy": 0.05969880665899807,
+        "published_at": null
+      },
+      {
+        "date": "2022-12-01",
+        "ref_period": "2022-12",
+        "cpiaucsl": 298.832,
+        "cpiaucsl_yoy": 0.06404600402357152,
+        "cpilfesl": 301.394,
+        "cpilfesl_yoy": 0.05685531944736666,
+        "published_at": null
+      },
+      {
+        "date": "2023-01-01",
+        "ref_period": "2023-01",
+        "cpiaucsl": 300.42,
+        "cpiaucsl_yoy": 0.06327178517960097,
+        "cpilfesl": 302.642,
+        "cpilfesl_yoy": 0.05539533472591773,
+        "published_at": null
+      },
+      {
+        "date": "2023-02-01",
+        "ref_period": "2023-02",
+        "cpiaucsl": 301.45,
+        "cpiaucsl_yoy": 0.05957820738137087,
+        "cpilfesl": 304.123,
+        "cpilfesl_yoy": 0.054982603296180876,
+        "published_at": null
+      },
+      {
+        "date": "2023-03-01",
+        "ref_period": "2023-03",
+        "cpiaucsl": 301.821,
+        "cpiaucsl_yoy": 0.04917719362889961,
+        "cpilfesl": 305.147,
+        "cpilfesl_yoy": 0.05566741392671326,
+        "published_at": null
+      },
+      {
+        "date": "2023-04-01",
+        "ref_period": "2023-04",
+        "cpiaucsl": 302.845,
+        "cpiaucsl_yoy": 0.049500798791243694,
+        "cpilfesl": 306.534,
+        "cpilfesl_yoy": 0.05514364195873522,
+        "published_at": null
+      },
+      {
+        "date": "2023-05-01",
+        "ref_period": "2023-05",
+        "cpiaucsl": 303.334,
+        "cpiaucsl_yoy": 0.04131851231385042,
+        "cpilfesl": 307.652,
+        "cpilfesl_yoy": 0.05337547036084689,
+        "published_at": null
+      },
+      {
+        "date": "2023-06-01",
+        "ref_period": "2023-06",
+        "cpiaucsl": 304.014,
+        "cpiaucsl_yoy": 0.03070617072997095,
+        "cpilfesl": 308.322,
+        "cpilfesl_yoy": 0.04853596327155252,
+        "published_at": null
+      },
+      {
+        "date": "2023-07-01",
+        "ref_period": "2023-07",
+        "cpiaucsl": 304.609,
+        "cpiaucsl_yoy": 0.03287749268428297,
+        "cpilfesl": 308.96,
+        "cpilfesl_yoy": 0.04700970557935236,
+        "published_at": null
+      },
+      {
+        "date": "2023-08-01",
+        "ref_period": "2023-08",
+        "cpiaucsl": 306.082,
+        "cpiaucsl_yoy": 0.03722504803505289,
+        "cpilfesl": 309.58,
+        "cpilfesl_yoy": 0.04399143440066089,
+        "published_at": null
+      },
+      {
+        "date": "2023-09-01",
+        "ref_period": "2023-09",
+        "cpiaucsl": 307.276,
+        "cpiaucsl_yoy": 0.03687206638119256,
+        "cpilfesl": 310.539,
+        "cpilfesl_yoy": 0.04128747996485882,
+        "published_at": null
+      },
+      {
+        "date": "2023-10-01",
+        "ref_period": "2023-10",
+        "cpiaucsl": 307.696,
+        "cpiaucsl_yoy": 0.032512659098611785,
+        "cpilfesl": 311.457,
+        "cpilfesl_yoy": 0.04027401561127464,
+        "published_at": null
+      },
+      {
+        "date": "2023-11-01",
+        "ref_period": "2023-11",
+        "cpiaucsl": 308.148,
+        "cpiaucsl_yoy": 0.031333462745911866,
+        "cpilfesl": 312.392,
+        "cpilfesl_yoy": 0.04017980521102138,
+        "published_at": null
+      },
+      {
+        "date": "2023-12-01",
+        "ref_period": "2023-12",
+        "cpiaucsl": 308.741,
+        "cpiaucsl_yoy": 0.033159099427102934,
+        "cpilfesl": 313.195,
+        "cpilfesl_yoy": 0.039154727698627045,
+        "published_at": null
+      },
+      {
+        "date": "2024-01-01",
+        "ref_period": "2024-01",
+        "cpiaucsl": 309.698,
+        "cpiaucsl_yoy": 0.030883429864855705,
+        "cpilfesl": 314.319,
+        "cpilfesl_yoy": 0.03858354094937266,
+        "published_at": null
+      },
+      {
+        "date": "2024-02-01",
+        "ref_period": "2024-02",
+        "cpiaucsl": 310.967,
+        "cpiaucsl_yoy": 0.03157074141648697,
+        "cpilfesl": 315.564,
+        "cpilfesl_yoy": 0.037619647313751337,
+        "published_at": null
+      },
+      {
+        "date": "2024-03-01",
+        "ref_period": "2024-03",
+        "cpiaucsl": 312.345,
+        "cpiaucsl_yoy": 0.034868349120836584,
+        "cpilfesl": 316.792,
+        "cpilfesl_yoy": 0.038161935067360986,
+        "published_at": null
+      },
+      {
+        "date": "2024-04-01",
+        "ref_period": "2024-04",
+        "cpiaucsl": 313.023,
+        "cpiaucsl_yoy": 0.033607951262196734,
+        "cpilfesl": 317.649,
+        "cpilfesl_yoy": 0.03626025171759095,
+        "published_at": null
+      },
+      {
+        "date": "2024-05-01",
+        "ref_period": "2024-05",
+        "cpiaucsl": 313.175,
+        "cpiaucsl_yoy": 0.03244278584003113,
+        "cpilfesl": 318.095,
+        "cpilfesl_yoy": 0.03394419668976645,
+        "published_at": null
+      },
+      {
+        "date": "2024-06-01",
+        "ref_period": "2024-06",
+        "cpiaucsl": 313.044,
+        "cpiaucsl_yoy": 0.029702579486470926,
+        "cpilfesl": 318.39,
+        "cpilfesl_yoy": 0.032654173234475614,
+        "published_at": null
+      },
+      {
+        "date": "2024-07-01",
+        "ref_period": "2024-07",
+        "cpiaucsl": 313.569,
+        "cpiaucsl_yoy": 0.029414757935583014,
+        "cpilfesl": 318.94,
+        "cpilfesl_yoy": 0.03230191610564481,
+        "published_at": null
+      },
+      {
+        "date": "2024-08-01",
+        "ref_period": "2024-08",
+        "cpiaucsl": 314.062,
+        "cpiaucsl_yoy": 0.02607144490692037,
+        "cpilfesl": 319.75,
+        "cpilfesl_yoy": 0.03285095936430005,
+        "published_at": null
+      },
+      {
+        "date": "2024-09-01",
+        "ref_period": "2024-09",
+        "cpiaucsl": 314.732,
+        "cpiaucsl_yoy": 0.024264830315416708,
+        "cpilfesl": 320.732,
+        "cpilfesl_yoy": 0.032823574494668994,
+        "published_at": null
+      },
+      {
+        "date": "2024-10-01",
+        "ref_period": "2024-10",
+        "cpiaucsl": 315.631,
+        "cpiaucsl_yoy": 0.02578844053871343,
+        "cpilfesl": 321.731,
+        "cpilfesl_yoy": 0.03298689706765301,
+        "published_at": null
+      },
+      {
+        "date": "2024-11-01",
+        "ref_period": "2024-11",
+        "cpiaucsl": 316.528,
+        "cpiaucsl_yoy": 0.02719472461284833,
+        "cpilfesl": 322.657,
+        "cpilfesl_yoy": 0.032859356193500444,
+        "published_at": null
+      },
+      {
+        "date": "2024-12-01",
+        "ref_period": "2024-12",
+        "cpiaucsl": 317.604,
+        "cpiaucsl_yoy": 0.028706909675099812,
+        "cpilfesl": 323.259,
+        "cpilfesl_yoy": 0.032133335461932644,
+        "published_at": null
+      },
+      {
+        "date": "2025-01-01",
+        "ref_period": "2025-01",
+        "cpiaucsl": 318.961,
+        "cpiaucsl_yoy": 0.029909783078999608,
+        "cpilfesl": 324.638,
+        "cpilfesl_yoy": 0.03282970485398584,
+        "published_at": null
+      },
+      {
+        "date": "2025-02-01",
+        "ref_period": "2025-02",
+        "cpiaucsl": 319.679,
+        "cpiaucsl_yoy": 0.028015834477613355,
+        "cpilfesl": 325.465,
+        "cpilfesl_yoy": 0.0313755688228059,
+        "published_at": null
+      },
+      {
+        "date": "2025-03-01",
+        "ref_period": "2025-03",
+        "cpiaucsl": 319.785,
+        "cpiaucsl_yoy": 0.02381981462805549,
+        "cpilfesl": 325.69,
+        "cpilfesl_yoy": 0.02808783050077035,
+        "published_at": null
+      },
+      {
+        "date": "2025-04-01",
+        "ref_period": "2025-04",
+        "cpiaucsl": 320.302,
+        "cpiaucsl_yoy": 0.0232538823025783,
+        "cpilfesl": 326.467,
+        "cpilfesl_yoy": 0.027760200724699313,
+        "published_at": null
+      },
+      {
+        "date": "2025-05-01",
+        "ref_period": "2025-05",
+        "cpiaucsl": 320.62,
+        "cpiaucsl_yoy": 0.023772651073680873,
+        "cpilfesl": 326.893,
+        "cpilfesl_yoy": 0.027658403935930886,
+        "published_at": null
+      },
+      {
+        "date": "2025-06-01",
+        "ref_period": "2025-06",
+        "cpiaucsl": 321.435,
+        "cpiaucsl_yoy": 0.02680453865910226,
+        "cpilfesl": 327.658,
+        "cpilfesl_yoy": 0.02910895442696071,
+        "published_at": null
+      },
+      {
+        "date": "2025-07-01",
+        "ref_period": "2025-07",
+        "cpiaucsl": 322.169,
+        "cpiaucsl_yoy": 0.02742618052167134,
+        "cpilfesl": 328.682,
+        "cpilfesl_yoy": 0.030544930080893096,
+        "published_at": null
+      },
+      {
+        "date": "2025-08-01",
+        "ref_period": "2025-08",
+        "cpiaucsl": 323.291,
+        "cpiaucsl_yoy": 0.029385917430316155,
+        "cpilfesl": 329.7,
+        "cpilfesl_yoy": 0.03111806098514469,
+        "published_at": null
+      },
+      {
+        "date": "2025-09-01",
+        "ref_period": "2025-09",
+        "cpiaucsl": 324.245,
+        "cpiaucsl_yoy": 0.030225715847133294,
+        "cpilfesl": 330.418,
+        "cpilfesl_yoy": 0.030199668258857892,
+        "published_at": null
+      },
+      {
+        "date": "2025-11-01",
+        "ref_period": "2025-11",
+        "cpiaucsl": 325.063,
+        "cpiaucsl_yoy": 0.026964439164939513,
+        "cpilfesl": 331.043,
+        "cpilfesl_yoy": 0.025990448060944082,
+        "published_at": null
+      },
+      {
+        "date": "2025-12-01",
+        "ref_period": "2025-12",
+        "cpiaucsl": 326.031,
+        "cpiaucsl_yoy": 0.02653304114557753,
+        "cpilfesl": 331.814,
+        "cpilfesl_yoy": 0.026464847073089937,
+        "published_at": null
+      },
+      {
+        "date": "2026-01-01",
+        "ref_period": "2026-01",
+        "cpiaucsl": 326.588,
+        "cpiaucsl_yoy": 0.02391201432150014,
+        "cpilfesl": 332.793,
+        "cpilfesl_yoy": 0.02512028782828879,
+        "published_at": null
+      },
+      {
+        "date": "2026-02-01",
+        "ref_period": "2026-02",
+        "cpiaucsl": 327.46,
+        "cpiaucsl_yoy": 0.024340041103732224,
+        "cpilfesl": 333.512,
+        "cpilfesl_yoy": 0.024724624767640258,
+        "published_at": null
+      },
+      {
+        "date": "2026-03-01",
+        "ref_period": "2026-03",
+        "cpiaucsl": 330.293,
+        "cpiaucsl_yoy": 0.032859577528651984,
+        "cpilfesl": 334.165,
+        "cpilfesl_yoy": 0.026021677054868242,
+        "published_at": null
+      },
+      {
+        "date": "2026-04-01",
+        "ref_period": "2026-04",
+        "cpiaucsl": 332.407,
+        "cpiaucsl_yoy": 0.03779245836741563,
+        "cpilfesl": 335.423,
+        "cpilfesl_yoy": 0.027433094309685213,
+        "published_at": null
+      },
+      {
+        "date": "2026-05-01",
+        "ref_period": "2026-05",
+        "cpiaucsl": 333.979,
+        "cpiaucsl_yoy": 0.04166614684049641,
+        "cpilfesl": 336.121,
+        "cpilfesl_yoy": 0.028229420636110225,
+        "published_at": null
+      },
+      {
+        "date": "2026-06-01",
+        "ref_period": "2026-06",
+        "cpiaucsl": 332.568,
+        "cpiaucsl_yoy": 0.03463530729385411,
+        "cpilfesl": 336.065,
+        "cpilfesl_yoy": 0.025657850563697515,
+        "published_at": null
+      },
+      {
+        "date": "2026-07-01",
+        "ref_period": "2026-07",
+        "cpiaucsl": 332.813,
+        "cpiaucsl_yoy": 0.03303856050706311,
+        "cpilfesl": 336.789,
+        "cpilfesl_yoy": 0.024665177892309265,
+        "published_at": null
+      }
+    ],
+    "meta": {
+      "cpi_latest_ref_period": "2026-07",
+      "cpi_latest_published_at": null,
+      "cpi_release_date_available": false
+    }
+  }
+}

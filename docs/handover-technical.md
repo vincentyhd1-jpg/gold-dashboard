@@ -145,6 +145,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_oi.py --test` | 0 | 62 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 22 passed, 0 failed |
 | `fetch_fred.py --test` | 0 | 17 passed, 0 failed |
+| `derive_macro.py --test` | 0 | 23 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 37 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 100 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 22 passed, 0 failed；page errors: none |
@@ -155,9 +156,11 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
 | `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 5 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
+| `tools/verify-macro-page.mjs` | 0 | 25 passed, 0 failed |
 
 前端 verify 中 ui-fixes(22)/contract-contango(29)/isolation(37)/
-schema-coupling(3)/envelope-helper-raw-inputs(5)/cot-sentinel-strict(4) 有计数；
+schema-coupling(3)/envelope-helper-raw-inputs(5)/cot-sentinel-strict(4)/
+macro-page(25) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -374,6 +377,10 @@ index.html:484   label 文案「页面更新：」
 
 ### 偶发失败
 
+- **`tools/verify-macro-page.mjs`** —— 页面从 CDN 取 `chart.umd.min.js`，取不到时
+  `Chart` 始终 undefined、一张图都建不起来。本机四连跑中两次触发（重试 1~2 次后成功）。
+  脚本内已加 3 次重试 + 每次重试清空 `errors`；三次全失败才红，且红的文案会点明
+  「Chart.js（CDN）未加载：环境问题」以免被当成页面缺陷。
 - **`tools/verify-ui-fixes.mjs`** —— 批量连跑六个前端 verify 时出现过一次
   `waitForFunction` 30s 超时、exit=1；单独重跑 exit=0 / 13 passed。当时数据文件
   完好、dev server 正常。表现为并发争用，非代码缺陷。

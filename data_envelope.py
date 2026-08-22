@@ -123,7 +123,7 @@ REQUIRED_ENVELOPE_KEYS = (
     "date_field", "coverage", "derived_from", "warnings", "info", "data",
 )
 
-VALID_FREQ = frozenset({"daily", "weekly"})
+VALID_FREQ = frozenset({"daily", "weekly", "monthly"})
 
 
 def is_envelope(payload) -> bool:

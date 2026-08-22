@@ -25,6 +25,15 @@ COMEX 黄金持仓仪表盘。数据每交易日由 GitHub Actions 采集，前�
 
 `reports/` 是过程存档，不是产物，不入库；与 `screenshots/` 里的一次性注入脚本同类处置。
 
+## 命令临时文件
+
+命令输出的临时文件一律写系统临时目录（`mktemp` / `$TMPDIR`），不得写入仓库根
+或任何被 git 跟踪的目录。
+
+写进仓库的临时文件会混进 `git status` 与完整 diff，让本轮真实改动和一次性中间
+产物无法区分；忘记删就变成游离文件被误提交。取证输出、diff 快照、测试 stdout
+全部同此处置。
+
 ## 架构
 
 ```
@@ -635,6 +644,7 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 
 ```
 python3 derive_term_structure.py --test    # 派生逻辑 13 项（含信封契约、KPI）
+python3 derive_macro.py --test             # 宏观派生 23 项（rates/cpi 双链、warnings 拆分）
 python3 fetch_oi.py --test                 # 采集校验 23 项（不联网）
 python3 fetch_cot.py --test                # 采集校验 26 项（含 build_payload 幂等前提）
 python3 fetch_gold.py --test               # 采集校验 12 项（含退化边界）
@@ -650,6 +660,7 @@ node tools/verify-schema-coupling.mjs      # 注入 schema 破坏，验证护栏
 node tools/verify-kpi-injection.mjs        # 注入错误 KPI 值，验证护栏会变红
 node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证护栏会变红
 node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
+node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 首屏落位 25 项
 node tools/verify-live.mjs                 # 线上端到端
 ```
 
