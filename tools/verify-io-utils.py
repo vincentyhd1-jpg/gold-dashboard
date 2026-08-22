@@ -474,7 +474,7 @@ with tempfile.TemporaryDirectory() as d:
 # ══ D 表：信封读取端（unwrap / assert_envelope）═════════════════════════════
 print("\n[D 表：信封读取端]")
 from data_envelope import (
-    envelope, unwrap, assert_envelope, is_envelope, SCHEMA_VERSION,
+    envelope, unwrap, assert_envelope, is_envelope, SCHEMA_VERSION, VALID_FREQ,
 )
 
 good = envelope("test_src", "daily", {"rows": [1, 2]},
@@ -522,6 +522,22 @@ check("schema_version=999（未来版本）→ 拒绝，不按旧格式硬解", 
 p = dict(good); p["freq"] = "hourly"
 ok, msg = rejects(p, "freq")
 check("freq='hourly' → 拒绝", ok, msg)
+
+# freq 合法：quarterly（债务面板用季频，Treasury Bulletin 与 BEA GDP 都是季频）。
+# 上面那条 hourly 只证明「白名单外的被拒」，白名单里少一项它照样绿 ——
+# 所以必须有这条正向断言，否则 quarterly 被删掉不会有任何护栏出声。
+p = dict(good); p["freq"] = "quarterly"
+try:
+    assert_envelope(p)
+    check("freq='quarterly' → 接受", True)
+except ValueError as e:
+    check("freq='quarterly' → 接受", False, str(e))
+
+# 白名单本身的锚：增或删任何一项都红。放宽校验不会让别的断言变红，
+# 这条是唯一会拦住「悄悄多加一种频率」的地方。
+check("VALID_FREQ 恰为 {daily,weekly,monthly,quarterly} 四项",
+      VALID_FREQ == frozenset({"daily", "weekly", "monthly", "quarterly"}),
+      str(sorted(VALID_FREQ)))
 
 # unwrap 对坏信封也必须拒绝（不能绕过 assert）
 p = dict(good); p["schema_version"] = 999

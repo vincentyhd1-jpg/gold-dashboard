@@ -700,6 +700,16 @@ python3 tools/verify-noise-injection.py    # 本机跑不起来（见交接文�
 node tools/verify-live.mjs                 # 线上端到端
 ```
 
+**九个前端 verify 需要本地静态 server 监听 3001**（脚本一律 `goto
+http://localhost:3001`，没起 server 时全部 `ERR_CONNECTION_REFUSED`）。
+server 必须 **`.listen(3001)` 双栈**，只绑 `127.0.0.1` 会让 `verify-isolation`
+挂在 `page.goto` 超时 60s：它用 `route.fetch()` 由 **Playwright Node 侧**重新发
+请求（`tools/verify-isolation.mjs:38-43`），按 `localhost` 先试 `::1`；其余脚本
+走浏览器的网络栈，IPv4 回退正常，照常全绿。
+
+推论：**「同一个 server 上别的脚本能过」不能证明 server 没问题** —— 浏览器与
+Playwright Node 侧走两条不同的网络栈，一条通不代表另一条通。
+
 ### 验证护栏是否有效，靠注入破坏，不靠读代码推断
 
 「这个脚本看起来会覆盖到」是不可靠的判断。要确认一条护栏真的有效，

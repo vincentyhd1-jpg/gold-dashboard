@@ -147,7 +147,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_fred.py --test` | 0 | 25 passed, 0 failed |
 | `derive_macro.py --test` | 0 | 23 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 37 passed, 0 failed |
-| `tools/verify-io-utils.py` | 0 | 100 passed, 0 failed |
+| `tools/verify-io-utils.py` | 0 | 102 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 22 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
