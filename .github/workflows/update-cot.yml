@@ -37,6 +37,8 @@ jobs:
           python fetch_stocks.py --test
           python fetch_oi.py --test
           python derive_term_structure.py --test
+          python fetch_fred.py --test
+          python derive_macro.py --test
         continue-on-error: true
 
       # 每个采集步骤互不连累：任一失败都不能让其余步骤被跳过，
@@ -85,10 +87,50 @@ jobs:
           exit 0
         continue-on-error: true
 
+      # FRED 八个序列（UST 2Y/10Y/30Y、Fed 目标区间上下限、DFF、CPIAUCSL、CPILFESL）。
+      # 逐序列独立下载/解析/校验/落盘，一个序列失败不影响其余，见 fetch_fred.py:182 process_one。
+      #
+      # exit code 三态：0 正常 / 1 需人工介入（c 类解析失败已隔离原始响应；
+      # d 类校验不过已隔离并落 data:null）/ 2 上游未更新（a 类下载失败或
+      # FRED_API_KEY 缺失、b 类响应顶层格式非法）。与 gold/stocks/oi 同一写法。
+      #
+      # 额外抓一次 stdout：main() 是 max(code) 取最严重码（fetch_fred.py:432），
+      # 而按本仓约定 1（需人工介入）比 2（上游未更新）更严重 —— 一个序列 d 类失败(1)
+      # 撞上另一个序列下载失败(2)时，进程码是 2，闸门若只看码就会把那条 1 当成
+      # 「上游未更新，正常」放过去。故同时数一遍逐序列打印的 "c/d exit 1" 行，
+      # 有一行就红，不依赖进程码。
+      - name: Run fetch_fred.py
+        id: fred
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          set +e
+          python fetch_fred.py 2>&1 | tee /tmp/fred.log
+          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          echo "needs_attention=$(grep -cE ': [cd] exit 1' /tmp/fred.log)" >> "$GITHUB_OUTPUT"
+          exit 0
+        continue-on-error: true
+
       # 派生数据可从 oi.json 随时重算，失败不阻断提交
       - name: Run derive_term_structure.py
         id: derive
         run: python derive_term_structure.py
+        continue-on-error: true
+
+      # 宏观派生：两条链解耦（rates 读 6 个上游 / cpi 读 2 个），一条失败另一条照常产出，
+      # 失败的那条保留上一版文件。派生数据可从 data/*.json 随时重算，失败不阻断提交。
+      #
+      # exit code 只有两态：0 正常 / 1 至少一条链的上游缺失、非信封、空或全 null
+      # （derive_macro.py:366 `return 1 if failures else 0`）—— **不产生 2**。
+      # 仍显式捕获码而不只看 outcome：出现 2 或其它码说明是未预期的崩溃路径，
+      # 闸门要能把它和「上游没更新」区分开报出来。
+      - name: Run derive_macro.py
+        id: derive_macro
+        run: |
+          set +e
+          python derive_macro.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
         continue-on-error: true
 
       # 原始数据不可再生（CME 无历史归档），无条件落盘：
@@ -102,7 +144,12 @@ jobs:
 
           # 逐个 add：任一文件缺失（对应采集步骤失败）不影响其余文件入库
           for f in data/cot.json data/gold_price.json data/stocks.json \
-                   data/oi.json data/derived/term-structure-series.json; do
+                   data/oi.json data/derived/term-structure-series.json \
+                   data/ust_dgs2.json data/ust_dgs10.json data/ust_dgs30.json \
+                   data/fed_target_upper.json data/fed_target_lower.json \
+                   data/fed_effective_rate.json \
+                   data/cpi_cpiaucsl.json data/cpi_cpilfesl.json \
+                   data/derived/macro_rates.json data/derived/macro_cpi.json; do
             git add "$f" 2>/dev/null || true
           done
           # 隔离区必须提交：CME 只提供当日文件，坏数据错过就永久拿不回来
@@ -134,7 +181,7 @@ jobs:
           }
 
           [ "${{ steps.tests.outcome }}"  = "failure" ] && \
-            fail "校验器自检" "fetch_oi.py --test 或 derive_term_structure.py --test 失败 —— 校验逻辑本身有问题，本次采集的校验结果不可信"
+            fail "校验器自检" "七个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
           [ "${{ steps.cot.outcome }}"    = "failure" ] && \
             fail "采集层：COT" "fetch_cot.py 失败或未通过 5 项校验 —— 坏数据已隔离到 data/quarantine/，cot.json 保持上一份。详见该步骤日志"
           # 金价按 exit code 两态处理。**gold 不产生 exit 2**：
@@ -172,8 +219,33 @@ jobs:
             0|"") : ;;
             *) fail "采集层：期限结构" "fetch_oi.py 以未预期的 exit code ${{ steps.oi.outputs.code }} 退出" ;;
           esac
+          # FRED 按 exit code 三态处理，但**不只看进程码**（见 fetch_fred.py 步骤注释）：
+          #   needs_attention>0 = 有序列走了 c/d 类（解析失败或校验不过）→ 红。
+          #       这条放在最前面：main() 的 max(code) 会让同批出现的 2 盖住 1。
+          #   1 = 需人工介入 —— c 类原始响应已隔离；d 类已隔离并落 data:null + coverage:null
+          #   2 = 上游未更新 —— a 类下载失败 / FRED_API_KEY 缺失或失效 / b 类顶层格式非法。
+          #       只告警不红：FRED 提供完整历史，下次跑能补回，八个文件保持上一份。
+          #       **已知分辨力缺口**：secret 缺失/失效也落在这一态，会连日只告警不红。
+          #       告警文案点名这一点，看到连续多天该 warning 就该去查 secret。
+          if [ "${{ steps.fred.outputs.needs_attention }}" != "0" ] && [ -n "${{ steps.fred.outputs.needs_attention }}" ]; then
+            fail "采集层：FRED" "fetch_fred.py 有 ${{ steps.fred.outputs.needs_attention }} 个序列需人工介入（c 类解析失败或 d 类校验不过）—— 原始响应已隔离到 data/quarantine/，d 类对应文件已落 data:null + coverage:null。详见该步骤日志中的逐序列行"
+          else
+            case "${{ steps.fred.outputs.code }}" in
+              1) fail "采集层：FRED" "fetch_fred.py 需人工介入（exit 1）—— 详见该步骤日志" ;;
+              2) echo "::warning title=采集层：FRED::FRED 未返回可用数据（下载失败 / API key 缺失或失效 / 响应格式非法），八个序列文件保持上一份。若连续多天出现，先查 secrets.FRED_API_KEY" ;;
+              0|"") : ;;
+              *) fail "采集层：FRED" "fetch_fred.py 以未预期的 exit code ${{ steps.fred.outputs.code }} 退出（fetch_fred 只应产生 0 / 1 / 2）" ;;
+            esac
+          fi
           [ "${{ steps.derive.outcome }}" = "failure" ] && \
             fail "派生层" "derive_term_structure.py 失败 —— term-structure-series.json 保持上一版，页面回放停留在旧数据。原始数据已落盘，修好后重跑即可重算"
+          # 宏观派生只有 0/1 两态（无 2）。exit 1 = 至少一条链的上游缺失/非信封/空/全 null，
+          # 那条链保留上一版文件、另一条照常产出 —— 是失败隔离生效，不是全盘失败。
+          case "${{ steps.derive_macro.outputs.code }}" in
+            1) fail "派生层：宏观" "derive_macro.py 至少一条派生链失败（上游缺失 / 非信封 / 空 / 全 null）—— 失败的那条保留上一版 macro_rates.json 或 macro_cpi.json，宏观页面对应图停留在旧数据。原始采集已落盘，修好上游后重跑即可重算" ;;
+            0|"") : ;;
+            *) fail "派生层：宏观" "derive_macro.py 以未预期的 exit code ${{ steps.derive_macro.outputs.code }} 退出（derive_macro 只应产生 0 或 1）" ;;
+          esac
           [ "${{ steps.commit.outcome }}" = "failure" ] && \
             fail "提交层" "commit/push 失败 —— 本次采集到的数据未能入库，需人工介入"
 

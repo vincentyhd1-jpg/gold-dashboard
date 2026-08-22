@@ -642,25 +642,33 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 
 ## 验证
 
+本节只列命令与用途，**不写测试项数** —— 项数唯一维护点是
+`docs/handover-technical.md` 的基线表，两处各存一份必然漂（曾漂到 13/23/12 三个错数）。
+
 ```
-python3 derive_term_structure.py --test    # 派生逻辑 13 项（含信封契约、KPI）
-python3 derive_macro.py --test             # 宏观派生 23 项（rates/cpi 双链、warnings 拆分）
-python3 fetch_oi.py --test                 # 采集校验 23 项（不联网）
-python3 fetch_cot.py --test                # 采集校验 26 项（含 build_payload 幂等前提）
-python3 fetch_gold.py --test               # 采集校验 12 项（含退化边界）
-python3 fetch_stocks.py --test             # 采集校验 18 项（含缺字段 SKIP）
-python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘 24 项
-python3 tools/verify-io-utils.py           # 落盘骨架 100 项（含隔离区撞名断言）
+python3 derive_term_structure.py --test    # 派生逻辑（含信封契约、KPI）
+python3 derive_macro.py --test             # 宏观派生（rates/cpi 双链、warnings 拆分）
+python3 fetch_oi.py --test                 # 采集校验（不联网）
+python3 fetch_cot.py --test                # 采集校验（含 build_payload 幂等前提）
+python3 fetch_gold.py --test               # 采集校验（含退化边界）
+python3 fetch_stocks.py --test             # 采集校验（含缺字段 SKIP）
+python3 fetch_fred.py --test               # 采集校验（8 个 FRED 序列，a/b/c/d 四类失败）
+python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘
+python3 tools/verify-io-utils.py           # 落盘骨架（含隔离区撞名断言）
 node tools/verify-ui-fixes.mjs             # 柱对齐 / 按钮态 / 轴刻度 / 合约列表
 node tools/verify-contract-contango.mjs    # 合约过滤 / 最小柱高 / 价差锚点
 node tools/verify-playback.mjs             # 回放交互
 node tools/verify-gapframe.mjs             # 断层帧
-node tools/verify-isolation.mjs            # 注入渲染故障，验证模块隔离（37 项断言）
+node tools/verify-isolation.mjs            # 注入渲染故障，验证模块隔离
 node tools/verify-schema-coupling.mjs      # 注入 schema 破坏，验证护栏会变红
+node tools/verify-envelope-helper-raw-inputs.mjs  # 前端解包 helper 不吃裸格式
+node tools/verify-cot-sentinel-strict.mjs  # COT 哨兵值严格拒绝
 node tools/verify-kpi-injection.mjs        # 注入错误 KPI 值，验证护栏会变红
+node tools/verify-spread-injection.mjs     # 注入错误 spread，验证护栏会变红
 node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证护栏会变红
 node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
-node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 首屏落位 25 项
+node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 首屏落位
+python3 tools/verify-noise-injection.py    # 本机跑不起来（见交接文档），清点全绿时不含它
 node tools/verify-live.mjs                 # 线上端到端
 ```
 
