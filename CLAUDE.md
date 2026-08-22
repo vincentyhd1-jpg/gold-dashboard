@@ -73,6 +73,8 @@ tools/*.mjs       Playwright 验证脚本
 三个读 `cot.json` 的地方都已容双形状（`fetch_gold.py`、
 `tools/verify-fetch-gates.py`、`index.html`），所以写入端切换不会开破窗。
 
+**TODO（fetch_fred --test 剩余覆盖缺口）**：补充幂等写盘断言、缺日期不补点、c 类 quarantine 与主文件不变的独立断言，以及 d 类 coverage 不一致的独立断言。
+
 ## 常见陷阱
 
 ### cwd 陷阱
