@@ -38,6 +38,12 @@ class FetchFailure(Exception):
     pass
 
 
+class MissingKey(Exception):
+    """FRED_API_KEY 缺失/为空。刻意不继承 FetchFailure：
+    继承的话任何 `except FetchFailure` 都会顺手把它吃掉，又退回 exit 2。"""
+    pass
+
+
 class FormatFailure(Exception):
     pass
 
@@ -53,7 +59,7 @@ def utc_stamp() -> str:
 def _key() -> str:
     key = os.environ.get("FRED_API_KEY")
     if not key:
-        raise FetchFailure("FRED_API_KEY 缺失")
+        raise MissingKey("FRED_API_KEY 缺失")
     return key
 
 
@@ -186,6 +192,9 @@ def process_one(series_id: str, relpath: str, freq: str, kind: str, *, fetcher=f
     sweep_stale_tmp(str(path))
     try:
         payload, raw = fetcher(series_id)
+    except MissingKey as exc:
+        print(f"{series_id}: key exit 3: {exc}")
+        return "key", 3, ""
     except FetchFailure as exc:
         print(f"{series_id}: a/b exit 2: {exc}")
         return "download", 2, ""
@@ -275,7 +284,7 @@ def run_tests() -> None:
         )
         return path
 
-    def assert_hash_unchanged(label: str, fetcher, *, base_dir: Path, target_relpath: str, series_id: str = "DGS2", freq: str = "daily", kind: str = "rate", quarantine_dir: Path | None = None):
+    def assert_hash_unchanged(label: str, fetcher, *, base_dir: Path, target_relpath: str, series_id: str = "DGS2", freq: str = "daily", kind: str = "rate", quarantine_dir: Path | None = None, expect_code: int = 2, expect_kinds: set[str] = frozenset({"download", "format"})):
         path = seed_target(base_dir, target_relpath)
         before = file_hash(path)
         result_kind, code, _ = process_one(
@@ -288,7 +297,7 @@ def run_tests() -> None:
             quarantine_dir=quarantine_dir or (base_dir / "quarantine"),
         )
         after = file_hash(path)
-        check(label, code == 2 and before == after and result_kind in {"download", "format"})
+        check(label, code == expect_code and before == after and result_kind in expect_kinds)
 
     old_key = os.environ.get("FRED_API_KEY")
     os.environ["FRED_API_KEY"] = "TEST_KEY"
@@ -382,10 +391,12 @@ def run_tests() -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             assert_hash_unchanged(
-                "a 缺 key exit 2 且 hash 不变",
+                "key 缺失 exit 3（不再混进 a 的 2）且 hash 不变",
                 missing_key_fetch,
                 base_dir=root,
                 target_relpath="data/ust_dgs2.json",
+                expect_code=3,
+                expect_kinds=frozenset({"key"}),
             )
         os.environ["FRED_API_KEY"] = "TEST_KEY"
         with tempfile.TemporaryDirectory() as tmp:
@@ -404,6 +415,73 @@ def run_tests() -> None:
                 base_dir=root,
                 target_relpath="data/ust_dgs2.json",
             )
+        # —— 严重度汇总：断言的是**进程码**，不是单序列的码 ——
+        # 这几条是 max() 缺陷的回归闸门：把 worse_exit 换回 max，它们必须红。
+        def batch_processor(root: Path, fetcher):
+            def proc(series_id, relpath, freq, kind):
+                return process_one(series_id, relpath, freq, kind, fetcher=fetcher,
+                                   base_dir=root, quarantine_dir=root / "quarantine")
+            return proc
+
+        def raise_missing_key(series_id):
+            # 刻意走真实 _key()（清空环境变量后调 fetch_payload），而不是直接
+            # raise MissingKey：直接 raise 会绕过 _key()，那么「key 到底走 3 还是
+            # 混进 a/b 的 2」这个分流就没被考到，把 _key() 改回抛 FetchFailure
+            # 时这条仍会绿。
+            os.environ.pop("FRED_API_KEY", None)
+            return fetch_payload(series_id)
+
+        def raise_download(series_id):
+            raise FetchFailure(f"FRED {series_id} 下载失败: 模拟")
+
+        def mixed_fetch(series_id):
+            # DGS10 → c 类（日期非法）、CPIAUCSL → d 类（CPI ≤ 0）、DGS2 → a 类（下载失败），
+            # 其余序列正常。同批里 1 和 2 并存，考的就是汇总取谁。
+            if series_id == "DGS10":
+                obs = [{"date": "bad-date", "value": "1.0"}]
+            elif series_id == "CPIAUCSL":
+                obs = [{"date": "2026-01-01", "value": "0"}]
+            elif series_id == "DGS2":
+                raise FetchFailure("FRED DGS2 下载失败: 模拟")
+            else:
+                obs = [{"date": "2026-01-01", "value": "1.0"}]
+            payload = {"observations": obs}
+            return payload, json.dumps(payload).encode()
+
+        def key_and_download_fetch(series_id):
+            if series_id == "DGS2":
+                raise FetchFailure("FRED DGS2 下载失败: 模拟")
+            raise MissingKey("FRED_API_KEY 缺失")
+
+        def d_and_key_fetch(series_id):
+            if series_id == "CPIAUCSL":
+                obs = [{"date": "2026-01-01", "value": "0"}]
+                payload = {"observations": obs}
+                return payload, json.dumps(payload).encode()
+            raise MissingKey("FRED_API_KEY 缺失")
+
+        for label, fetcher, expect in [
+            ("c/d 与 a 同批时进程码=1（1 比 2 严重，max() 会给出 2）", mixed_fetch, 1),
+            ("key 缺失时进程码=3（不是 2）", raise_missing_key, 3),
+            ("key 与 a 同批时进程码=3（3 比 2 严重，max() 会给出 3 —— 此条不区分实现）", key_and_download_fetch, 3),
+            ("d 与 key 同批时进程码=1（1 比 3 严重，max() 会给出 3）", d_and_key_fetch, 1),
+            ("整批只有 a 时进程码=2", raise_download, 2),
+        ]:
+            os.environ["FRED_API_KEY"] = "TEST_KEY"   # 上一条可能把它清了
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "data").mkdir(parents=True, exist_ok=True)
+                rc = run_all(SERIES, processor=batch_processor(root, fetcher))
+                check(f"{label} —— 实得 {rc}", rc == expect)
+
+        os.environ["FRED_API_KEY"] = "TEST_KEY"
+        check("严重度序 1 > 3 > 2 > 0",
+              _severity(1) > _severity(3) > _severity(2) > _severity(0))
+        check("未登记的码视为最严重（未预期退出路径必须能压过一切）",
+              worse_exit(1, 9) == 9 and worse_exit(9, 1) == 9)
+        check("worse_exit 与顺序无关（可交换）",
+              all(worse_exit(a, b) == worse_exit(b, a) for a in (0, 1, 2, 3) for b in (0, 1, 2, 3)))
+
     finally:
         if old_key is None:
             os.environ.pop("FRED_API_KEY", None)
@@ -422,15 +500,41 @@ def _classify_parse(payload: dict) -> str:
     return "ok"
 
 
+# 退出码的严重度**与数值大小无关**，故显式映射，不能用 max()：
+#   1 需人工介入（c 类解析失败 / d 类校验不过，已隔离）
+#   3 key 缺失或无效（配置问题，等不来自愈，必须有人去看 secrets.FRED_API_KEY）
+#   2 上游未更新（下载失败 / 顶层格式非法，下次跑能补回）
+#   0 正常
+# 排序：1 > 3 > 2 > 0。用 max() 会让 2 盖住 1、3 盖住 1，把「要人管」的错
+# 报成「上游没更新，正常」。
+EXIT_SEVERITY = {0: 0, 2: 1, 3: 2, 1: 3}
+_UNKNOWN_SEVERITY = max(EXIT_SEVERITY.values()) + 1
+
+
+def _severity(code: int) -> int:
+    # 未登记的码视为最严重：出现了没设计过的退出路径，就该压过一切被看见。
+    return EXIT_SEVERITY.get(code, _UNKNOWN_SEVERITY)
+
+
+def worse_exit(current: int, incoming: int) -> int:
+    return incoming if _severity(incoming) > _severity(current) else current
+
+
+def run_all(configs=SERIES, *, processor=process_one) -> int:
+    """逐序列跑完，按严重度汇总成一个进程码。
+    单独成函数是为了让 --test 能换掉 processor 直接验汇总结果（进程码本身）。"""
+    result = 0
+    for config in configs:
+        _, code, _ = processor(*config)
+        result = worse_exit(result, code)
+    return result
+
+
 def main() -> int:
     if "--test" in sys.argv:
         run_tests()
         return 0
-    result = 0
-    for config in SERIES:
-        _, code, _ = process_one(*config)
-        result = max(result, code)
-    return result
+    return run_all()
 
 
 if __name__ == "__main__":

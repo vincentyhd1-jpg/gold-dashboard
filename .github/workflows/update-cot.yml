@@ -88,17 +88,17 @@ jobs:
         continue-on-error: true
 
       # FRED 八个序列（UST 2Y/10Y/30Y、Fed 目标区间上下限、DFF、CPIAUCSL、CPILFESL）。
-      # 逐序列独立下载/解析/校验/落盘，一个序列失败不影响其余，见 fetch_fred.py:182 process_one。
+      # 逐序列独立下载/解析/校验/落盘，一个序列失败不影响其余，见 fetch_fred.py:188 process_one。
       #
-      # exit code 三态：0 正常 / 1 需人工介入（c 类解析失败已隔离原始响应；
-      # d 类校验不过已隔离并落 data:null）/ 2 上游未更新（a 类下载失败或
-      # FRED_API_KEY 缺失、b 类响应顶层格式非法）。与 gold/stocks/oi 同一写法。
+      # exit code 四态：0 正常 / 1 需人工介入（c 类解析失败已隔离原始响应；
+      # d 类校验不过已隔离并落 data:null）/ 3 FRED_API_KEY 缺失或无效 /
+      # 2 上游未更新（a 类下载失败、b 类响应顶层格式非法）。
       #
-      # 额外抓一次 stdout：main() 是 max(code) 取最严重码（fetch_fred.py:432），
-      # 而按本仓约定 1（需人工介入）比 2（上游未更新）更严重 —— 一个序列 d 类失败(1)
-      # 撞上另一个序列下载失败(2)时，进程码是 2，闸门若只看码就会把那条 1 当成
-      # 「上游未更新，正常」放过去。故同时数一遍逐序列打印的 "c/d exit 1" 行，
-      # 有一行就红，不依赖进程码。
+      # 汇总按**严重度**取，不是 max()：fetch_fred.py 的 EXIT_SEVERITY 显式定义
+      # 1 > 3 > 2 > 0（数值大小与严重度无关）。此前用 max() 时，一个序列 d 类失败(1)
+      # 撞上另一个序列下载失败(2)，进程码会变成 2，把「要人管」报成「上游没更新」；
+      # 闸门那边为此加过一条数 "c/d exit 1" 行的 grep 绕过，现在源头修好，绕过已删。
+      # 回归闸门在 fetch_fred.py --test 里（"c/d 与 a 同批时进程码=1" 等 5 条）。
       - name: Run fetch_fred.py
         id: fred
         env:
@@ -107,7 +107,6 @@ jobs:
           set +e
           python fetch_fred.py 2>&1 | tee /tmp/fred.log
           echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
-          echo "needs_attention=$(grep -cE ': [cd] exit 1' /tmp/fred.log)" >> "$GITHUB_OUTPUT"
           exit 0
         continue-on-error: true
 
@@ -219,24 +218,21 @@ jobs:
             0|"") : ;;
             *) fail "采集层：期限结构" "fetch_oi.py 以未预期的 exit code ${{ steps.oi.outputs.code }} 退出" ;;
           esac
-          # FRED 按 exit code 三态处理，但**不只看进程码**（见 fetch_fred.py 步骤注释）：
-          #   needs_attention>0 = 有序列走了 c/d 类（解析失败或校验不过）→ 红。
-          #       这条放在最前面：main() 的 max(code) 会让同批出现的 2 盖住 1。
+          # FRED 按 exit code 四态处理，只看进程码即可 —— 汇总已按严重度取
+          # （fetch_fred.py 的 EXIT_SEVERITY，1 > 3 > 2 > 0），同批的 2 不会再盖住 1，
+          # 原先那条数 "c/d exit 1" 行的 grep 绕过已删。
           #   1 = 需人工介入 —— c 类原始响应已隔离；d 类已隔离并落 data:null + coverage:null
-          #   2 = 上游未更新 —— a 类下载失败 / FRED_API_KEY 缺失或失效 / b 类顶层格式非法。
-          #       只告警不红：FRED 提供完整历史，下次跑能补回，八个文件保持上一份。
-          #       **已知分辨力缺口**：secret 缺失/失效也落在这一态，会连日只告警不红。
-          #       告警文案点名这一点，看到连续多天该 warning 就该去查 secret。
-          if [ "${{ steps.fred.outputs.needs_attention }}" != "0" ] && [ -n "${{ steps.fred.outputs.needs_attention }}" ]; then
-            fail "采集层：FRED" "fetch_fred.py 有 ${{ steps.fred.outputs.needs_attention }} 个序列需人工介入（c 类解析失败或 d 类校验不过）—— 原始响应已隔离到 data/quarantine/，d 类对应文件已落 data:null + coverage:null。详见该步骤日志中的逐序列行"
-          else
-            case "${{ steps.fred.outputs.code }}" in
-              1) fail "采集层：FRED" "fetch_fred.py 需人工介入（exit 1）—— 详见该步骤日志" ;;
-              2) echo "::warning title=采集层：FRED::FRED 未返回可用数据（下载失败 / API key 缺失或失效 / 响应格式非法），八个序列文件保持上一份。若连续多天出现，先查 secrets.FRED_API_KEY" ;;
-              0|"") : ;;
-              *) fail "采集层：FRED" "fetch_fred.py 以未预期的 exit code ${{ steps.fred.outputs.code }} 退出（fetch_fred 只应产生 0 / 1 / 2）" ;;
-            esac
-          fi
+          #   3 = FRED_API_KEY 缺失或无效 —— 配置问题，等不来自愈，必须有人去看，故报红。
+          #       从前它混在 2 里只告警，能连日不红；现在单独一态。
+          #   2 = 上游未更新 —— a 类下载失败 / b 类顶层格式非法。只告警不红：
+          #       FRED 提供完整历史，下次跑能补回，八个文件保持上一份。
+          case "${{ steps.fred.outputs.code }}" in
+            1) fail "采集层：FRED" "fetch_fred.py 需人工介入（exit 1）—— c 类解析失败的原始响应已隔离到 data/quarantine/，d 类对应文件已落 data:null + coverage:null。详见该步骤日志中的逐序列行" ;;
+            3) fail "采集层：FRED" "FRED_API_KEY 缺失或无效（exit 3）—— 八个序列一个都没取到，文件保持上一份。去 Settings → Secrets and variables → Actions 检查 secrets.FRED_API_KEY 是否存在、是否过期、是否被 fork/环境限制挡掉；key 在 https://fredaccount.stlouisfed.org/apikeys 重发" ;;
+            2) echo "::warning title=采集层：FRED::FRED 未返回可用数据（下载失败或响应格式非法），八个序列文件保持上一份（非异常）。key 问题不落在这一态，另有 exit 3" ;;
+            0|"") : ;;
+            *) fail "采集层：FRED" "fetch_fred.py 以未预期的 exit code ${{ steps.fred.outputs.code }} 退出（fetch_fred 只应产生 0 / 1 / 2 / 3）" ;;
+          esac
           [ "${{ steps.derive.outcome }}" = "failure" ] && \
             fail "派生层" "derive_term_structure.py 失败 —— term-structure-series.json 保持上一版，页面回放停留在旧数据。原始数据已落盘，修好后重跑即可重算"
           # 宏观派生只有 0/1 两态（无 2）。exit 1 = 至少一条链的上游缺失/非信封/空/全 null，

@@ -144,7 +144,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_gold.py --test` | 0 | 38 passed, 0 failed |
 | `fetch_oi.py --test` | 0 | 62 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 22 passed, 0 failed |
-| `fetch_fred.py --test` | 0 | 17 passed, 0 failed |
+| `fetch_fred.py --test` | 0 | 25 passed, 0 failed |
 | `derive_macro.py --test` | 0 | 23 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 37 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 100 passed, 0 failed |
@@ -201,7 +201,7 @@ Windows 侧 python3: C:\Users\vince\AppData\Local\Microsoft\WindowsApps\python3.
 
 ### derive --test 全绿的判读
 
-当前 17 条全部是 PASS，**无 SKIP**。抽查 2 现在报的是：
+当前全部是 PASS，**无 SKIP**（条数见上方基线表，不在此处复述）。抽查 2 现在报的是：
 
 ```
 PASS  2026-07-24: 窗口内 13 条 oi_chg 与 CME stored 相符
