@@ -9,7 +9,7 @@ import os
 import re
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -22,16 +22,46 @@ ROOT = Path(__file__).resolve().parent
 QUAR_DIR = ROOT / "data" / "quarantine"
 OBS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
+# (series_id, 目标文件, freq, kind, units)
+#
+# units 是 FRED 元数据页 https://fred.stlouisfed.org/data/<ID> 上的 Units **原文**，
+# 逐条实测于 2026-08-22，不是凭记忆写的。采集层**原样落盘不换算**，只把这行抄进
+# info（原始数据无条件落盘；换算是算术，归派生层）。
+#
+# 债务五条里只有 FDHBFIN 是 Billions，另三条债务是 Millions —— 这是最容易搞错
+# 的一处：写反了外国持有会变成千分之一，在堆叠图里几乎看不见，而不是明显崩掉。
+# 真正拦住这类错误的是派生层的恒等式闸与非负闸（见计划 §3.3），这里只负责如实记。
+#
+# 日/月频那八条的 units 暂留空：给它们补 units 会重写这八个文件的 info，
+# 属本批次之外的改动面。留空时 build_info 不产出 units 行（不是产出空值）。
 SERIES = (
-    ("DGS2", "data/ust_dgs2.json", "daily", "rate"),
-    ("DGS10", "data/ust_dgs10.json", "daily", "rate"),
-    ("DGS30", "data/ust_dgs30.json", "daily", "rate"),
-    ("DFEDTARU", "data/fed_target_upper.json", "daily", "rate"),
-    ("DFEDTARL", "data/fed_target_lower.json", "daily", "rate"),
-    ("DFF", "data/fed_effective_rate.json", "daily", "rate"),
-    ("CPIAUCSL", "data/cpi_cpiaucsl.json", "monthly", "cpi"),
-    ("CPILFESL", "data/cpi_cpilfesl.json", "monthly", "cpi"),
+    ("DGS2", "data/ust_dgs2.json", "daily", "rate", ""),
+    ("DGS10", "data/ust_dgs10.json", "daily", "rate", ""),
+    ("DGS30", "data/ust_dgs30.json", "daily", "rate", ""),
+    ("DFEDTARU", "data/fed_target_upper.json", "daily", "rate", ""),
+    ("DFEDTARL", "data/fed_target_lower.json", "daily", "rate", ""),
+    ("DFF", "data/fed_effective_rate.json", "daily", "rate", ""),
+    ("CPIAUCSL", "data/cpi_cpiaucsl.json", "monthly", "cpi", ""),
+    ("CPILFESL", "data/cpi_cpilfesl.json", "monthly", "cpi", ""),
+    # —— 美国债务面板（季频，Treasury Bulletin + BEA）——
+    ("GFDEBTN", "data/debt_total.json", "quarterly", "debt", "Millions of Dollars"),
+    ("FYGFDPUN", "data/debt_held_public.json", "quarterly", "debt", "Millions of Dollars"),
+    ("FDHBATN", "data/debt_intragov.json", "quarterly", "debt", "Millions of Dollars"),
+    ("FDHBFIN", "data/debt_foreign.json", "quarterly", "debt_foreign", "Billions of Dollars"),
+    ("GDP", "data/gdp_nominal.json", "quarterly", "gdp", "Billions of Dollars"),
 )
+
+# 债务/GDP 类：值必须为正。与 CPI 指数 ≤ 0 同类，属可确定性判断，走 d 类硬闸。
+POSITIVE_KINDS = frozenset({"cpi", "debt", "debt_foreign", "gdp"})
+
+# 滞后多少天开始报 warning。**只进 warnings，不触发 d 类**（宏观 d 类阈值待实测后确定）。
+# 季频那两个数是实测出来的，不是拍的：Treasury Bulletin 的 2026 Q1 数据发布于
+# 2026-06-18，即观测日期（季首 2026-01-01）之后 168 天；下一期发布前最长会到
+# 约 260 天，取 300 天留余量。套用原来的 100 天会天天报（实测当天 GFDEBTN 已 233 天）。
+STALE_DAYS_BY_FREQ = {"daily": 10, "weekly": 100, "monthly": 100, "quarterly": 300}
+# FDHBFIN 在同一次发布里天然比其余四条晚一个季度（实测 Last Updated 同为
+# 2026-06-18，但它只到 2025 Q4，另三条已到 2026 Q1），故单独放宽。
+STALE_DAYS_BY_KIND = {"debt_foreign": 400}
 
 
 class FetchFailure(Exception):
@@ -125,14 +155,17 @@ def _point_text(point: dict) -> str:
     return f"{point['date']}={point['value']:g}"
 
 
-def build_info(series_id: str, points: list[dict], old: dict | None) -> list[str]:
+def build_info(series_id: str, points: list[dict], old: dict | None, units: str = "") -> list[str]:
     latest = points[-12:]
     info = [
         "source=FRED",
         f"series_id={series_id}",
         "api_path=/fred/series/observations",
-        "latest_observations=[" + ",".join(_point_text(p) for p in latest) + "]",
     ]
+    if units:
+        # FRED 元数据页 Units 原文，原样抄。派生层据此换算，所以这行不能省、不能改写。
+        info.append(f"units={units}")
+    info.append("latest_observations=[" + ",".join(_point_text(p) for p in latest) + "]")
     if old:
         old_tail = {p.get("date"): p.get("value") for p in old["data"][-12:] if isinstance(p, dict)}
         revisions = []
@@ -146,8 +179,8 @@ def build_info(series_id: str, points: list[dict], old: dict | None) -> list[str
 
 def validate_points(points: list[dict], kind: str) -> list[str]:
     failures = []
-    if kind == "cpi" and any(p["value"] <= 0 for p in points):
-        failures.append("CPI 指数 ≤ 0")
+    if kind in POSITIVE_KINDS and any(p["value"] <= 0 for p in points):
+        failures.append(f"{kind} 值 ≤ 0")
     return failures
 
 
@@ -160,7 +193,8 @@ def warnings_for(points: list[dict], freq: str, kind: str) -> list[str]:
     if points:
         last = datetime.strptime(points[-1]["date"], "%Y-%m-%d").date()
         age = (datetime.now(timezone.utc).date() - last).days
-        if age > (10 if freq == "daily" else 100):
+        limit = STALE_DAYS_BY_KIND.get(kind, STALE_DAYS_BY_FREQ.get(freq, 100))
+        if age > limit:
             warnings.append(f"最新观测滞后 {age} 天")
     return warnings
 
@@ -185,7 +219,7 @@ def save_quarantine(series_id: str, reason: list[str], payload: dict, raw: bytes
     )
 
 
-def process_one(series_id: str, relpath: str, freq: str, kind: str, *, fetcher=fetch_payload, base_dir: Path | None = None, quarantine_dir: Path | None = None) -> tuple[str, int, str]:
+def process_one(series_id: str, relpath: str, freq: str, kind: str, units: str = "", *, fetcher=fetch_payload, base_dir: Path | None = None, quarantine_dir: Path | None = None) -> tuple[str, int, str]:
     base = Path(base_dir) if base_dir is not None else ROOT
     path = base / relpath
     quarantine = Path(quarantine_dir) if quarantine_dir is not None else base / "data" / "quarantine"
@@ -209,13 +243,13 @@ def process_one(series_id: str, relpath: str, freq: str, kind: str, *, fetcher=f
         return "parse", 1, ""
     failures = validate_points(points, kind)
     if failures:
-        info = build_info(series_id, points, _old_data(path))
+        info = build_info(series_id, points, _old_data(path), units)
         save_quarantine(series_id, failures, payload, raw, quarantine)
         atomic_write_json(str(path), failure_envelope(series_id, freq, failures, info), compact=False)
         print(f"{series_id}: d exit 1: {', '.join(failures)}")
         return "validation", 1, ""
     old = _old_data(path)
-    info = build_info(series_id, points, old)
+    info = build_info(series_id, points, old, units)
     output = envelope(
         "FRED",
         freq,
@@ -236,14 +270,15 @@ def run_tests() -> None:
     checks = 0
     failures = 0
 
-    def check(name, condition):
+    def check(name, condition, detail=""):
+        # detail 只在 FAIL 时打印：PASS 行文案与计数都不变，不影响基线表。
         nonlocal checks, failures
         checks += 1
         if condition:
             print(f"PASS {name}")
         else:
             failures += 1
-            print(f"FAIL {name}")
+            print(f"FAIL {name}" + (f"  {detail}" if detail else ""))
 
     def file_hash(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -374,9 +409,78 @@ def run_tests() -> None:
         )
         check("失败 envelope data:null", failure_envelope("CPIAUCSL", "monthly", ["x"])["data"] is None)
         check("失败 envelope coverage:null", failure_envelope("CPIAUCSL", "monthly", ["x"])["coverage"] is None)
-        check("8 个序列配置", len(SERIES) == 8)
-        check("CPI 月频", all(x[2] == "monthly" for x in SERIES[-2:]))
-        check("利率日频", all(x[2] == "daily" for x in SERIES[:-2]))
+        check("13 个序列配置", len(SERIES) == 13)
+        check("每行 5 元组（含 units）", all(len(x) == 5 for x in SERIES))
+        check("CPI 月频", all(x[2] == "monthly" for x in SERIES if x[3] == "cpi"))
+        check("利率日频", all(x[2] == "daily" for x in SERIES if x[3] == "rate"))
+
+        # —— 债务面板五条（季频）——
+        QUARTERLY = tuple(x for x in SERIES if x[2] == "quarterly")
+        check("季频恰 5 条", len(QUARTERLY) == 5)
+        check(
+            "季频五条 series_id 与目标文件",
+            tuple((x[0], x[1]) for x in QUARTERLY) == (
+                ("GFDEBTN", "data/debt_total.json"),
+                ("FYGFDPUN", "data/debt_held_public.json"),
+                ("FDHBATN", "data/debt_intragov.json"),
+                ("FDHBFIN", "data/debt_foreign.json"),
+                ("GDP", "data/gdp_nominal.json"),
+            ),
+            str(tuple((x[0], x[1]) for x in QUARTERLY)),
+        )
+        UNITS = {x[0]: x[4] for x in SERIES}
+        # 这条单列：五条里只有 FDHBFIN 是 Billions，写成 Millions 会让外国持有
+        # 变成千分之一 —— 在堆叠图里几乎看不见，不会明显崩掉，只能靠断言拦。
+        check("FDHBFIN units = Billions of Dollars",
+              UNITS["FDHBFIN"] == "Billions of Dollars", UNITS["FDHBFIN"])
+        check("GFDEBTN/FYGFDPUN/FDHBATN units = Millions of Dollars",
+              all(UNITS[k] == "Millions of Dollars"
+                  for k in ("GFDEBTN", "FYGFDPUN", "FDHBATN")),
+              str({k: UNITS[k] for k in ("GFDEBTN", "FYGFDPUN", "FDHBATN")}))
+        check("GDP units = Billions of Dollars",
+              UNITS["GDP"] == "Billions of Dollars", UNITS["GDP"])
+        check("季频五条 units 均非空", all(x[4] for x in QUARTERLY))
+        check("日/月八条 units 留空（本批次不改它们的 info）",
+              all(x[4] == "" for x in SERIES if x[2] != "quarterly"))
+
+        # units 进 info：非空才产出一行，且是 FRED 原文原样
+        _pt = [{"date": "2026-01-01", "value": 1.0}]
+        info_q = build_info("FDHBFIN", _pt, None, "Billions of Dollars")
+        check("units 非空 → info 有 units 行且为原文",
+              "units=Billions of Dollars" in info_q, str(info_q))
+        info_d = build_info("DGS2", _pt, None, "")
+        check("units 为空 → info 无 units 行（不是空值行）",
+              not any(x.startswith("units=") for x in info_d), str(info_d))
+
+        # 非负闸：debt / gdp 与 CPI 同属 d 类硬闸（可确定性判断）
+        check("debt 值 ≤ 0 → d 类",
+              bool(validate_points([{"date": "2026-01-01", "value": 0}], "debt")))
+        check("debt_foreign 值 ≤ 0 → d 类",
+              bool(validate_points([{"date": "2026-01-01", "value": -1}], "debt_foreign")))
+        check("gdp 值 ≤ 0 → d 类",
+              bool(validate_points([{"date": "2026-01-01", "value": -1}], "gdp")))
+        check("debt 正值不触发 d 类",
+              not validate_points([{"date": "2026-01-01", "value": 1}], "debt"))
+
+        # 滞后：季频只进 warnings，永不触发 d 类（宏观 d 类阈值待实测后确定）
+        _stale = [{"date": "2020-01-01", "value": 1.0}]
+        check("季频滞后只 warning 不 d",
+              bool(warnings_for(_stale, "quarterly", "debt"))
+              and not validate_points(_stale, "debt"))
+        # 300 天内不报：套用日/月频的 100 天会天天报（实测当天 GFDEBTN 已 233 天）
+        _recent = [{"date": (datetime.now(timezone.utc).date()
+                             - timedelta(days=200)).isoformat(), "value": 1.0}]
+        check("季频滞后 200 天不报 warning",
+              not warnings_for(_recent, "quarterly", "debt"),
+              str(warnings_for(_recent, "quarterly", "debt")))
+        check("同样 200 天在月频要报 warning（证明阈值真按 freq 分流）",
+              bool(warnings_for(_recent, "monthly", "cpi")))
+        # FDHBFIN 天然晚一个季度，单独放宽到 400 天
+        _lag = [{"date": (datetime.now(timezone.utc).date()
+                          - timedelta(days=350)).isoformat(), "value": 1.0}]
+        check("debt_foreign 350 天不报，同日期换 debt 要报",
+              not warnings_for(_lag, "quarterly", "debt_foreign")
+              and bool(warnings_for(_lag, "quarterly", "debt")))
 
         def missing_key_fetch(series_id):
             os.environ.pop("FRED_API_KEY", None)
@@ -418,8 +522,8 @@ def run_tests() -> None:
         # —— 严重度汇总：断言的是**进程码**，不是单序列的码 ——
         # 这几条是 max() 缺陷的回归闸门：把 worse_exit 换回 max，它们必须红。
         def batch_processor(root: Path, fetcher):
-            def proc(series_id, relpath, freq, kind):
-                return process_one(series_id, relpath, freq, kind, fetcher=fetcher,
+            def proc(series_id, relpath, freq, kind, units=""):
+                return process_one(series_id, relpath, freq, kind, units, fetcher=fetcher,
                                    base_dir=root, quarantine_dir=root / "quarantine")
             return proc
 

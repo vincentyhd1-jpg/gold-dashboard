@@ -144,7 +144,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_gold.py --test` | 0 | 38 passed, 0 failed |
 | `fetch_oi.py --test` | 0 | 62 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 22 passed, 0 failed |
-| `fetch_fred.py --test` | 0 | 25 passed, 0 failed |
+| `fetch_fred.py --test` | 0 | 43 passed, 0 failed |
 | `derive_macro.py --test` | 0 | 23 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 37 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 102 passed, 0 failed |
