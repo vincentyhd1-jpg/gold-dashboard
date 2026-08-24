@@ -704,7 +704,7 @@ node tools/verify-spread-injection.mjs     # 注入错误 spread，验证护栏�
 node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证护栏会变红
 node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
 node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 债务缺口与隔离
-python3 tools/verify-noise-injection.py    # 本机跑不起来（见交接文档），清点全绿时不含它
+python3 tools/verify-noise-injection.py    # WSL 内运行；三种 noise 注入必须红，恢复后绿
 node tools/verify-live.mjs                 # 线上端到端
 ```
 
@@ -749,16 +749,17 @@ Playwright 脚本不要用 `waitUntil:'networkidle'` —— Chart.js 走 CDN，�
 该事件永不触发（实测卡满 30s 超时）。改用
 `waitForFunction(() => Chart.getChart('oiChart'))`。
 
-### tools/verify-noise-injection.py 在本机静默失效，「全绿」不包含它
+### tools/verify-noise-injection.py 从 WSL 直接运行（C5）
 
-该脚本内部 `subprocess.run(["wsl", ...])`，必须从 Windows 侧启动才能调到 WSL。
-本机 Windows 侧只有 Microsoft Store 存根 `python.exe` / `python3.exe`（运行即
-打印安装提示并退出），没有真实 Windows Python；从 WSL 里跑它则 `wsl` 命令不存在。
-两条路都不通，这条护栏当前跑不起来。
+运行方式：`wsl -d Ubuntu-22.04 --cd <repo-wsl-path> -- python3 -B
+tools/verify-noise-injection.py`。脚本已经在 WSL Python 内，子测试用
+`sys.executable` + `shell=False` 直跑，不再从 WSL 反向调用 Windows `wsl.exe`，
+也不经过 `bash -c` / PowerShell；`CompletedProcess.returncode` 就是目标测试的
+真实退出码。
 
-清点「全绿」时不得把它算进去 —— 它属于上表「以为在验证实际没在跑」的同一类。
-**待修**：改成不依赖执行侧的调用方式（例如按 `platform.system()` 分支选
-`python3` 直调，或把注入逻辑改写成 `.mjs`）。
+脚本必须同时证明：基线与恢复后 exit 0；三种 noise 破坏均非零且命中预期 NOISE
+断言。任一条件不满足，脚本自身 exit 1，不能只打印红绿后仍返回 0。源码备份放系统
+临时目录，每个 case 后及最外层 `finally` 恢复，并以 SHA-256 校验无污染。
 
 同类陷阱：跨 shell 传 Python 代码时 `python`/`python3` 可能命中 Store 存根而
 **静默不执行**，`$?` 仍可能为 0，注入看似完成实际没改任何东西 —— 本轮反转断言

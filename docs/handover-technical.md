@@ -178,26 +178,32 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-spread-injection.mjs` | 0 | 绿 → 红 → 改回后绿（29 passed, 0 failed） |
 | `tools/verify-totaloi-injection.mjs` | 0 | 绿 → 红 → 改回后绿（29 passed, 0 failed） |
 | `tools/verify-isolation-injection.mjs` | 0 | 基线绿 → 2 种注入（`_safeRender` 吞异常 / 隔离失效双模块受害）均红 → 改回绿 |
-| `tools/verify-noise-injection.py` | **无法运行** | 见下 |
+| `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
 
-**注入类 verify 之间无隔离。** 它们都改 `data/derived/term-structure-series.json`
-再改回，但改回用的是自己记的原值，不是 derive 重算的产物。连跑时前一条的残留会让
+修改 `data/derived/term-structure-series.json` 的注入类 verify 之间无隔离：改回用的是
+自己记的原值，不是 derive 重算的产物。连跑时前一条的残留会让
 后一条的基线阶段假红 —— 实测 `verify-totaloi-injection` 因此显示「改回后 exit=1 红」，
 重跑 derive 后转绿。**一条跑完必须重跑 `python3 derive_term_structure.py` 再跑下一条。**
+`verify-noise-injection.py` 不改派生 JSON；它短暂修改生产 Python 源码并在每个 case 后
+从系统临时目录恢复，且以 SHA-256 校验恢复，不参与上述数据文件污染。
 
-### verify-noise-injection 静默失效（「全绿」不含它）
+### verify-noise-injection 执行链（C5 已修复）
 
 ```
-WSL 侧运行:      exit=1  FileNotFoundError: [Errno 2] No such file or directory: 'wsl'
-Windows 侧 python3: C:\Users\vince\AppData\Local\Microsoft\WindowsApps\python3.exe（Store 存根）
+wsl -d Ubuntu-22.04 --cd /mnt/d/VScode/test/gold-dashboard -- \
+  python3 -B tools/verify-noise-injection.py
 ```
 
-该脚本内部 `subprocess.run(["wsl", "-d", "Ubuntu-22.04", ...])`，必须从 Windows 侧
-启动才能调到 WSL；而本机 Windows 侧只有 Store 存根（运行即打印安装提示后退出），
-没有真实 Windows Python。两条路都不通。
+旧脚本从 WSL Python 内再次调用 Windows `wsl.exe`，报 `FileNotFoundError`；Windows
+侧又只有 Store Python 存根，因此两条启动路径都不可用。C5 改为在 WSL 内用
+`sys.executable` + `subprocess.run(..., shell=False)` 直跑目标测试，并以
+`CompletedProcess.returncode` 判定真实红绿。脚本自身只有在基线/恢复均 exit 0、
+三种注入均非零且命中预期 NOISE 断言时才 exit 0。
 
-**清点「全绿」时不得把它算进去。** 待修：改成不依赖执行侧的调用方式
-（按 `platform.system()` 分支选 `python3` 直调，或改写成 `.mjs`）。
+源码备份位于系统临时目录；每个 case 后及最外层 `finally` 都恢复，并校验原文件
+SHA-256。实测三种注入分别让 `roll_noise` round(4)、`roll_noise_ma` round(4)、
+`roll_noise × 2` 的对应断言变红，脚本最终 exit 0。另将首个注入临时改成 no-op，
+脚本以「注入未落地，文件 hash 未变化」exit 1，证明包装器不会只打印结果后恒绿。
 
 ### derive --test 全绿的判读
 
@@ -385,9 +391,9 @@ index.html:484   label 文案「页面更新：」
   `waitForFunction` 30s 超时、exit=1；单独重跑 exit=0 / 13 passed。当时数据文件
   完好、dev server 正常。表现为并发争用，非代码缺陷。
 
-### 静默失效的护栏
+### 曾静默失效或仍需注意的护栏
 
-- **`tools/verify-noise-injection.py`** 本机跑不起来（见第 4 节）。**「全绿」不含它。**
+- **`tools/verify-noise-injection.py`** 的跨层启动与假绿路径已由 C5 修复（见第 4 节）。
 - **`tools/verify-isolation.mjs`** 历史上有过「只打印不断言」的时期（退出码仅反映
   脚本是否抛异常），`63e28c5` 补齐后现为 37 条真断言。
 - **注入类 verify 无相互隔离**（见第 4 节），连跑会互相污染基线。

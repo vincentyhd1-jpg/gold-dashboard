@@ -298,9 +298,11 @@ B/C 多算进来的部分，取证证实：差异最大三帧（07-01 Δ=-0.0959
   把 `generated_at` 提到了业务对象上，删兼容代码时**这个提取动作要保留**
 
 ### 护栏与取证的欠账（新增，勿忽略）
-- **`tools/verify-noise-injection.py` 静默失效**：内部 `subprocess.run(["wsl",...])`
-  需 Windows 侧真实 Python，本机仅 Store 存根，两条路都不通。
-  **清点「全绿」时不得把它算进去。** 待改成不依赖执行侧的调用方式。
+- **`tools/verify-noise-injection.py` 静默失效已由 C5 修复**：从 Windows PowerShell
+  以 WSL Python 启动；脚本内部用 `sys.executable` 直跑目标测试并读取真实
+  `returncode`，不再跨 WSL → Windows → shell。三种注入必须各自变红且命中预期
+  NOISE 断言，基线/恢复必须绿，否则脚本自身 exit 1。备份在系统临时目录，
+  `finally` 恢复并校验 SHA-256。
 - **注入类 verify 之间无隔离**：一条跑完的注入残留会污染下一条
   （实测 `verify-totaloi-injection` 曾因上一步残留的派生文件显红），
   一条跑完须重跑 derive 再跑下一条。
