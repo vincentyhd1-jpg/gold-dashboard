@@ -89,6 +89,19 @@ cot 比整个 data（latest+weekly 全量，因 CFTC 会修订历史期）；gol
 `front_remaining` 保留 round(4)（纯展示比率）；`roll_noise`/`roll_noise_ma` 全精度落盘。
 CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 
+### 联邦债务面板语义（C4）
+
+- 前端只消费 `macro_debt.json` 的派生字段，不做百万→十亿换算，不重算
+  `domestic_public_bn`，也不以 0 或前值填补 foreign。
+- 债务结构是 `intragov_bn + domestic_public_bn + foreign_bn` 的共同 stack。
+  foreign 右端滞后一季时，三项同时保持 null；宁可显示结构缺口，也不画一个会被
+  误读成债务骤降的不完整堆叠。
+- 总债务与比率按各自真实 coverage 延伸：结构缺口季度仍可显示 `total_bn`、
+  `debt_gdp_pct`、`public_gdp_pct`。结构 coverage 与 ratio coverage 不强行对齐。
+- 比率与金额分图、分轴：比率轴 `%`，结构/总额轴 `USD bn`；不使用双 Y 轴制造
+  视觉相关性。
+- rates/CPI 与 debt 是两个独立前端加载边界，任一组失败不得拖掉另一组。
+
 ### 帧级 vs 展示视图二分（重要）
 **帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）是两类东西。**
 取证字段不得经任何**随时间移动的边界**过滤：

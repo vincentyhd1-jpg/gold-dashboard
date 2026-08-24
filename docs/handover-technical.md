@@ -156,11 +156,11 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
 | `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 5 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
-| `tools/verify-macro-page.mjs` | 0 | 25 passed, 0 failed |
+| `tools/verify-macro-page.mjs` | 0 | 54 passed, 0 failed |
 
 前端 verify 中 ui-fixes(22)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(5)/cot-sentinel-strict(4)/
-macro-page(25) 有计数；
+macro-page(54) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -431,3 +431,29 @@ index.html:484   label 文案「页面更新：」
 注入写盘格式与生产不一致致 diff 被重排淹没，四种形态 + 五条硬规则）。
 
 PowerShell 侧 `$?` 是布尔值，取码须用 `$LASTEXITCODE`。
+
+## 8. C4 联邦债务前端与 workflow 闭环
+
+`macro.html` 通过公共 `loadJson()` 严格解包
+`data/derived/macro_debt.json`，与 rates/CPI 使用独立 Promise 错误边界。
+债务读取或渲染失败只更新 `debtStatus`，不会移除 UST/Fed/CPI；rates/CPI
+加载失败也不会阻止债务图建起。
+
+债务卡片包含两张图：
+
+- `debtRatioChart`：直接读取 `debt_gdp_pct`、`public_gdp_pct`，Y 轴 `yRatio`，单位 `%`。
+- `debtStackChart`：`intragov_bn`、`domestic_public_bn`、`foreign_bn` 共用
+  `debtStructure` stack，Y 轴 `yDebt`，单位 `USD bn`；`total_bn` 以同轴折线显示。
+
+前端不做单位换算、不重算 `domestic_public_bn`、不 forward-fill。`stack_last`
+之后三个结构字段保持 null；同季度 `total_bn` 与两个 GDP 比率若派生文件仍有值，
+图中继续显示。
+
+`tools/verify-macro-page.mjs` 当前为 **54 passed, 0 failed**，新增真实请求、
+dataset 逐点对账、共同 stack、轴与单位、foreign 右端缺口、total/ratio 延伸，
+以及 debt ↔ rates/CPI 双向加载故障隔离断言。
+
+`.github/workflows/update-cot.yml` 的 FRED 基线为 13 个序列。提交清单包含五个
+债务/GDP 原始信封（`debt_total.json`、`debt_held_public.json`、
+`debt_intragov.json`、`debt_foreign.json`、`gdp_nominal.json`）和
+`data/derived/macro_debt.json`；宏观派生说明与错误信息按 rates/CPI/debt 三链维护。

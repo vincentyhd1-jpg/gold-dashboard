@@ -55,7 +55,10 @@ fetch_gold.py     Yahoo Finance 金价   → data/gold_price.json
 fetch_stocks.py   CME 库存             → data/stocks.json
 fetch_oi.py       CME Section 62 PDF   → data/oi.json        （含 4 项写入前校验）
 derive_term_structure.py                → data/derived/term-structure-series.json
+fetch_fred.py      FRED 13 个序列        → rates / CPI / debt / GDP 原始信封
+derive_macro.py                         → macro_rates / macro_cpi / macro_debt
 index.html        期限结构回放 + 各图表
+macro.html        利率 / CPI / 美国联邦债务面板
 term-3d.html      Plotly 3D 曲面页，**已从导航移除**（无运行时入口，见下方专节）
 trading_calendar.py  交易日历，采集层与派生层共用一份假日表
 data_envelope.py  统一落盘信封 + write_json 单点落盘
@@ -612,7 +615,7 @@ WINDOW fixture 必须是**合成数据**：当前 24 帧的修订合约恰好全
 里只告警，能连日不红 —— 配置问题等不来自愈，必须有人去看，故单独成一态并报红。
 
 **多序列脚本的汇总不能用 `max()`。** 退出码的严重度与数值大小无关：本仓的序是
-`1 > 3 > 2 > 0`。`fetch_fred` 一个进程跑八个序列，用 `max(code)` 汇总时，
+`1 > 3 > 2 > 0`。`fetch_fred` 一个进程跑十三个序列，用 `max(code)` 汇总时，
 一个序列 d 类失败(1) 撞上另一个序列下载失败(2)，进程码会变成 2 —— 把「要人管」
 报成「上游没更新，正常」。故显式映射 `EXIT_SEVERITY = {0:0, 2:1, 3:2, 1:3}`
 （`fetch_fred.py`，配 `_severity()` / `worse_exit()` / `run_all()`），
@@ -652,6 +655,11 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 
 ## 前端
 
+- `macro.html` 的联邦债务结构只读 `macro_debt.json` 中的 `intragov_bn` /
+  `domestic_public_bn` / `foreign_bn`，三项共用一个 stack；前端不做 `/1000`、
+  不重算本国公众持有、不填补 foreign。`stack_last` 后三项保持 null，但
+  `total_bn` / `debt_gdp_pct` / `public_gdp_pct` 可按各自 coverage 继续显示。
+- macro rates/CPI 与 debt 使用独立加载错误边界；任一组失败不得拖掉另一组。
 - Y 轴 min/max 全部取自派生 JSON 的 `scale`，回放期间 Chart.js 不自动缩放，
   帧间柱高可直接比较
 - 升级 Chart.js 或改动 `_initCharts` 初始化路径时，必须复跑
@@ -675,7 +683,7 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 
 ```
 python3 derive_term_structure.py --test    # 派生逻辑（含信封契约、KPI）
-python3 derive_macro.py --test             # 宏观派生（rates/cpi 双链、warnings 拆分）
+python3 derive_macro.py --test             # 宏观派生（rates/cpi/debt 三链、warnings 拆分）
 python3 fetch_oi.py --test                 # 采集校验（不联网）
 python3 fetch_cot.py --test                # 采集校验（含 build_payload 幂等前提）
 python3 fetch_gold.py --test               # 采集校验（含退化边界）
@@ -695,7 +703,7 @@ node tools/verify-kpi-injection.mjs        # 注入错误 KPI 值，验证护栏
 node tools/verify-spread-injection.mjs     # 注入错误 spread，验证护栏会变红
 node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证护栏会变红
 node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
-node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 首屏落位
+node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 债务缺口与隔离
 python3 tools/verify-noise-injection.py    # 本机跑不起来（见交接文档），清点全绿时不含它
 node tools/verify-live.mjs                 # 线上端到端
 ```

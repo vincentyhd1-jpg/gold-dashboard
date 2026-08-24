@@ -41,6 +41,9 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .card-sub{font-size:11px;color:#8b949e;margin-bottom:16px}
 .chart-wrap{position:relative;height:260px}
 .card.full .chart-wrap{height:300px}
+.debt-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.debt-chart-title{font-size:12px;font-weight:600;color:#c9d1d9;margin-bottom:8px}
+@media(max-width:800px){.debt-grid{grid-template-columns:1fr}}
 
 /* 状态行 */
 .status{font-size:12px;color:#8b949e;min-height:18px}
@@ -57,7 +60,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     <div class="gi">&#128200;</div>
     <div>
       <h1>宏观数据</h1>
-      <p class="sub">美债收益率 &middot; 联邦基金利率 &middot; CPI 同比 &middot; FRED 数据</p>
+      <p class="sub">美债收益率 &middot; 联邦基金利率 &middot; CPI 同比 &middot; 美国联邦债务 &middot; FRED 数据</p>
     </div>
   </div>
   <nav class="top-nav" aria-label="主导航">
@@ -70,8 +73,8 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
 
   <div class="intro">
     <div>
-      <h2>利率与通胀</h2>
-      <p>数据来自 FRED，读取派生文件 data/derived/macro_rates.json 与 data/derived/macro_cpi.json。缺失值保持为空。</p>
+      <h2>利率、通胀与联邦债务</h2>
+      <p>数据来自 FRED，读取 rates、CPI 与 debt 三份派生文件。不同频率不互相补点，缺失值保持为空。</p>
     </div>
     <div class="release" id="cpiRelease">CPI 最新参考期 --，发布日：当前采集未保存</div>
   </div>
@@ -94,6 +97,22 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
       <div class="card-title">CPI 同比</div>
       <div class="card-sub">CPIAUCSL（金）· CPILFESL 核心（蓝）— 按月度参考期，右端空白是真实发布延迟</div>
       <div class="chart-wrap"><canvas id="cpiChart"></canvas></div>
+    </div>
+
+    <div class="card full" id="debtPanel">
+      <div class="card-title">美国联邦债务</div>
+      <div class="card-sub">比率按季度、单位 %；债务结构为政府内部持有 + 本国公众持有 + 外国持有，单位十亿美元（USD bn）。结构缺口不做前值填充。</div>
+      <div class="debt-grid">
+        <div>
+          <div class="debt-chart-title">债务与公众持有占 GDP 比率</div>
+          <div class="chart-wrap"><canvas id="debtRatioChart"></canvas></div>
+        </div>
+        <div>
+          <div class="debt-chart-title">联邦债务结构</div>
+          <div class="chart-wrap"><canvas id="debtStackChart"></canvas></div>
+        </div>
+      </div>
+      <div class="status" id="debtStatus" role="status">正在加载联邦债务数据…</div>
     </div>
 
   </div>
@@ -205,12 +224,90 @@ function renderCPI(rows) {
   ]);
 }
 
+function debtOptions(axisId, unit, stacked = false) {
+  const options = chartOptions();
+  const yStyle = options.scales.y;
+  delete options.scales.y;
+  options.scales.x.stacked = stacked;
+  options.scales[axisId] = {
+    ...yStyle,
+    stacked,
+    title: { display: true, text: unit, color: COLORS.muted, font: { size: 10 } },
+    ticks: {
+      ...yStyle.ticks,
+      callback: v => unit === '%' ? v + '%' : Number(v).toLocaleString(),
+    },
+  };
+  options.plugins.tooltip.callbacks = {
+    label: ctx => ctx.parsed.y === null
+      ? '  ' + ctx.dataset.label + ': --'
+      : '  ' + ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString(undefined, {
+          minimumFractionDigits: unit === '%' ? 2 : 0,
+          maximumFractionDigits: unit === '%' ? 2 : 1,
+        }) + (unit === '%' ? '%' : ' USD bn'),
+  };
+  return options;
+}
+
+function renderDebt(rows) {
+  const labels = rows.map(r => r.quarter);
+  const ratioAxis = 'yRatio';
+  const debtAxis = 'yDebt';
+  const structureStack = 'debtStructure';
+
+  new Chart(document.getElementById('debtRatioChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        lineDataset('联邦债务 / GDP', rows.map(r => r.debt_gdp_pct), COLORS.gold, {
+          yAxisID: ratioAxis, sourceField: 'debt_gdp_pct',
+        }),
+        lineDataset('公众持有债务 / GDP', rows.map(r => r.public_gdp_pct), COLORS.blue, {
+          yAxisID: ratioAxis, sourceField: 'public_gdp_pct',
+        }),
+      ],
+    },
+    options: debtOptions(ratioAxis, '%'),
+  });
+
+  new Chart(document.getElementById('debtStackChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '政府内部持有', data: rows.map(r => r.intragov_bn),
+          backgroundColor: 'rgba(88,166,255,.75)', stack: structureStack, yAxisID: debtAxis,
+          sourceField: 'intragov_bn',
+        },
+        {
+          label: '本国公众持有', data: rows.map(r => r.domestic_public_bn),
+          backgroundColor: 'rgba(245,200,66,.75)', stack: structureStack, yAxisID: debtAxis,
+          sourceField: 'domestic_public_bn',
+        },
+        {
+          label: '外国持有', data: rows.map(r => r.foreign_bn),
+          backgroundColor: 'rgba(163,113,247,.75)', stack: structureStack, yAxisID: debtAxis,
+          sourceField: 'foreign_bn',
+        },
+        lineDataset('联邦债务总额', rows.map(r => r.total_bn), COLORS.red, {
+          type: 'line', yAxisID: debtAxis, order: 0, sourceField: 'total_bn',
+        }),
+      ],
+    },
+    options: debtOptions(debtAxis, 'USD bn', true),
+  });
+}
+
 // 渲染异常不能伪装成"数据文件未找到"：单张图出错只影响自己，异常照常打到控制台。
 function _safeRender(name, fn) {
   try {
     fn();
+    return true;
   } catch (err) {
     console.error('[render] ' + name + ' 渲染失败：', err);
+    return false;
   }
 }
 
@@ -245,6 +342,29 @@ Promise.all([
     console.error('[fetch] 宏观数据加载失败：', err);
     const el = document.getElementById('status');
     el.textContent = '宏观数据加载失败：' + err.message;
+    el.className = 'status err';
+  });
+
+// debt 使用独立加载链：债务文件或渲染失败只影响债务卡片；rates/CPI 失败也不会
+// 阻止 debt 继续加载。所有数值直接读取派生字段，不在前端换算或补齐。
+loadJson('data/derived/macro_debt.json?_=' + Date.now(), { name: 'macro_debt.json' })
+  .then(debt => {
+    const rows = debt.debt || [];
+    const meta = debt.meta || {};
+    const rendered = _safeRender('美国联邦债务', () => renderDebt(rows));
+    const el = document.getElementById('debtStatus');
+    if (rendered) {
+      el.textContent = '已加载 ' + rows.length + ' 条季度债务记录；结构数据截至 '
+        + (meta.stack_last || '--') + '，比率截至 ' + (meta.ratio_last || '--') + '。';
+    } else {
+      el.textContent = '联邦债务图表渲染失败，请查看控制台。';
+      el.className = 'status err';
+    }
+  })
+  .catch(err => {
+    console.error('[fetch] 美国联邦债务数据加载失败：', err);
+    const el = document.getElementById('debtStatus');
+    el.textContent = '联邦债务数据加载失败：' + err.message;
     el.className = 'status err';
   });
 </script>
