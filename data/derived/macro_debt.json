@@ -1,0 +1,555 @@
+{
+  "schema_version": 0,
+  "source": "derived_macro_debt",
+  "freq": "quarterly",
+  "generated_at": "2026-08-23T13:21:46Z",
+  "date_field": "date",
+  "coverage": {
+    "first": "2016-01-01",
+    "last": "2026-04-01",
+    "count": 42
+  },
+  "derived_from": [
+    {
+      "source": "FRED",
+      "generated_at": "2026-08-22T15:15:45Z",
+      "coverage": {
+        "first": "2016-01-01",
+        "last": "2026-01-01",
+        "count": 41
+      },
+      "envelope": true
+    },
+    {
+      "source": "FRED",
+      "generated_at": "2026-08-22T15:15:46Z",
+      "coverage": {
+        "first": "2016-01-01",
+        "last": "2026-01-01",
+        "count": 41
+      },
+      "envelope": true
+    },
+    {
+      "source": "FRED",
+      "generated_at": "2026-08-22T15:15:48Z",
+      "coverage": {
+        "first": "2016-01-01",
+        "last": "2026-01-01",
+        "count": 41
+      },
+      "envelope": true
+    },
+    {
+      "source": "FRED",
+      "generated_at": "2026-08-22T15:15:50Z",
+      "coverage": {
+        "first": "2016-01-01",
+        "last": "2025-10-01",
+        "count": 40
+      },
+      "envelope": true
+    },
+    {
+      "source": "FRED",
+      "generated_at": "2026-08-22T15:15:53Z",
+      "coverage": {
+        "first": "2016-01-01",
+        "last": "2026-04-01",
+        "count": 42
+      },
+      "envelope": true
+    }
+  ],
+  "warnings": [],
+  "info": [
+    "units_source=FRED metadata: GFDEBTN/FYGFDPUN/FDHBATN=Millions of Dollars, FDHBFIN/GDP=Billions of Dollars",
+    "units_normalized=millions_divided_by_1000",
+    "debt_coverage=2016-01-01..2026-01-01 count=41",
+    "stack_coverage=2016-01-01..2025-10-01 count=40",
+    "ratio_coverage=2016-01-01..2026-01-01 count=41",
+    "date_alignment=outer_join",
+    "ratio=debt_bn/gdp_bn*100 same_quarter",
+    "gdp_basis=SAAR_raw_not_divided_by_4",
+    "domestic_public=public_minus_foreign",
+    "identity=GFDEBTN==FYGFDPUN+FDHBATN tol=1e-06",
+    "stack_null_after=meta.stack_last",
+    "missing_values=null"
+  ],
+  "data": {
+    "debt": [
+      {
+        "date": "2016-01-01",
+        "quarter": "2016-Q1",
+        "total_bn": 19264.939,
+        "intragov_bn": 5335.177,
+        "domestic_public_bn": 7645.362000000001,
+        "foreign_bn": 6284.4,
+        "gdp_bn": 18525.933,
+        "debt_gdp_pct": 103.98903526208368,
+        "public_gdp_pct": 75.19060983325375
+      },
+      {
+        "date": "2016-04-01",
+        "quarter": "2016-Q2",
+        "total_bn": 19381.591,
+        "intragov_bn": 5444.282,
+        "domestic_public_bn": 7658.208999999999,
+        "foreign_bn": 6279.1,
+        "gdp_bn": 18711.702,
+        "debt_gdp_pct": 103.58005380803948,
+        "public_gdp_pct": 74.4844536322778
+      },
+      {
+        "date": "2016-07-01",
+        "quarter": "2016-Q3",
+        "total_bn": 19573.445,
+        "intragov_bn": 5395.695,
+        "domestic_public_bn": 8021.85,
+        "foreign_bn": 6155.9,
+        "gdp_bn": 18892.639,
+        "debt_gdp_pct": 103.60355162664148,
+        "public_gdp_pct": 75.04377763212435
+      },
+      {
+        "date": "2016-10-01",
+        "quarter": "2016-Q4",
+        "total_bn": 19976.827,
+        "intragov_bn": 5537.501,
+        "domestic_public_bn": 8436.525999999998,
+        "foreign_bn": 6002.8,
+        "gdp_bn": 19089.379,
+        "debt_gdp_pct": 104.64890974190413,
+        "public_gdp_pct": 75.64062717807634
+      },
+      {
+        "date": "2017-01-01",
+        "quarter": "2017-Q1",
+        "total_bn": 19846.42,
+        "intragov_bn": 5471.963,
+        "domestic_public_bn": 8299.157,
+        "foreign_bn": 6075.3,
+        "gdp_bn": 19280.084,
+        "debt_gdp_pct": 102.93741458802772,
+        "public_gdp_pct": 74.5559874116731
+      },
+      {
+        "date": "2017-04-01",
+        "quarter": "2017-Q2",
+        "total_bn": 19844.554,
+        "intragov_bn": 5473.656,
+        "domestic_public_bn": 8218.998,
+        "foreign_bn": 6151.9,
+        "gdp_bn": 19438.643,
+        "debt_gdp_pct": 102.08816531071638,
+        "public_gdp_pct": 73.92953304405044
+      },
+      {
+        "date": "2017-07-01",
+        "quarter": "2017-Q3",
+        "total_bn": 20244.9,
+        "intragov_bn": 5563.073,
+        "domestic_public_bn": 8379.927,
+        "foreign_bn": 6301.9,
+        "gdp_bn": 19692.595,
+        "debt_gdp_pct": 102.80463290896908,
+        "public_gdp_pct": 74.55506498762605
+      },
+      {
+        "date": "2017-10-01",
+        "quarter": "2017-Q4",
+        "total_bn": 20492.747,
+        "intragov_bn": 5669.641,
+        "domestic_public_bn": 8611.806,
+        "foreign_bn": 6211.3,
+        "gdp_bn": 20037.088,
+        "debt_gdp_pct": 102.2740779498498,
+        "public_gdp_pct": 73.97834455785191
+      },
+      {
+        "date": "2018-01-01",
+        "quarter": "2018-Q1",
+        "total_bn": 21089.643,
+        "intragov_bn": 5652.861,
+        "domestic_public_bn": 9213.382,
+        "foreign_bn": 6223.4,
+        "gdp_bn": 20328.553,
+        "debt_gdp_pct": 103.74394576928323,
+        "public_gdp_pct": 75.93645253550511
+      },
+      {
+        "date": "2018-04-01",
+        "quarter": "2018-Q2",
+        "total_bn": 21195.07,
+        "intragov_bn": 5711.522,
+        "domestic_public_bn": 9258.548,
+        "foreign_bn": 6225.0,
+        "gdp_bn": 20580.912,
+        "debt_gdp_pct": 102.98411460094674,
+        "public_gdp_pct": 75.23256500975273
+      },
+      {
+        "date": "2018-07-01",
+        "quarter": "2018-Q3",
+        "total_bn": 21516.058,
+        "intragov_bn": 5737.252,
+        "domestic_public_bn": 9552.906,
+        "foreign_bn": 6225.9,
+        "gdp_bn": 20798.73,
+        "debt_gdp_pct": 103.44890288974375,
+        "public_gdp_pct": 75.86427632841044
+      },
+      {
+        "date": "2018-10-01",
+        "quarter": "2018-Q4",
+        "total_bn": 21974.096,
+        "intragov_bn": 5853.354,
+        "domestic_public_bn": 9850.642,
+        "foreign_bn": 6270.1,
+        "gdp_bn": 20917.867,
+        "debt_gdp_pct": 105.04941063063458,
+        "public_gdp_pct": 77.06685390054349
+      },
+      {
+        "date": "2019-01-01",
+        "quarter": "2019-Q1",
+        "total_bn": 22027.88,
+        "intragov_bn": 5804.029,
+        "domestic_public_bn": 9749.851,
+        "foreign_bn": 6474.0,
+        "gdp_bn": 21111.6,
+        "debt_gdp_pct": 104.34017317493702,
+        "public_gdp_pct": 76.84804088747418
+      },
+      {
+        "date": "2019-04-01",
+        "quarter": "2019-Q2",
+        "total_bn": 22023.283,
+        "intragov_bn": 5818.564,
+        "domestic_public_bn": 9578.819,
+        "foreign_bn": 6625.9,
+        "gdp_bn": 21397.938,
+        "debt_gdp_pct": 102.9224544907084,
+        "public_gdp_pct": 75.73028298334167
+      },
+      {
+        "date": "2019-07-01",
+        "quarter": "2019-Q3",
+        "total_bn": 22719.402,
+        "intragov_bn": 5893.424,
+        "domestic_public_bn": 9902.478,
+        "foreign_bn": 6923.5,
+        "gdp_bn": 21717.171,
+        "debt_gdp_pct": 104.61492429193471,
+        "public_gdp_pct": 77.47776172135865
+      },
+      {
+        "date": "2019-10-01",
+        "quarter": "2019-Q4",
+        "total_bn": 23201.38,
+        "intragov_bn": 6013.988,
+        "domestic_public_bn": 10343.192,
+        "foreign_bn": 6844.2,
+        "gdp_bn": 21933.217,
+        "debt_gdp_pct": 105.7819288433612,
+        "public_gdp_pct": 78.36238523514358
+      },
+      {
+        "date": "2020-01-01",
+        "quarter": "2020-Q1",
+        "total_bn": 23223.813,
+        "intragov_bn": 5995.035,
+        "domestic_public_bn": 10279.277999999998,
+        "foreign_bn": 6949.5,
+        "gdp_bn": 21751.238,
+        "debt_gdp_pct": 106.77007442059158,
+        "public_gdp_pct": 79.2082639158286
+      },
+      {
+        "date": "2020-04-01",
+        "quarter": "2020-Q2",
+        "total_bn": 26477.241,
+        "intragov_bn": 5928.866,
+        "domestic_public_bn": 13496.275,
+        "foreign_bn": 7052.1,
+        "gdp_bn": 19958.291,
+        "debt_gdp_pct": 132.662866775517,
+        "public_gdp_pct": 102.95658581188138
+      },
+      {
+        "date": "2020-07-01",
+        "quarter": "2020-Q3",
+        "total_bn": 26945.391,
+        "intragov_bn": 5907.764,
+        "domestic_public_bn": 13968.427,
+        "foreign_bn": 7069.2,
+        "gdp_bn": 21704.437,
+        "debt_gdp_pct": 124.14692442840143,
+        "public_gdp_pct": 96.92777103594071
+      },
+      {
+        "date": "2020-10-01",
+        "quarter": "2020-Q4",
+        "total_bn": 27747.798,
+        "intragov_bn": 6096.382,
+        "domestic_public_bn": 14580.716,
+        "foreign_bn": 7070.7,
+        "gdp_bn": 22087.16,
+        "debt_gdp_pct": 125.62863672830731,
+        "public_gdp_pct": 98.02716148205565
+      },
+      {
+        "date": "2021-01-01",
+        "quarter": "2021-Q1",
+        "total_bn": 28132.57,
+        "intragov_bn": 6125.707,
+        "domestic_public_bn": 14968.563000000002,
+        "foreign_bn": 7038.3,
+        "gdp_bn": 22680.693,
+        "debt_gdp_pct": 124.03752389752817,
+        "public_gdp_pct": 97.02905903272004
+      },
+      {
+        "date": "2021-04-01",
+        "quarter": "2021-Q2",
+        "total_bn": 28529.436,
+        "intragov_bn": 6175.904,
+        "domestic_public_bn": 14834.632,
+        "foreign_bn": 7518.9,
+        "gdp_bn": 23425.91,
+        "debt_gdp_pct": 121.78581749865853,
+        "public_gdp_pct": 95.42225680880699
+      },
+      {
+        "date": "2021-07-01",
+        "quarter": "2021-Q3",
+        "total_bn": 28428.919,
+        "intragov_bn": 6123.04,
+        "domestic_public_bn": 14734.979000000001,
+        "foreign_bn": 7570.9,
+        "gdp_bn": 23982.379,
+        "debt_gdp_pct": 118.54086285601608,
+        "public_gdp_pct": 93.0094508138663
+      },
+      {
+        "date": "2021-10-01",
+        "quarter": "2021-Q4",
+        "total_bn": 29617.215,
+        "intragov_bn": 6448.886,
+        "domestic_public_bn": 15427.929000000002,
+        "foreign_bn": 7740.4,
+        "gdp_bn": 24813.6,
+        "debt_gdp_pct": 119.35879920688654,
+        "public_gdp_pct": 93.36947883418772
+      },
+      {
+        "date": "2022-01-01",
+        "quarter": "2022-Q1",
+        "total_bn": 30400.96,
+        "intragov_bn": 6497.68,
+        "domestic_public_bn": 16299.079999999998,
+        "foreign_bn": 7604.2,
+        "gdp_bn": 25250.347,
+        "debt_gdp_pct": 120.39818700313305,
+        "public_gdp_pct": 94.6651545026292
+      },
+      {
+        "date": "2022-04-01",
+        "quarter": "2022-Q2",
+        "total_bn": 30568.582,
+        "intragov_bn": 6635.101,
+        "domestic_public_bn": 16516.581,
+        "foreign_bn": 7416.9,
+        "gdp_bn": 25861.292,
+        "debt_gdp_pct": 118.20206817200005,
+        "public_gdp_pct": 92.5455735158166
+      },
+      {
+        "date": "2022-07-01",
+        "quarter": "2022-Q3",
+        "total_bn": 30928.912,
+        "intragov_bn": 6608.706,
+        "domestic_public_bn": 17068.706,
+        "foreign_bn": 7251.5,
+        "gdp_bn": 26336.304,
+        "debt_gdp_pct": 117.43831632563173,
+        "public_gdp_pct": 92.34479523018871
+      },
+      {
+        "date": "2022-10-01",
+        "quarter": "2022-Q4",
+        "total_bn": 31419.689,
+        "intragov_bn": 6880.448,
+        "domestic_public_bn": 17344.541,
+        "foreign_bn": 7194.7,
+        "gdp_bn": 26770.514,
+        "debt_gdp_pct": 117.36677525130821,
+        "public_gdp_pct": 91.66518431435424
+      },
+      {
+        "date": "2023-01-01",
+        "quarter": "2023-Q1",
+        "total_bn": 31458.438,
+        "intragov_bn": 6743.612,
+        "domestic_public_bn": 17246.226000000002,
+        "foreign_bn": 7468.6,
+        "gdp_bn": 27216.445,
+        "debt_gdp_pct": 115.5861391890087,
+        "public_gdp_pct": 90.80842850710297
+      },
+      {
+        "date": "2023-04-01",
+        "quarter": "2023-Q2",
+        "total_bn": 32332.274,
+        "intragov_bn": 6850.199,
+        "domestic_public_bn": 17918.875,
+        "foreign_bn": 7563.2,
+        "gdp_bn": 27530.055,
+        "debt_gdp_pct": 117.44355033072038,
+        "public_gdp_pct": 92.56093022698283
+      },
+      {
+        "date": "2023-07-01",
+        "quarter": "2023-Q3",
+        "total_bn": 33167.334,
+        "intragov_bn": 6817.835,
+        "domestic_public_bn": 18840.398999999998,
+        "foreign_bn": 7509.1,
+        "gdp_bn": 28074.846,
+        "debt_gdp_pct": 118.13897037939229,
+        "public_gdp_pct": 93.8544738589127
+      },
+      {
+        "date": "2023-10-01",
+        "quarter": "2023-Q4",
+        "total_bn": 34001.494,
+        "intragov_bn": 7041.267,
+        "domestic_public_bn": 19020.227,
+        "foreign_bn": 7940.0,
+        "gdp_bn": 28424.722,
+        "debt_gdp_pct": 119.61944254019441,
+        "public_gdp_pct": 94.84781240780472
+      },
+      {
+        "date": "2024-01-01",
+        "quarter": "2024-Q1",
+        "total_bn": 34586.533,
+        "intragov_bn": 7053.111,
+        "domestic_public_bn": 19425.521999999997,
+        "foreign_bn": 8107.9,
+        "gdp_bn": 28708.161,
+        "debt_gdp_pct": 120.47630985488762,
+        "public_gdp_pct": 95.90799633595478
+      },
+      {
+        "date": "2024-04-01",
+        "quarter": "2024-Q2",
+        "total_bn": 34831.634,
+        "intragov_bn": 7197.526,
+        "domestic_public_bn": 19334.808,
+        "foreign_bn": 8299.3,
+        "gdp_bn": 29147.044,
+        "debt_gdp_pct": 119.50314412672516,
+        "public_gdp_pct": 94.80929867193393
+      },
+      {
+        "date": "2024-07-01",
+        "quarter": "2024-Q3",
+        "total_bn": 35464.674,
+        "intragov_bn": 7138.959,
+        "domestic_public_bn": 19559.415,
+        "foreign_bn": 8766.3,
+        "gdp_bn": 29511.664,
+        "debt_gdp_pct": 120.17171922260974,
+        "public_gdp_pct": 95.98142280286194
+      },
+      {
+        "date": "2024-10-01",
+        "quarter": "2024-Q4",
+        "total_bn": 36218.605,
+        "intragov_bn": 7359.48,
+        "domestic_public_bn": 20239.825,
+        "foreign_bn": 8619.3,
+        "gdp_bn": 29825.182,
+        "debt_gdp_pct": 121.43632518319588,
+        "public_gdp_pct": 96.76093510510681
+      },
+      {
+        "date": "2025-01-01",
+        "quarter": "2025-Q1",
+        "total_bn": 36214.30952079646,
+        "intragov_bn": 7281.33628264719,
+        "domestic_public_bn": 19878.77323814926,
+        "foreign_bn": 9054.2,
+        "gdp_bn": 30042.113,
+        "debt_gdp_pct": 120.54514780899885,
+        "public_gdp_pct": 96.30805009670678
+      },
+      {
+        "date": "2025-04-01",
+        "quarter": "2025-Q2",
+        "total_bn": 36211.469,
+        "intragov_bn": 7235.29225514179,
+        "domestic_public_bn": 19885.876744858215,
+        "foreign_bn": 9090.3,
+        "gdp_bn": 30485.729,
+        "debt_gdp_pct": 118.78170602382512,
+        "public_gdp_pct": 95.04833144996537
+      },
+      {
+        "date": "2025-07-01",
+        "quarter": "2025-Q3",
+        "total_bn": 37637.55259555763,
+        "intragov_bn": 7339.27125686674,
+        "domestic_public_bn": 21063.881338690895,
+        "foreign_bn": 9234.4,
+        "gdp_bn": 31098.027,
+        "debt_gdp_pct": 121.0287475651032,
+        "public_gdp_pct": 97.4283073929124
+      },
+      {
+        "date": "2025-10-01",
+        "quarter": "2025-Q4",
+        "total_bn": 38514.009,
+        "intragov_bn": 7643.29590550346,
+        "domestic_public_bn": 21599.813094496538,
+        "foreign_bn": 9270.9,
+        "gdp_bn": 31422.526,
+        "debt_gdp_pct": 122.56815063181105,
+        "public_gdp_pct": 98.24389386931063
+      },
+      {
+        "date": "2026-01-01",
+        "quarter": "2026-Q1",
+        "total_bn": 39065.421,
+        "intragov_bn": null,
+        "domestic_public_bn": null,
+        "foreign_bn": null,
+        "gdp_bn": 31865.721,
+        "debt_gdp_pct": 122.59387132649533,
+        "public_gdp_pct": 98.71049506631203
+      },
+      {
+        "date": "2026-04-01",
+        "quarter": "2026-Q2",
+        "total_bn": null,
+        "intragov_bn": null,
+        "domestic_public_bn": null,
+        "foreign_bn": null,
+        "gdp_bn": 32475.21,
+        "debt_gdp_pct": null,
+        "public_gdp_pct": null
+      }
+    ],
+    "meta": {
+      "units": "billions_usd",
+      "stack_last": "2025-10-01",
+      "total_last": "2026-01-01",
+      "ratio_last": "2026-01-01",
+      "foreign_lag_quarters": 1,
+      "identity_max_abs_rel": 2.103696723283431e-16,
+      "identity_bad_quarters": [],
+      "negative_domestic_quarters": []
+    }
+  }
+}
