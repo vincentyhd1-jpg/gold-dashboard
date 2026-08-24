@@ -231,11 +231,12 @@ jobs:
           #   3 = FRED_API_KEY 缺失或无效 —— 配置问题，等不来自愈，必须有人去看，故报红。
           #       从前它混在 2 里只告警，能连日不红；现在单独一态。
           #   2 = 上游未更新 —— a 类下载失败 / b 类顶层格式非法。只告警不红：
-          #       FRED 提供完整历史，下次跑能补回，十三个文件保持上一份。
+          #       FRED 提供完整历史，下次跑能补回；失败序列保持上一份，
+          #       同批成功序列仍会正常更新。
           case "${{ steps.fred.outputs.code }}" in
             1) fail "采集层：FRED" "fetch_fred.py 需人工介入（exit 1）—— c 类解析失败的原始响应已隔离到 data/quarantine/，d 类对应文件已落 data:null + coverage:null。详见该步骤日志中的逐序列行" ;;
             3) fail "采集层：FRED" "FRED_API_KEY 缺失或无效（exit 3）—— 十三个序列一个都没取到，文件保持上一份。去 Settings → Secrets and variables → Actions 检查 secrets.FRED_API_KEY 是否存在、是否过期、是否被 fork/环境限制挡掉；key 在 https://fredaccount.stlouisfed.org/apikeys 重发" ;;
-            2) echo "::warning title=采集层：FRED::FRED 未返回可用数据（下载失败或响应格式非法），十三个序列文件保持上一份（非异常）。key 问题不落在这一态，另有 exit 3" ;;
+            2) echo "::warning title=采集层：FRED::部分 FRED 序列未返回可用数据（下载失败或响应格式非法）；失败序列保持上一份，同批成功序列仍会正常更新（非异常）。key 问题不落在这一态，另有 exit 3" ;;
             0|"") : ;;
             *) fail "采集层：FRED" "fetch_fred.py 以未预期的 exit code ${{ steps.fred.outputs.code }} 退出（fetch_fred 只应产生 0 / 1 / 2 / 3）" ;;
           esac
