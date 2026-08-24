@@ -87,7 +87,8 @@ jobs:
           exit 0
         continue-on-error: true
 
-      # FRED 八个序列（UST 2Y/10Y/30Y、Fed 目标区间上下限、DFF、CPIAUCSL、CPILFESL）。
+      # FRED 十三个序列（UST 2Y/10Y/30Y、Fed 目标区间上下限、DFF、CPIAUCSL、CPILFESL，
+      # 以及 GFDEBTN/FYGFDPUN/FDHBATN/FDHBFIN/GDP 五个债务与 GDP 序列）。
       # 逐序列独立下载/解析/校验/落盘，一个序列失败不影响其余，见 fetch_fred.py:188 process_one。
       #
       # exit code 四态：0 正常 / 1 需人工介入（c 类解析失败已隔离原始响应；
@@ -116,7 +117,8 @@ jobs:
         run: python derive_term_structure.py
         continue-on-error: true
 
-      # 宏观派生：两条链解耦（rates 读 6 个上游 / cpi 读 2 个），一条失败另一条照常产出，
+      # 宏观派生：三条链解耦（rates 读 6 个上游 / cpi 读 2 个 / debt 读 5 个），
+      # 一条失败时其余链照常产出，
       # 失败的那条保留上一版文件。派生数据可从 data/*.json 随时重算，失败不阻断提交。
       #
       # exit code 只有两态：0 正常 / 1 至少一条链的上游缺失、非信封、空或全 null
@@ -148,7 +150,11 @@ jobs:
                    data/fed_target_upper.json data/fed_target_lower.json \
                    data/fed_effective_rate.json \
                    data/cpi_cpiaucsl.json data/cpi_cpilfesl.json \
-                   data/derived/macro_rates.json data/derived/macro_cpi.json; do
+                   data/debt_total.json data/debt_held_public.json \
+                   data/debt_intragov.json data/debt_foreign.json \
+                   data/gdp_nominal.json \
+                   data/derived/macro_rates.json data/derived/macro_cpi.json \
+                   data/derived/macro_debt.json; do
             git add "$f" 2>/dev/null || true
           done
           # 隔离区必须提交：CME 只提供当日文件，坏数据错过就永久拿不回来
@@ -163,7 +169,7 @@ jobs:
           if git diff --cached --name-only | grep -q '^data/quarantine/'; then
             git commit -m "data: 数据更新 ${DATE}（含隔离数据，见 data/quarantine/）"
           else
-            git commit -m "data: COT+金价+库存数据更新 ${DATE}"
+            git commit -m "data: COT+金价+库存+宏观数据更新 ${DATE}"
           fi
           git push
 
@@ -225,20 +231,22 @@ jobs:
           #   3 = FRED_API_KEY 缺失或无效 —— 配置问题，等不来自愈，必须有人去看，故报红。
           #       从前它混在 2 里只告警，能连日不红；现在单独一态。
           #   2 = 上游未更新 —— a 类下载失败 / b 类顶层格式非法。只告警不红：
-          #       FRED 提供完整历史，下次跑能补回，八个文件保持上一份。
+          #       FRED 提供完整历史，下次跑能补回；失败序列保持上一份，
+          #       同批成功序列仍会正常更新。
           case "${{ steps.fred.outputs.code }}" in
             1) fail "采集层：FRED" "fetch_fred.py 需人工介入（exit 1）—— c 类解析失败的原始响应已隔离到 data/quarantine/，d 类对应文件已落 data:null + coverage:null。详见该步骤日志中的逐序列行" ;;
-            3) fail "采集层：FRED" "FRED_API_KEY 缺失或无效（exit 3）—— 八个序列一个都没取到，文件保持上一份。去 Settings → Secrets and variables → Actions 检查 secrets.FRED_API_KEY 是否存在、是否过期、是否被 fork/环境限制挡掉；key 在 https://fredaccount.stlouisfed.org/apikeys 重发" ;;
-            2) echo "::warning title=采集层：FRED::FRED 未返回可用数据（下载失败或响应格式非法），八个序列文件保持上一份（非异常）。key 问题不落在这一态，另有 exit 3" ;;
+            3) fail "采集层：FRED" "FRED_API_KEY 缺失或无效（exit 3）—— 十三个序列一个都没取到，文件保持上一份。去 Settings → Secrets and variables → Actions 检查 secrets.FRED_API_KEY 是否存在、是否过期、是否被 fork/环境限制挡掉；key 在 https://fredaccount.stlouisfed.org/apikeys 重发" ;;
+            2) echo "::warning title=采集层：FRED::部分 FRED 序列未返回可用数据（下载失败或响应格式非法）；失败序列保持上一份，同批成功序列仍会正常更新（非异常）。key 问题不落在这一态，另有 exit 3" ;;
             0|"") : ;;
             *) fail "采集层：FRED" "fetch_fred.py 以未预期的 exit code ${{ steps.fred.outputs.code }} 退出（fetch_fred 只应产生 0 / 1 / 2 / 3）" ;;
           esac
           [ "${{ steps.derive.outcome }}" = "failure" ] && \
             fail "派生层" "derive_term_structure.py 失败 —— term-structure-series.json 保持上一版，页面回放停留在旧数据。原始数据已落盘，修好后重跑即可重算"
-          # 宏观派生只有 0/1 两态（无 2）。exit 1 = 至少一条链的上游缺失/非信封/空/全 null，
+          # 宏观派生只有 0/1 两态（无 2）。exit 1 = rates/CPI/debt 至少一条链的
+          # 上游缺失/非信封/空/全 null，
           # 那条链保留上一版文件、另一条照常产出 —— 是失败隔离生效，不是全盘失败。
           case "${{ steps.derive_macro.outputs.code }}" in
-            1) fail "派生层：宏观" "derive_macro.py 至少一条派生链失败（上游缺失 / 非信封 / 空 / 全 null）—— 失败的那条保留上一版 macro_rates.json 或 macro_cpi.json，宏观页面对应图停留在旧数据。原始采集已落盘，修好上游后重跑即可重算" ;;
+            1) fail "派生层：宏观" "derive_macro.py 至少一条派生链失败（上游缺失 / 非信封 / 空 / 全 null）—— 失败链保留上一版 macro_rates.json、macro_cpi.json 或 macro_debt.json，其他链照常产出。宏观页面对应模块停留在旧数据，原始采集已落盘，修好上游后重跑即可重算" ;;
             0|"") : ;;
             *) fail "派生层：宏观" "derive_macro.py 以未预期的 exit code ${{ steps.derive_macro.outputs.code }} 退出（derive_macro 只应产生 0 或 1）" ;;
           esac
