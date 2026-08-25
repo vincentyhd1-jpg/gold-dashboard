@@ -124,6 +124,9 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - foreign 当前继续 FDHBFIN/FRED 季度频率；GDP 与正式 debt/GDP 继续季度。
   禁止 forward-fill、插值、0 fallback，也禁止用“每日债务 / 最近季度 GDP”冒充
   正式每日 debt/GDP。
+- 低频折线的渲染输入只包含真实 `{x, y}` observations，并直接连接相邻真实观测；
+  这只是可视化表示，不增加中间日期的数据点。不能用与日频全集等长的 null 数组配合
+  `spanGaps:false` / `pointRadius:0`，否则 1993 年后季度曲线会实际不可见。
 - Treasury 源字段自身异常按分量隔离：可信 total 可继续保留，不一致的 public /
   intragov 同日一起置 null 并写 warning，不能为满足恒等式反算任一分量。
 - 债务图可在 fine pointer 环境左键拖框缩放 X 轴；Y 轴保持全历史范围。移动端不启用

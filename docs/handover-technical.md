@@ -159,7 +159,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
 | `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
-| `tools/verify-macro-page.mjs` | 0 | 85 passed, 0 failed；page errors: none |
+| `tools/verify-macro-page.mjs` | 0 | 88 passed, 0 failed；page errors: none |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
@@ -182,7 +182,7 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-totaloi-injection.mjs` | 0 | wrapper 11/0；基线 29/0 → 旧 total_oi 口径 28/1 → 恢复 29/0 + hash 一致 |
 | `tools/verify-isolation-injection.mjs` | 0 | wrapper 18/0；基线 37/0 → 两种隔离破坏分别红 → 恢复 37/0 + hash 一致 |
 | `tools/verify-cot-index-null-injection.mjs` | 0 | wrapper 18/0；基线 38/0 → current null→50 为 31/7、chart null→50 为 36/2 → 恢复 38/0 + hash 一致 |
-| `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 46/0；基线 85/0 → 双轴/公众 stack/GDP 及 drag disabled/reset 删除/低频 fill 六项均真实变红 → 恢复 85/0 + hash 一致 |
+| `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 53/0；基线 88/0 → 原六项及低频 null-array 不可见表示均真实变红 → 恢复 88/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
 | `tools/verify-injection-wrappers.mjs` | 0 | 34/0；静态锁六 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
 
@@ -612,13 +612,16 @@ public/intragov 的早期官方字段为字符串 `"null"`，原样落 JSON null
 债务图使用 1990 起季度日期与 Treasury 日日期的去重并集。金额字段各按自身首个
 Treasury 真实观测衔接，此前保留 C13 FRED 季度值；起点后 Treasury 某日缺值就留
 gap，不回退季度。foreign、GDP 与正式 debt/GDP 继续季度，结构 stack 也只保留真实
-季度 snapshot。页面分别显示 debt `YYYY-MM-DD`、foreign `YYYY-MM`、GDP `YYYY-Qn`。
+季度 snapshot。三条低频折线只把真实 `{x, y}` observation 交给 Chart.js；不创建
+日频值，但所有真实季度观测都形成可见 point/segment。页面分别显示 debt
+`YYYY-MM-DD`、foreign `YYYY-MM`、GDP `YYYY-Qn`。
 
 Chart.js 仍为 4.4.0，只增加兼容的 chartjs-plugin-zoom 2.2.0 + Hammer.js 2.0.8。
 fine pointer 下左键右向左/左向右拖框只缩 X，threshold=12；两条 Y 轴冻结全历史范围。
 reset 按钮与双击可恢复，touch 环境 drag 关闭且页面可滚动。真实 Playwright 基线为
-85/0；六项 wrapper 为 46/0，其中 drag disabled、reset handler 删除、季度字段
-forward-fill 均使对应 guard 非零且命中稳定 FAIL marker，恢复后 85/0、SHA-256 一致。
+88/0；七项 wrapper 为 53/0，其中 drag disabled、reset handler 删除、季度字段
+forward-fill 与 reviewer 指出的 daily-union null-array / pointRadius=0 表示均使对应 guard
+非零且命中稳定 FAIL marker，恢复后 88/0、SHA-256 一致。
 
 workflow 每日 UTC 22:00 运行 Treasury；周六 UTC 18:00 COT 专场跳过该步，避免同日
 重复。commit 清单含 `data/treasury_debt_daily.json`，末尾 gate 按 0/1/2 三态处理。

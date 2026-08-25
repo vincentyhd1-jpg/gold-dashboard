@@ -26,10 +26,11 @@ const domesticAnchor =
   "          label: '结构快照 · 本国公众', data: quarterly('domestic_public_bn'),";
 const duplicatePublic =
   "          label: '结构快照 · 本国公众', data: quarterly('public_bn'),";
-const gdpDataset = `        lineDataset('美国名义 GDP', quarterly('gdp_bn'), COLORS.green, {
+const gdpDataset = `        lineDataset('美国名义 GDP', quarterlyPoints('gdp_bn'), COLORS.green, {
           type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'gdp_bn',
           sourceFrequency: 'quarterly',
-          stack: 'gdpLine', borderWidth: 2.5, tension: 0, pointStyle: 'line',
+          stack: 'gdpLine', borderWidth: 2.5, tension: 0,
+          pointRadius: 2, pointHoverRadius: 4, pointStyle: 'circle',
         }),
 `;
 const dragAnchor = '        enabled: finePointer,';
@@ -49,6 +50,54 @@ const quarterlyForwardFill = `  const quarterly = field => {
       return value === null ? previous : value;
     });
   };`;
+
+function restoreInvisibleNullArrayRepresentation(original) {
+  let patched = original.toString('utf8');
+  for (const [field, label] of [
+    ['foreign_bn', 'foreign 低频调用'],
+    ['gdp_bn', 'GDP 低频调用'],
+    ['debt_gdp_pct', 'debt/GDP 低频调用'],
+  ]) {
+    patched = replaceExactly(
+      patched,
+      `quarterlyPoints('${field}')`,
+      `quarterly('${field}')`,
+      label,
+    ).toString('utf8');
+  }
+  patched = replaceExactly(
+    patched,
+    '          borderWidth: 1, pointRadius: 2, pointHoverRadius: 4, tension: 0,\n'
+      + "          pointStyle: 'circle',",
+    '          borderWidth: 1, pointRadius: 0, pointHoverRadius: 0, tension: 0,\n'
+      + "          pointStyle: 'line',",
+    'foreign pointRadius 注入锚点',
+  ).toString('utf8');
+  patched = replaceExactly(
+    patched,
+    "          pointRadius: 2, pointHoverRadius: 4, pointStyle: 'circle',",
+    "          pointRadius: 0, pointHoverRadius: 0, pointStyle: 'line',",
+    'GDP pointRadius 注入锚点',
+  ).toString('utf8');
+  patched = replaceExactly(
+    patched,
+    "          tension: 0, pointRadius: 2, pointHoverRadius: 4, pointStyle: 'circle',",
+    "          tension: 0, pointRadius: 0, pointHoverRadius: 0, pointStyle: 'line',",
+    'debt/GDP pointRadius 注入锚点',
+  ).toString('utf8');
+  return Buffer.from(patched, 'utf8');
+}
+
+function verifyInvisibleNullArrayRepresentation(_original, patched) {
+  const text = patched.toString('utf8');
+  return {
+    ok: ["foreign_bn", "gdp_bn", "debt_gdp_pct"]
+      .every(field => text.includes(`quarterly('${field}')`)
+        && !text.includes(`quarterlyPoints('${field}')`))
+      && (text.match(/pointRadius: 0/g) || []).length >= 3,
+    detail: 'daily union + null arrays + spanGaps:false + pointRadius:0',
+  };
+}
 
 const result = await runInjectionSuite({
   name: 'C14 debt overview injection wrapper',
@@ -91,6 +140,12 @@ const result = await runInjectionSuite({
       patch: replaceAnchor(quarterlyAnchor, quarterlyForwardFill, '低频 forward-fill 注入锚点'),
       verifyPatch: verifyReplacement(quarterlyAnchor, quarterlyForwardFill),
       expectedFailureMarkers: ['FAIL 低频 dataset structure_intragov_bn 只映射真实季度观测'],
+    },
+    {
+      name: 'low-frequency lines restored to invisible daily-union null arrays',
+      patch: restoreInvisibleNullArrayRepresentation,
+      verifyPatch: verifyInvisibleNullArrayRepresentation,
+      expectedFailureMarkers: ['FAIL 低频折线 foreign_bn 只含真实 observation object'],
     },
   ],
 });

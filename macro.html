@@ -357,7 +357,14 @@ function buildDebtSeries(quarterlyRows, dailyRows) {
     const row = quarterlyByDate.get(date);
     return row && row[field] !== undefined ? row[field] : null;
   });
-  return { labels, hybrid, quarterly, firstDaily };
+  // Low-frequency lines use only their real observations.  Keeping thousands
+  // of daily-union null entries between quarterly values with spanGaps:false
+  // would make every value an isolated, invisible point.  Object points let
+  // Chart.js connect the real observations without creating any daily value.
+  const quarterlyPoints = field => quarterlyRows
+    .filter(row => row[field] !== null && row[field] !== undefined)
+    .map(row => ({ x: row.date, y: row[field] }));
+  return { labels, hybrid, quarterly, quarterlyPoints, firstDaily };
 }
 
 function syncDebtResetButton(chart = debtOverviewChart) {
@@ -374,7 +381,8 @@ function resetDebtZoom() {
 }
 
 function renderDebt(quarterlyRows, dailyRows) {
-  const { labels, hybrid, quarterly } = buildDebtSeries(quarterlyRows, dailyRows);
+  const { labels, hybrid, quarterly, quarterlyPoints } = buildDebtSeries(
+    quarterlyRows, dailyRows);
   const amountAxis = 'yAmount';
   const ratioAxis = 'yPct';
   const structureStack = 'debtStructure';
@@ -420,22 +428,23 @@ function renderDebt(quarterlyRows, dailyRows) {
           sourceFrequency: 'hybrid_quarterly_then_daily',
           stack: 'intragovDebtLine', borderWidth: 1.5, tension: 0, pointStyle: 'line',
         }),
-        lineDataset('外国持有（真实季度观测）', quarterly('foreign_bn'), COLORS.gold, {
+        lineDataset('外国持有（真实季度观测）', quarterlyPoints('foreign_bn'), COLORS.gold, {
           type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'foreign_bn',
           sourceFrequency: 'quarterly', stack: 'foreignObservationLine',
           borderWidth: 1, pointRadius: 2, pointHoverRadius: 4, tension: 0,
           pointStyle: 'circle',
         }),
-        lineDataset('美国名义 GDP', quarterly('gdp_bn'), COLORS.green, {
+        lineDataset('美国名义 GDP', quarterlyPoints('gdp_bn'), COLORS.green, {
           type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'gdp_bn',
           sourceFrequency: 'quarterly',
-          stack: 'gdpLine', borderWidth: 2.5, tension: 0, pointStyle: 'line',
+          stack: 'gdpLine', borderWidth: 2.5, tension: 0,
+          pointRadius: 2, pointHoverRadius: 4, pointStyle: 'circle',
         }),
-        lineDataset('联邦债务 / GDP（季度）', quarterly('debt_gdp_pct'), '#ffa657', {
+        lineDataset('联邦债务 / GDP（季度）', quarterlyPoints('debt_gdp_pct'), '#ffa657', {
           type: 'line', yAxisID: ratioAxis, order: 0, sourceField: 'debt_gdp_pct',
           sourceFrequency: 'quarterly',
           stack: 'debtRatioLine', borderWidth: 3, borderDash: [7, 4],
-          tension: 0, pointStyle: 'line',
+          tension: 0, pointRadius: 2, pointHoverRadius: 4, pointStyle: 'circle',
         }),
       ],
     },

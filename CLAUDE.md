@@ -138,7 +138,9 @@ public/intragov 早期字段本身稀疏，原样保留 null。官方 `2025-08-0
 
 `macro.html` 的金额线按字段各自真实 Treasury 起点衔接：此前保留 FRED 季度历史，
 起点后只在 Treasury 有真实记录的日期取值；GDP、foreign、正式 debt/GDP 继续季度
-点，不复制成日频。债务图用 chartjs-plugin-zoom 2.2.0（兼容现有 Chart.js 4.4.0）
+点，不复制成日频。三条低频折线只传真实 `{x: date, y: value}` observation 给
+Chart.js 并连接这些观测；不得恢复为 daily union 等长 null 数组，否则季度线会退化
+为不可见孤点。债务图用 chartjs-plugin-zoom 2.2.0（兼容现有 Chart.js 4.4.0）
 在 fine pointer 环境启用左键 X 轴拖框，移动端禁用；按钮与双击均可 reset。两条 Y
 轴锁定全历史范围，不随 X 缩放重算。
 

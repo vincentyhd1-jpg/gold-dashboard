@@ -148,17 +148,34 @@ const state = await page.evaluate(() => {
       : null;
     return {
       labels: chart.data.labels,
-      datasets: chart.data.datasets.map(d => ({
-        label: d.label,
-        spanGaps: d.spanGaps,
-        fill: d.fill,
-        stack: d.stack ?? null,
-        yAxisID: d.yAxisID ?? null,
-        sourceField: d.sourceField ?? null,
-        sourceFrequency: d.sourceFrequency ?? null,
-        type: d.type || chart.config.type,
-        data: Array.from(d.data),
-      })),
+      datasets: chart.data.datasets.map((d, index) => {
+        const meta = chart.getDatasetMeta(index);
+        const visiblePoints = meta.data.filter(point => !point.skip
+          && Number.isFinite(point.x) && Number.isFinite(point.y));
+        const visibleSegments = (meta.dataset?.segments || [])
+          .filter(segment => segment.end > segment.start);
+        const segmentPointIndexes = new Set();
+        for (const segment of visibleSegments) {
+          for (let pointIndex = segment.start; pointIndex <= segment.end; pointIndex++) {
+            if (!meta.data[pointIndex]?.skip) segmentPointIndexes.add(pointIndex);
+          }
+        }
+        return {
+          label: d.label,
+          spanGaps: d.spanGaps,
+          fill: d.fill,
+          stack: d.stack ?? null,
+          yAxisID: d.yAxisID ?? null,
+          sourceField: d.sourceField ?? null,
+          sourceFrequency: d.sourceFrequency ?? null,
+          type: d.type || chart.config.type,
+          data: Array.from(d.data),
+          visiblePointCount: visiblePoints.length,
+          visibleSegmentCount: visibleSegments.length,
+          segmentVisiblePointCount: segmentPointIndexes.size,
+          renderedPointRadius: visiblePoints[0]?.options?.radius ?? null,
+        };
+      }),
       scaleAxes: Object.values(chart.scales).map(s => ({
         id: s.id,
         axis: s.axis,
@@ -291,6 +308,9 @@ const expectedHybrid = field => expectedDates.map(date => {
   return quarterlyByDate.get(date)?.[field] ?? null;
 });
 const expectedQuarterly = field => expectedDates.map(date => quarterlyByDate.get(date)?.[field] ?? null);
+const expectedQuarterlyPoints = field => debtRows
+  .filter(row => row[field] !== null && row[field] !== undefined)
+  .map(row => ({ x: row.date, y: row[field] }));
 
 for (const field of ['total_bn', 'public_bn', 'intragov_bn']) {
   const rendered = debtByField['daily_' + field];
@@ -304,15 +324,46 @@ for (const [sourceField, sourceRowField] of [
   ['structure_intragov_bn', 'intragov_bn'],
   ['structure_domestic_public_bn', 'domestic_public_bn'],
   ['structure_foreign_bn', 'foreign_bn'],
-  ['foreign_bn', 'foreign_bn'],
-  ['gdp_bn', 'gdp_bn'],
-  ['debt_gdp_pct', 'debt_gdp_pct'],
 ]) {
   check(`低频 dataset ${sourceField} 只映射真实季度观测`,
     JSON.stringify(debtByField[sourceField]?.data) === JSON.stringify(expectedQuarterly(sourceRowField))
       && debtByField[sourceField]?.sourceFrequency === 'quarterly',
     JSON.stringify({ rendered: debtByField[sourceField]?.data.length, expected: expectedDates.length }));
 }
+
+for (const field of ['foreign_bn', 'gdp_bn', 'debt_gdp_pct']) {
+  const rendered = debtByField[field];
+  const expected = expectedQuarterlyPoints(field);
+  check(`低频折线 ${field} 只含真实 observation object，数量与源一致`,
+    JSON.stringify(rendered?.data) === JSON.stringify(expected)
+      && rendered?.sourceFrequency === 'quarterly'
+      && rendered?.data.length === expected.length,
+    JSON.stringify({ rendered: rendered?.data.length, expected: expected.length,
+      first: rendered?.data[0], last: rendered?.data.at(-1) }));
+}
+check('GDP 与 debt/GDP 全历史视图存在真实可见 points / segments',
+  ['gdp_bn', 'debt_gdp_pct'].every(field => {
+    const dataset = debtByField[field];
+    return dataset?.visiblePointCount === expectedQuarterlyPoints(field).length
+      && dataset.visiblePointCount > 1 && dataset.visibleSegmentCount > 0
+      && dataset.segmentVisiblePointCount === dataset.visiblePointCount
+      && dataset.renderedPointRadius > 0;
+  }),
+  JSON.stringify(['gdp_bn', 'debt_gdp_pct'].map(field => ({ field,
+    points: debtByField[field]?.visiblePointCount,
+    segments: debtByField[field]?.visibleSegmentCount,
+    segmentPoints: debtByField[field]?.segmentVisiblePointCount,
+    radius: debtByField[field]?.renderedPointRadius }))));
+check('foreign 全历史视图存在真实可见低频 observations / segments',
+  debtByField.foreign_bn?.visiblePointCount === expectedQuarterlyPoints('foreign_bn').length
+    && debtByField.foreign_bn.visiblePointCount > 1
+    && debtByField.foreign_bn.visibleSegmentCount > 0
+    && debtByField.foreign_bn.segmentVisiblePointCount === debtByField.foreign_bn.visiblePointCount
+    && debtByField.foreign_bn.renderedPointRadius > 0,
+  JSON.stringify({ points: debtByField.foreign_bn?.visiblePointCount,
+    segments: debtByField.foreign_bn?.visibleSegmentCount,
+    segmentPoints: debtByField.foreign_bn?.segmentVisiblePointCount,
+    radius: debtByField.foreign_bn?.renderedPointRadius }));
 
 const structureFields = [
   'structure_intragov_bn', 'structure_domestic_public_bn', 'structure_foreign_bn',
@@ -379,13 +430,15 @@ check('foreign/恒等式缺口的结构三项同时 null，不补 0/前值', inc
 const lagRow = debtRows.find(r => r.date > debtMeta.stack_last
   && r.total_bn !== null && r.gdp_bn !== null && r.debt_gdp_pct !== null);
 const lagIdx = state.debtOverview.labels.indexOf(lagRow?.date);
+const gdpPointByDate = new Map(debtByField.gdp_bn.data.map(point => [point.x, point.y]));
+const ratioPointByDate = new Map(debtByField.debt_gdp_pct.data.map(point => [point.x, point.y]));
 check('foreign 右端缺口季度 stack 为空但 GDP/debt-GDP 继续', !!lagRow
   && structureFields.every(field => debtByField[field].data[lagIdx] === null)
-  && debtByField.gdp_bn.data[lagIdx] === lagRow.gdp_bn
-  && debtByField.debt_gdp_pct.data[lagIdx] === lagRow.debt_gdp_pct,
+  && gdpPointByDate.get(lagRow.date) === lagRow.gdp_bn
+  && ratioPointByDate.get(lagRow.date) === lagRow.debt_gdp_pct,
   JSON.stringify({ date: lagRow?.date,
     stack: structureFields.map(field => debtByField[field].data[lagIdx]),
-    gdp: debtByField.gdp_bn.data[lagIdx], ratio: debtByField.debt_gdp_pct.data[lagIdx] }));
+    gdp: gdpPointByDate.get(lagRow?.date), ratio: ratioPointByDate.get(lagRow?.date) }));
 
 const identityRow = debtRows.find(r => r.total_bn !== null
   && ['intragov_bn', 'domestic_public_bn', 'foreign_bn'].every(f => r[f] !== null));
@@ -559,6 +612,40 @@ const resetState = await page.evaluate(() => {
 check('点击重置缩放恢复完整历史范围', resetState.xMin === initialZoom.xMin
   && resetState.xMax === initialZoom.xMax && resetState.resetDisabled === true,
   JSON.stringify({ initial: [initialZoom.xMin, initialZoom.xMax], resetState }));
+
+// 再做一次左向右真实拖框，并以真实双击事件复验第二条 reset 路径。
+await page.mouse.move(initialZoom.chartArea.left + 180, dragY);
+await page.mouse.down({ button: 'left' });
+await page.mouse.move(initialZoom.chartArea.right - 250, dragY, { steps: 10 });
+await page.mouse.up({ button: 'left' });
+try {
+  await page.waitForFunction(() => Chart.getChart(document.getElementById('debtOverviewChart'))
+    ?.isZoomedOrPanned?.() === true, null, { timeout: 5000 });
+} catch (_) {}
+await page.mouse.dblclick(
+  (initialZoom.chartArea.left + initialZoom.chartArea.right) / 2, dragY,
+  { button: 'left' });
+try {
+  await page.waitForFunction(() => !Chart.getChart(document.getElementById('debtOverviewChart'))
+    ?.isZoomedOrPanned?.(), null, { timeout: 5000 });
+} catch (_) {}
+const doubleResetState = await page.evaluate(() => {
+  const chart = Chart.getChart(document.getElementById('debtOverviewChart'));
+  return {
+    xMin: chart.scales.x.min, xMax: chart.scales.x.max,
+    amountMin: chart.scales.yAmount.min, amountMax: chart.scales.yAmount.max,
+    pctMin: chart.scales.yPct.min, pctMax: chart.scales.yPct.max,
+    resetDisabled: document.getElementById('debtResetZoom').disabled,
+  };
+});
+check('双击重置恢复完整 X 范围且左右 Y 轴保持不变',
+  doubleResetState.xMin === initialZoom.xMin && doubleResetState.xMax === initialZoom.xMax
+    && doubleResetState.amountMin === initialZoom.amountMin
+    && doubleResetState.amountMax === initialZoom.amountMax
+    && doubleResetState.pctMin === initialZoom.pctMin
+    && doubleResetState.pctMax === initialZoom.pctMax
+    && doubleResetState.resetDisabled === true,
+  JSON.stringify({ initial: [initialZoom.xMin, initialZoom.xMax], doubleResetState }));
 
 // 4 px < threshold=12，必须保持完整范围。
 await page.mouse.move(initialZoom.chartArea.left + 120, dragY);
