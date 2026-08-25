@@ -183,6 +183,16 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - `verify-browser-launch.mjs` 必须真实创建 page 并执行 JS，同时静态守住普通脚本不得
   直接 launch。改变此策略前先修改这条 guard 并做反恒真，而不是在单个脚本加例外。
 
+### 前端 injection wrapper 契约（C10）
+
+- Node 破坏注入统一经 `tools/_injection.mjs`，业务 patch 留在各 wrapper，不放进 helper。
+- wrapper 的成功必须同时证明：baseline 绿、patch/业务锚点真实改变、injection 红并
+  命中稳定 marker、逐 case 恢复、restored baseline 绿、最终 SHA-256 与运行前一致。
+- backup 只放系统临时目录；case 与最外层 `finally` 都恢复。baseline 本来已红、spawn
+  error、signal、timeout、no-op、锚点未命中、注入仍绿或恢复错配均必须使 wrapper exit 1。
+- `verify-injection-wrappers.mjs` 是公共状态机的 meta guard；改变 helper 的失败累计或
+  恢复语义前必须先用其临时 fixture 证伪，不得只观察真实 wrapper 输出。
+
 ### 破窗规则
 改格式时，**读取端先容双形状 → 写入端再切**。因为数据文件要等下次 Actions 才变形，
 本地 verify 全绿、破窗在下次 CI 才炸、归因窗口已关。
@@ -301,9 +311,9 @@ B/C 多算进来的部分，取证证实：差异最大三帧（07-01 Δ=-0.0959
   `returncode`，不再跨 WSL → Windows → shell。三种注入必须各自变红且命中预期
   NOISE 断言，基线/恢复必须绿，否则脚本自身 exit 1。备份在系统临时目录，
   `finally` 恢复并校验 SHA-256。
-- **注入类 verify 之间无隔离**：一条跑完的注入残留会污染下一条
-  （实测 `verify-totaloi-injection` 曾因上一步残留的派生文件显红），
-  一条跑完须重跑 derive 再跑下一条。
+- **注入类 verify 之间的隔离已由 C10 完成**：四个 Node wrapper 每 case 从运行前
+  原始 bytes 重建，系统临时目录备份，并在 case/finally 校验 SHA-256；wrapper exit 0
+  已包含恢复后目标 guard 再次全绿的证据。
 - **抽查 2 的滑窗 SKIP**：见第 4 节末，约两年后到期。
 - **`term-3d.html`**：无 verify 覆盖 + 真实渲染未验。
 
