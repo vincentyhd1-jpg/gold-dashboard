@@ -94,7 +94,11 @@ tools/*.mjs       Playwright 验证脚本
 `upstream_ref()` 对不存在的上游仍返回 `None` 以保留首次运行语义，但已存在的
 bare 或损坏信封会明确失败，不再生成 `envelope:false` 元数据。
 
-**TODO（fetch_fred --test 剩余覆盖缺口）**：补充幂等写盘断言、缺日期不补点、c 类 quarantine 与主文件不变的独立断言，以及 d 类 coverage 不一致的独立断言。
+**FRED 数据安全回归（C8）**：`fetch_fred.py --test` 已用临时目录与 fake
+payload 锁死磁盘级幂等（第二次 writer 零调用 + bytes/SHA-256 不变）、`"."`
+缺失观测不补点且 coverage 只计有效点、c 类两份 quarantine 证据与旧主文件逐字节
+不变、d 类明确 failure envelope 且旧业务数据不泄漏，以及多序列失败不短路后续
+成功落盘。所有 fixture 禁止真实联网及写入真实 `data/`。
 
 ## 常见陷阱
 
@@ -537,7 +541,12 @@ WINDOW fixture 必须是**合成数据**：当前 24 帧的修订合约恰好全
 
 ### 宏观 d 类阈值待实测后确定
 
-新增 FRED 宏观数据时，d 类硬失败先只保留可确定性判断：CPI 指数 ≤ 0、coverage 计算与实际数据点数不一致、同一序列内日期重复。有效点数下限、滞后天数上限、利率值域只写 warnings，不触发 d 类、不写 data:null。没有真实运行样本前不要拍阈值，避免误用 data:null 覆盖好数据；攒几周后再决定哪些 warning 升级成闸门。
+新增 FRED 宏观数据时，d 类硬失败先只保留可确定性判断：当前 CPI、debt、
+debt_foreign、GDP 值 ≤ 0。日期重复或非法属于 c 类 ParseFailure，先 quarantine
+并逐字节保留旧主文件；成功 envelope 的 coverage 由实际有效点生成，C8 用硬编码
+数据与 coverage 期望锁死缺点不补。有效点数下限、滞后天数上限、利率值域只写
+warnings，不触发 d 类、不写 data:null。没有真实运行样本前不要拍阈值，避免误用
+data:null 覆盖好数据；攒几周后再决定哪些 warning 升级成闸门。
 
 ### warning 不刷 `generated_at`，要持久化就走单独日志
 
@@ -685,7 +694,7 @@ python3 fetch_oi.py --test                 # 采集校验（不联网）
 python3 fetch_cot.py --test                # 采集校验（含 build_payload 幂等前提）
 python3 fetch_gold.py --test               # 采集校验（含退化边界）
 python3 fetch_stocks.py --test             # 采集校验（含缺字段 SKIP）
-python3 fetch_fred.py --test               # 采集校验（8 个 FRED 序列，a/b/c/d 四类失败）
+python3 fetch_fred.py --test               # 采集校验（13 个 FRED 序列，四态 + 磁盘安全）
 python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘
 python3 tools/verify-io-utils.py           # 落盘骨架（含隔离区撞名断言）
 node tools/verify-ui-fixes.mjs             # 柱对齐 / 按钮态 / 轴刻度 / 合约列表
