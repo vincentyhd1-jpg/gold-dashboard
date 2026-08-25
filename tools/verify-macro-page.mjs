@@ -1,4 +1,4 @@
-// macro.html 护栏：图形态（三图 / dataset 数 / 无中值 / 单 Y 轴 / 不跨 null 连线）、
+// macro.html 护栏：rates/CPI 图形态、债务单图双轴与六条 dataset 数据契约、
 // CPI 右端不被补齐、首屏不贴底、发布日文案不冒充日期。
 //
 // 与其他前端 verify 的两处差异，都是刻意的：
@@ -125,6 +125,17 @@ const state = await page.evaluate(() => {
     const chart = Chart.getChart(document.getElementById(id));
     if (!chart) return null;
     const points = chart.getDatasetMeta(0).data.filter(p => !p.skip);
+    const tooltipLabel = chart.options.plugins.tooltip.callbacks?.label;
+    const tooltipSamples = id === 'debtOverviewChart' && typeof tooltipLabel === 'function'
+      ? {
+          amount: tooltipLabel({ parsed: { y: 12345.6 },
+            dataset: { label: '联邦债务总额', yAxisID: 'yAmount' } }),
+          pct: tooltipLabel({ parsed: { y: 122.56 },
+            dataset: { label: '联邦债务 / GDP', yAxisID: 'yPct' } }),
+          missing: tooltipLabel({ parsed: { y: null },
+            dataset: { label: '外国持有', yAxisID: 'yAmount' } }),
+        }
+      : null;
     return {
       labels: chart.data.labels,
       datasets: chart.data.datasets.map(d => ({
@@ -140,9 +151,15 @@ const state = await page.evaluate(() => {
       scaleAxes: Object.values(chart.scales).map(s => ({
         id: s.id,
         axis: s.axis,
+        position: s.options.position || '',
         stacked: s.options.stacked === true,
         title: s.options.title?.text || '',
+        tickSample: s.axis === 'y' && typeof s.options.ticks?.callback === 'function'
+          ? String(s.options.ticks.callback.call(s, 12345.6, 0, []))
+          : '',
       })),
+      tooltipSamples,
+      legendLabels: chart.legend?.legendItems?.map(item => item.text) || [],
       firstYs: points.slice(0, 5).map(p => p.y),
       chartAreaBottom: chart.chartArea.bottom,
     };
@@ -151,9 +168,11 @@ const state = await page.evaluate(() => {
     ust: read('ustChart'),
     fed: read('fedChart'),
     cpi: read('cpiChart'),
-    debtRatio: read('debtRatioChart'),
-    debtStack: read('debtStackChart'),
+    debtOverview: read('debtOverviewChart'),
     debtPanelExists: !!document.getElementById('debtPanel'),
+    debtCanvasIds: Array.from(document.querySelectorAll('#debtPanel canvas')).map(el => el.id),
+    oldDebtCanvasesExist: !!document.getElementById('debtRatioChart')
+      || !!document.getElementById('debtStackChart'),
     debtPanelText: document.getElementById('debtPanel')?.textContent || '',
     debtStatus: document.getElementById('debtStatus')?.textContent || '',
     debtStatusClass: document.getElementById('debtStatus')?.className || '',
@@ -164,15 +183,20 @@ const state = await page.evaluate(() => {
 });
 
 // —— 加载与控制台 ——
-check('macro.html 五张图全部建起', !!(state.ust && state.fed && state.cpi && state.debtRatio && state.debtStack),
+check('macro.html 四张图全部建起', !!(state.ust && state.fed && state.cpi && state.debtOverview),
   JSON.stringify({ ust: !!state.ust, fed: !!state.fed, cpi: !!state.cpi,
-    debtRatio: !!state.debtRatio, debtStack: !!state.debtStack }));
+    debtOverview: !!state.debtOverview }));
 check('page errors / console error 为 0', errors.length === 0, JSON.stringify(errors));
 check('状态行非报错态', !/失败/.test(state.status) && !/err/.test(state.statusClass), state.status);
 check('debt 状态行非报错态', !/失败/.test(state.debtStatus) && !/err/.test(state.debtStatusClass), state.debtStatus);
 check('macro_debt.json 被页面请求', requestedPaths.includes('data/derived/macro_debt.json'),
   JSON.stringify(requestedPaths.filter(p => p.includes('macro_'))));
 check('美国联邦债务面板存在', state.debtPanelExists, String(state.debtPanelExists));
+check('债务区域只有一个主 Chart canvas',
+  JSON.stringify(state.debtCanvasIds) === JSON.stringify(['debtOverviewChart']),
+  JSON.stringify(state.debtCanvasIds));
+check('DOM 不再存在旧的两个独立债务 canvas', !state.oldDebtCanvasesExist,
+  String(state.oldDebtCanvasesExist));
 
 // —— dataset 数 ——
 check('UST 图 3 条 dataset', state.ust.datasets.length === 3,
@@ -182,66 +206,104 @@ check('Fed 图 3 条 dataset', state.fed.datasets.length === 3,
 check('CPI 图 2 条 dataset', state.cpi.datasets.length === 2,
   JSON.stringify(state.cpi.datasets.map(d => d.label)));
 
-// —— 债务数据契约 / stack / 单位 ——
-const ratioByField = Object.fromEntries(state.debtRatio.datasets.map(d => [d.sourceField, d]));
-const stackByField = Object.fromEntries(state.debtStack.datasets.map(d => [d.sourceField, d]));
-for (const field of ['debt_gdp_pct', 'public_gdp_pct']) {
-  check(`债务比率 dataset ${field} 存在`, !!ratioByField[field],
-    JSON.stringify(state.debtRatio.datasets.map(d => d.sourceField)));
-  check(`债务比率 dataset ${field} 逐点直读派生字段`,
-    JSON.stringify(ratioByField[field]?.data) === JSON.stringify(debtRows.map(r => r[field])),
-    JSON.stringify({ rendered: ratioByField[field]?.data.length, source: debtRows.length }));
+// —— 债务单图 / 数据契约 / stack / 双轴 ——
+const debtByField = Object.fromEntries(state.debtOverview.datasets.map(d => [d.sourceField, d]));
+const expectedDebtFields = [
+  'intragov_bn', 'domestic_public_bn', 'foreign_bn',
+  'total_bn', 'gdp_bn', 'debt_gdp_pct',
+];
+const expectedDebtLabels = [
+  '政府内部持有', '本国公众持有', '外国持有',
+  '联邦债务总额', '美国名义 GDP', '联邦债务 / GDP',
+];
+check('债务总览恰有六个目标 dataset',
+  JSON.stringify(state.debtOverview.datasets.map(d => d.sourceField)) === JSON.stringify(expectedDebtFields)
+    && JSON.stringify(state.debtOverview.datasets.map(d => d.label)) === JSON.stringify(expectedDebtLabels),
+  JSON.stringify(state.debtOverview.datasets.map(d => ({ label: d.label, field: d.sourceField }))));
+check('债务图例按结构柱、金额线、比例线顺序展示',
+  JSON.stringify(state.debtOverview.legendLabels) === JSON.stringify(expectedDebtLabels),
+  JSON.stringify(state.debtOverview.legendLabels));
+for (const field of expectedDebtFields) {
+  check(`债务总览 dataset ${field} 逐点直读派生字段`,
+    JSON.stringify(debtByField[field]?.data) === JSON.stringify(debtRows.map(r => r[field])),
+    JSON.stringify({ rendered: debtByField[field]?.data.length, source: debtRows.length }));
 }
+check('public_gdp_pct 不再作为图上 dataset', !debtByField.public_gdp_pct,
+  JSON.stringify(state.debtOverview.datasets.map(d => d.sourceField)));
 for (const field of ['intragov_bn', 'domestic_public_bn', 'foreign_bn']) {
-  check(`债务结构 dataset ${field} 存在`, !!stackByField[field],
-    JSON.stringify(state.debtStack.datasets.map(d => d.sourceField)));
-  check(`债务结构 dataset ${field} 逐点直读派生字段`,
-    JSON.stringify(stackByField[field]?.data) === JSON.stringify(debtRows.map(r => r[field])),
-    JSON.stringify({ rendered: stackByField[field]?.data.length, source: debtRows.length }));
+  check(`债务结构 ${field} 为左轴堆叠柱`,
+    debtByField[field]?.type === 'bar' && debtByField[field]?.yAxisID === 'yAmount',
+    JSON.stringify(debtByField[field]));
 }
-check('联邦债务总额 dataset 逐点直读 total_bn',
-  JSON.stringify(stackByField.total_bn?.data) === JSON.stringify(debtRows.map(r => r.total_bn)),
-  JSON.stringify({ rendered: stackByField.total_bn?.data.length, source: debtRows.length }));
+for (const field of ['total_bn', 'gdp_bn']) {
+  check(`金额折线 ${field} 绑定左轴`,
+    debtByField[field]?.type === 'line' && debtByField[field]?.yAxisID === 'yAmount',
+    JSON.stringify(debtByField[field]));
+}
+check('联邦债务/GDP 为右轴比例折线',
+  debtByField.debt_gdp_pct?.type === 'line' && debtByField.debt_gdp_pct?.yAxisID === 'yPct',
+  JSON.stringify(debtByField.debt_gdp_pct));
 const structureStacks = ['intragov_bn', 'domestic_public_bn', 'foreign_bn']
-  .map(field => stackByField[field]?.stack);
+  .map(field => debtByField[field]?.stack);
 check('三个债务结构 dataset 属于同一非空 stack',
   structureStacks.every(Boolean) && new Set(structureStacks).size === 1,
   JSON.stringify(structureStacks));
-const ratioY = state.debtRatio.scaleAxes.filter(s => s.axis === 'y');
-const debtY = state.debtStack.scaleAxes.filter(s => s.axis === 'y');
-check('比率与债务结构使用不同坐标轴',
-  ratioY.length === 1 && debtY.length === 1 && ratioY[0].id !== debtY[0].id,
-  JSON.stringify({ ratioY, debtY }));
-check('比率轴单位为 %', ratioY.length === 1 && ratioY[0].title === '%', JSON.stringify(ratioY));
-check('债务结构轴堆叠且单位为 USD bn',
-  debtY.length === 1 && debtY[0].stacked && debtY[0].title === 'USD bn', JSON.stringify(debtY));
-check('债务面板明确标注十亿美元', /十亿美元.*USD bn/.test(state.debtPanelText), state.debtPanelText.trim());
-check('债务图季度标签逐点来自派生文件',
-  JSON.stringify(state.debtRatio.labels) === JSON.stringify(debtRows.map(r => r.quarter))
-    && JSON.stringify(state.debtStack.labels) === JSON.stringify(debtRows.map(r => r.quarter)),
-  JSON.stringify({ ratio: state.debtRatio.labels.length, stack: state.debtStack.labels.length }));
+const debtY = state.debtOverview.scaleAxes.filter(s => s.axis === 'y');
+const amountY = debtY.find(s => s.id === 'yAmount');
+const pctY = debtY.find(s => s.id === 'yPct');
+check('债务总览只有 yAmount / yPct 两条 Y 轴',
+  debtY.length === 2 && !!amountY && !!pctY, JSON.stringify(debtY));
+check('yAmount 是左侧堆叠金额轴且单位为 USD bn',
+  amountY?.position === 'left' && amountY?.stacked && amountY?.title === 'USD bn'
+    && amountY?.tickSample === '12,345.6',
+  JSON.stringify(amountY));
+check('yPct 是右侧非堆叠比例轴且单位为 %',
+  pctY?.position === 'right' && !pctY?.stacked && pctY?.title === '%'
+    && pctY?.tickSample === '12,345.6%',
+  JSON.stringify(pctY));
+check('债务 tooltip 区分 USD bn / % 且 null 不显示为 0',
+  /12,345\.6 USD bn$/.test(state.debtOverview.tooltipSamples?.amount || '')
+    && /122\.6%$/.test(state.debtOverview.tooltipSamples?.pct || '')
+    && /--$/.test(state.debtOverview.tooltipSamples?.missing || '')
+    && !/0(?:\.0+)? USD bn$/.test(state.debtOverview.tooltipSamples?.missing || ''),
+  JSON.stringify(state.debtOverview.tooltipSamples));
+check('债务面板明确说明左右轴单位',
+  /左轴（USD bn）.*右轴（%）/.test(state.debtPanelText), state.debtPanelText.trim());
+check('债务总览季度标签逐点来自派生文件',
+  JSON.stringify(state.debtOverview.labels) === JSON.stringify(debtRows.map(r => r.quarter)),
+  JSON.stringify({ rendered: state.debtOverview.labels.length, source: debtRows.length }));
+
+const identityIdx = debtRows.findIndex(r => r.total_bn !== null
+  && ['intragov_bn', 'domestic_public_bn', 'foreign_bn'].every(f => r[f] !== null));
+const identityRow = identityIdx >= 0 ? debtRows[identityIdx] : null;
+const renderedStructureTotal = identityRow
+  ? ['intragov_bn', 'domestic_public_bn', 'foreign_bn']
+      .reduce((sum, field) => sum + debtByField[field].data[identityIdx], 0)
+  : null;
+check('真实完整季度的三项 chart 映射之和与 total_bn 对账', !!identityRow
+  && Math.abs(renderedStructureTotal - identityRow.total_bn)
+    <= Math.max(1, Math.abs(identityRow.total_bn)) * 1e-12,
+  JSON.stringify({ date: identityRow?.date, renderedStructureTotal, total: identityRow?.total_bn }));
 
 const lagIdx = debtRows.findIndex(r => r.date > debtMeta.stack_last
-  && r.total_bn !== null && r.debt_gdp_pct !== null && r.public_gdp_pct !== null);
+  && r.total_bn !== null && r.gdp_bn !== null && r.debt_gdp_pct !== null);
 const lagRow = lagIdx >= 0 ? debtRows[lagIdx] : null;
-check('派生锚点存在：foreign 右端滞后但总债务/比率仍有效', !!lagRow,
+check('派生锚点存在：foreign 右端滞后但总债务/GDP/比率仍有效', !!lagRow,
   JSON.stringify({ stackLast: debtMeta.stack_last, lagRow }));
 check('foreign 右端缺失季度的三个源 stack 字段均为 null', !!lagRow
   && ['intragov_bn', 'domestic_public_bn', 'foreign_bn'].every(f => lagRow[f] === null),
   JSON.stringify(lagRow));
 check('foreign 右端缺失季度的三个图表 stack 值均保持 null', !!lagRow
   && ['intragov_bn', 'domestic_public_bn', 'foreign_bn']
-    .every(f => stackByField[f].data[lagIdx] === null),
+    .every(f => debtByField[f].data[lagIdx] === null),
   JSON.stringify(Object.fromEntries(['intragov_bn', 'domestic_public_bn', 'foreign_bn']
-    .map(f => [f, stackByField[f]?.data[lagIdx]]))));
-check('同一缺口季度 debt/GDP 与 public/GDP 仍显示', !!lagRow
-  && ratioByField.debt_gdp_pct.data[lagIdx] === lagRow.debt_gdp_pct
-  && ratioByField.public_gdp_pct.data[lagIdx] === lagRow.public_gdp_pct,
-  JSON.stringify({ debt: ratioByField.debt_gdp_pct?.data[lagIdx],
-    public: ratioByField.public_gdp_pct?.data[lagIdx] }));
-check('同一缺口季度 total debt 仍显示', !!lagRow
-  && stackByField.total_bn.data[lagIdx] === lagRow.total_bn,
-  JSON.stringify({ rendered: stackByField.total_bn?.data[lagIdx], source: lagRow?.total_bn }));
+    .map(f => [f, debtByField[f]?.data[lagIdx]]))));
+check('同一缺口季度 total debt / GDP / debt-GDP 仍显示', !!lagRow
+  && debtByField.total_bn?.data[lagIdx] === lagRow.total_bn
+  && debtByField.gdp_bn?.data[lagIdx] === lagRow.gdp_bn
+  && debtByField.debt_gdp_pct?.data[lagIdx] === lagRow.debt_gdp_pct,
+  JSON.stringify({ total: debtByField.total_bn?.data[lagIdx],
+    gdp: debtByField.gdp_bn?.data[lagIdx], ratio: debtByField.debt_gdp_pct?.data[lagIdx] }));
 
 // —— Fed 图不画中值 ——
 // FRED 只发布上下限，中值是构造出来的数。既查 label 也查条数：只查 label 的话，
@@ -274,6 +336,9 @@ check('CPI 图两条线 spanGaps=false',
 check('全页所有 dataset spanGaps=false',
   [state.ust, state.fed, state.cpi].every(c => c.datasets.every(d => d.spanGaps === false)),
   JSON.stringify([state.ust, state.fed, state.cpi].map(c => c.datasets.map(d => d.spanGaps))));
+check('债务总览三条折线 spanGaps=false',
+  state.debtOverview.datasets.filter(d => d.type === 'line').every(d => d.spanGaps === false),
+  JSON.stringify(state.debtOverview.datasets.filter(d => d.type === 'line').map(d => d.spanGaps)));
 
 // —— CPI 右端不被补齐 ——
 // 「早于」按月比：CPI 参考期是月度（YYYY-MM），利率是日度（YYYY-MM-DD）。
@@ -334,7 +399,7 @@ async function loadFailureScenario(blockedFiles) {
     const alive = id => !!Chart.getChart(document.getElementById(id));
     return {
       ust: alive('ustChart'), fed: alive('fedChart'), cpi: alive('cpiChart'),
-      debtRatio: alive('debtRatioChart'), debtStack: alive('debtStackChart'),
+      debtOverview: alive('debtOverviewChart'),
       status: document.getElementById('status')?.textContent || '',
       statusClass: document.getElementById('status')?.className || '',
       debtStatus: document.getElementById('debtStatus')?.textContent || '',
@@ -348,7 +413,7 @@ async function loadFailureScenario(blockedFiles) {
 const debtFailure = await loadFailureScenario(['macro_debt.json']);
 check('debt 加载错误只挂 debt 模块',
   debtFailure.result.ust && debtFailure.result.fed && debtFailure.result.cpi
-    && !debtFailure.result.debtRatio && !debtFailure.result.debtStack
+    && !debtFailure.result.debtOverview
     && /失败/.test(debtFailure.result.debtStatus)
     && /err/.test(debtFailure.result.debtStatusClass),
   JSON.stringify(debtFailure));
@@ -359,7 +424,7 @@ check('debt 加载错误明确进入 debt 错误边界',
 const ratesCpiFailure = await loadFailureScenario(['macro_rates.json', 'macro_cpi.json']);
 check('rates/CPI 加载错误不影响 debt 模块',
   !ratesCpiFailure.result.ust && !ratesCpiFailure.result.fed && !ratesCpiFailure.result.cpi
-    && ratesCpiFailure.result.debtRatio && ratesCpiFailure.result.debtStack
+    && ratesCpiFailure.result.debtOverview
     && !/失败/.test(ratesCpiFailure.result.debtStatus),
   JSON.stringify(ratesCpiFailure));
 check('rates/CPI 加载错误明确进入原宏观错误边界',

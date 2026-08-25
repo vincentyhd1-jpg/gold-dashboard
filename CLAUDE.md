@@ -73,7 +73,7 @@ tools/*.mjs       Playwright 验证脚本
 `tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
 不 fallback 与 EPERM 继续抛出。
 
-**前端破坏注入（C10/C11）**：五个 `verify-*-injection.mjs` 统一经
+**前端破坏注入（C10-C12）**：六个 `verify-*-injection.mjs` 统一经
 `tools/_injection.mjs` 执行 `baseline green → injection red → restore green`。
 每个 case 必须证明 patch 与业务锚点真实改变、目标 guard 非零且命中稳定 FAIL
 marker；备份只进系统临时目录，每 case 与最外层 `finally` 都按原始 bytes/SHA-256
@@ -689,10 +689,12 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 - `index.html` 的 COT Index 只读 `cot.json` 的 `latest` 与 `weekly[*]` 预计算字段。
   任一侧 null 时有效侧可以单独展示，但综合信号必须暂不判断、不高亮规则；管理基金
   Index 区间只在自身值有效时高亮，图表 null 保持缺口。
-- `macro.html` 的联邦债务结构只读 `macro_debt.json` 中的 `intragov_bn` /
-  `domestic_public_bn` / `foreign_bn`，三项共用一个 stack；前端不做 `/1000`、
-  不重算本国公众持有、不填补 foreign。`stack_last` 后三项保持 null，但
-  `total_bn` / `debt_gdp_pct` / `public_gdp_pct` 可按各自 coverage 继续显示。
+- `macro.html` 的联邦债务总览是一张双 Y 轴综合图：`intragov_bn` /
+  `domestic_public_bn` / `foreign_bn` 三项共用左轴 `yAmount` 的同一 stack，
+  `total_bn` / `gdp_bn` 是同轴金额线，`debt_gdp_pct` 是右轴 `yPct` 比例线。
+  前端不做 `/1000`、不重算本国公众持有、不填补 foreign；`stack_last` 后三项
+  保持 null，但金额/比例线按各自真实 coverage 继续延伸。`public_gdp_pct` 仍保留
+  在派生文件中，但 C12 主图不展示。
 - macro rates/CPI 与 debt 使用独立加载错误边界；任一组失败不得拖掉另一组。
 - Y 轴 min/max 全部取自派生 JSON 的 `scale`，回放期间 Chart.js 不自动缩放，
   帧间柱高可直接比较
@@ -739,7 +741,8 @@ node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证�
 node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
 node tools/verify-cot-index-null-injection.mjs  # 注入 COT null→50，验证 UI 会变红
 node tools/verify-injection-wrappers.mjs   # wrapper 状态机/恢复/退出码基础设施
-node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 债务缺口与隔离
+node tools/verify-debt-overview-injection.mjs  # C12 双轴/公众重复/GDP 删除三项注入
+node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 债务单图双轴与隔离
 python3 tools/verify-noise-injection.py    # WSL 内运行；三种 noise 注入必须红，恢复后绿
 node tools/verify-live.mjs                 # 线上端到端
 ```

@@ -149,7 +149,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
-| `tools/verify-injection-wrappers.mjs` | 0 | 31 passed, 0 failed |
+| `tools/verify-injection-wrappers.mjs` | 0 | 34 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 38 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
@@ -158,11 +158,11 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
 | `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
-| `tools/verify-macro-page.mjs` | 0 | 54 passed, 0 failed |
+| `tools/verify-macro-page.mjs` | 0 | 62 passed, 0 failed |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
-macro-page(54) 有计数；
+macro-page(62) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -170,7 +170,7 @@ playback/gapframe 无 passed/failed 累加器，
 `44aecf2` 反转了那条编码旧口径的断言（「JUN26 已到期已剔除」→「已到期合约仍保留
 X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案一致，断言未删。
 
-### 注入类护栏（七条，含 wrapper meta guard）
+### 注入类护栏（八条，含 wrapper meta guard）
 
 每条自身 exit 0 表示「注入→红、还原→绿」的完整序列成立。逐阶段实测：
 
@@ -181,10 +181,11 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-totaloi-injection.mjs` | 0 | wrapper 11/0；基线 29/0 → 旧 total_oi 口径 28/1 → 恢复 29/0 + hash 一致 |
 | `tools/verify-isolation-injection.mjs` | 0 | wrapper 18/0；基线 37/0 → 两种隔离破坏分别红 → 恢复 37/0 + hash 一致 |
 | `tools/verify-cot-index-null-injection.mjs` | 0 | wrapper 18/0；基线 38/0 → current null→50 为 31/7、chart null→50 为 36/2 → 恢复 38/0 + hash 一致 |
+| `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 25/0；基线 62/0 → 比例轴错绑、公众重复堆叠、GDP 删除三项均真实变红 → 恢复 62/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
-| `tools/verify-injection-wrappers.mjs` | 0 | 31/0；静态锁五 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
+| `tools/verify-injection-wrappers.mjs` | 0 | 34/0；静态锁六 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
 
-C10 后四个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
+C10-C12 的六个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
 exit 0 已包含「未污染下一个 wrapper」的证据，不再需要在 wrapper 之间重跑 derive。
 `verify-noise-injection.py` 继续独立使用同等严格的 WSL/Python 恢复契约。
@@ -444,26 +445,30 @@ index.html:484   label 文案「页面更新：」
 
 PowerShell 侧 `$?` 是布尔值，取码须用 `$LASTEXITCODE`。
 
-## 8. C4 联邦债务前端与 workflow 闭环
+## 8. C4/C12 联邦债务前端与 workflow 闭环
 
 `macro.html` 通过公共 `loadJson()` 严格解包
 `data/derived/macro_debt.json`，与 rates/CPI 使用独立 Promise 错误边界。
 债务读取或渲染失败只更新 `debtStatus`，不会移除 UST/Fed/CPI；rates/CPI
 加载失败也不会阻止债务图建起。
 
-债务卡片包含两张图：
+债务卡片在 C12 收口为一张 `debtOverviewChart` 双 Y 轴综合图，共六个 dataset：
 
-- `debtRatioChart`：直接读取 `debt_gdp_pct`、`public_gdp_pct`，Y 轴 `yRatio`，单位 `%`。
-- `debtStackChart`：`intragov_bn`、`domestic_public_bn`、`foreign_bn` 共用
-  `debtStructure` stack，Y 轴 `yDebt`，单位 `USD bn`；`total_bn` 以同轴折线显示。
+- `intragov_bn`、`domestic_public_bn`、`foreign_bn` 是共同 `debtStructure` stack
+  的三条互斥柱，绑定左轴 `yAmount`（`USD bn`）。完整季度三项之和与 `total_bn`
+  对账；完整 public 不进入 stack，避免 foreign 重复计算。
+- `total_bn` 与原本已存在于派生文件的 `gdp_bn` 是左轴金额折线。
+- `debt_gdp_pct` 是右轴 `yPct`（`%`）比例折线。`public_gdp_pct` 仍保留在
+  schema v0 派生数据中，但不再作为 C12 主图 dataset。
 
 前端不做单位换算、不重算 `domestic_public_bn`、不 forward-fill。`stack_last`
-之后三个结构字段保持 null；同季度 `total_bn` 与两个 GDP 比率若派生文件仍有值，
-图中继续显示。
+之后三个结构字段保持 null；同季度 `total_bn`、`gdp_bn` 与 `debt_gdp_pct` 若派生
+文件仍有值，三条线继续按真实 coverage 显示。
 
-`tools/verify-macro-page.mjs` 当前为 **54 passed, 0 failed**，新增真实请求、
-dataset 逐点对账、共同 stack、轴与单位、foreign 右端缺口、total/ratio 延伸，
-以及 debt ↔ rates/CPI 双向加载故障隔离断言。
+`tools/verify-macro-page.mjs` 当前为 **62 passed, 0 failed**，覆盖真实请求、单一
+canvas、六 dataset 逐点对账、共同 stack、左右轴/单位/tooltip、完整季度恒等式映射、
+foreign 右端缺口、金额/比例独立延伸，以及 debt ↔ rates/CPI 双向加载故障隔离。
+`verify-debt-overview-injection.mjs` 当前 **25/0**，三项破坏均红且恢复后重新 62/0。
 
 `.github/workflows/update-cot.yml` 的 FRED 基线为 13 个序列。提交清单包含五个
 债务/GDP 原始信封（`debt_total.json`、`debt_held_public.json`、
@@ -532,19 +537,22 @@ PASS/SKIP。
 
 ## 12. C10 前端 injection wrapper 自动判定
 
-新增 `tools/_injection.mjs` 统一四个 Node wrapper 的执行状态机：保存原始 bytes/hash，
+新增 `tools/_injection.mjs` 统一 Node wrapper 的执行状态机；C10 首批四个，C11/C12
+各增加一个业务 wrapper。helper 保存原始 bytes/hash，
 在系统临时目录备份，要求 baseline exit 0；每个 patch 必须改变文件与指定业务锚点，
 目标 guard 必须正常返回非零且命中稳定 FAIL marker；每 case 从原始 bytes 重建，
 恢复后重新跑 guard，并在 case/finally 两层校验 SHA-256。spawn error、signal、timeout
 或恢复错误都记为 wrapper failure，wrapper 明确设置自身 exit code。
 
-`verify-injection-wrappers.mjs` 当前 **31 passed, 0 failed**。动态临时 fixture 覆盖
+`verify-injection-wrappers.mjs` 当前 **34 passed, 0 failed**。静态锁定六个 wrapper，
+动态临时 fixture 覆盖
 成功状态机、红色基线不执行 injection、spawn error、signal、注入仍绿、no-op patch、
 restore mismatch 与 patch throw 后恢复。反恒真结果：吞掉“注入仍绿”累计、放行
 no-op、禁用 restore hash 三次均使 meta guard exit 1；所有临时破坏均已恢复。
 
-真实 wrapper 最终结果：total_oi 11/0、spread 11/0、KPI 32/0、isolation 18/0；
-目标 guard 恢复后仍为 contract-contango 29/0、isolation 37/0。C10 未修改
+真实 wrapper 最终结果：total_oi 11/0、spread 11/0、KPI 32/0、isolation 18/0、
+COT Index null 18/0、debt overview 25/0；目标 guard 恢复后分别保持各自基线。
+C10 未修改
 `index.html`、派生 JSON、业务断言、浏览器 helper、workflow 或生产逻辑。
 
 ## 13. C11 COT Index null / 不可知语义

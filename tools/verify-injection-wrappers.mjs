@@ -24,6 +24,7 @@ const wrappers = [
   'verify-kpi-injection.mjs',
   'verify-isolation-injection.mjs',
   'verify-cot-index-null-injection.mjs',
+  'verify-debt-overview-injection.mjs',
 ];
 
 console.log('## static contract');
