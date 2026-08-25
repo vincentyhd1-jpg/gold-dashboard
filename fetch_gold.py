@@ -42,7 +42,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-from data_envelope import envelope, unwrap, upstream_ref, coverage_of, is_envelope
+from data_envelope import envelope, unwrap, upstream_ref, coverage_of
 from io_utils import atomic_write_json, read_json_or, quarantine_write, sweep_stale_tmp
 
 COT_PATH = os.path.join(os.path.dirname(__file__), "data", "cot.json")
@@ -336,19 +336,23 @@ def write_null(failures: list[str], info: list[str]) -> None:
     atomic_write_json(OUT_PATH, payload, compact=False)
 
 
-def load_existing_data() -> tuple[list | None, bool]:
+def load_existing_data() -> list | None:
     """
-    读上一份的业务数据供幂等比对。裸格式与信封格式都能读。
-
-    返回 (业务数据, 是否信封格式)。
+    读上一份信封的业务数据供幂等比对。
 
     default=None：文件不存在与「文件存在但 data:null」在幂等语义上同类 ——
     都表示「上一份没有可比的数据」，一律视为不同，照常写盘。
     """
     raw = read_json_or(OUT_PATH, None)
     if raw is None:
-        return None, False
-    return unwrap(raw, strict=True), is_envelope(raw)
+        return None
+    return unwrap(raw, strict=True)
+
+
+def load_cot_data(path: str = COT_PATH) -> dict:
+    """读取 COT 业务数据；存在的文件必须是合法 schema v0 信封。"""
+    with open(path, encoding="utf-8") as f:
+        return unwrap(json.load(f), strict=True)
 
 
 def main():
@@ -362,10 +366,7 @@ def main():
         print(f"清理上次残留的临时文件 {len(swept)} 个")
 
     print("读取 COT 日期列表...")
-    # unwrap 容双形状：cot.json 信封化前后都能读。strict=False 是过渡期默认，
-    # 四源全迁完后统一收紧（见 CLAUDE.md TODO）。
-    with open(COT_PATH, encoding="utf-8") as f:
-        cot = unwrap(json.load(f))
+    cot = load_cot_data()
 
     # 用 .get 而非 ["weekly"]：缺键与空列表是同一类上游状态，都不该崩。
     cot_dates = [r["date"] for r in ((cot or {}).get("weekly") or [])]
@@ -478,18 +479,12 @@ def main():
     # 逐条比对而非只看最新一期：源站会修订历史周的收盘价，只比末条会漏掉
     # 中间某周被改的情形。相同则不写盘、不刷 generated_at ——
     # generated_at 表示「数据这次真变了」，不是「脚本跑了」。
-    old_data, old_is_envelope = load_existing_data()
+    old_data = load_existing_data()
 
     if old_data == result:
-        if old_is_envelope:
-            print(f"  {len(result)} 条数据与已有记录逐条相同，跳过写入"
-                  f"（generated_at 不刷新，git 无 diff）")
-            return
-        else:
-            # 格式迁移：旧文件是裸格式，业务数据相同但仍需写一次以升级到信封
-            migration_info = "Format migration: upgraded from bare list to envelope (business data unchanged)"
-            info.append(migration_info)
-            print(f"  {len(result)} 条数据格式迁移：bare list → envelope（业务数据未变）")
+        print(f"  {len(result)} 条数据与已有记录逐条相同，跳过写入"
+              f"（generated_at 不刷新，git 无 diff）")
+        return
 
     payload = envelope(
         source="gold_price",
@@ -608,6 +603,43 @@ def run_tests():
                               "last": good[-1]["date"], "count": 52},
           env["coverage"])
 
+    print("\n[COT strict reader]")
+    with tempfile.TemporaryDirectory() as td:
+        cot_path = os.path.join(td, "cot.json")
+        cot_data = {"latest": {"date": good[-1]["date"]},
+                    "weekly": [{"date": r["date"]} for r in good]}
+        with open(cot_path, "w", encoding="utf-8") as f:
+            json.dump(envelope("cftc_cot", "weekly", cot_data,
+                               dates=[r["date"] for r in good]), f)
+        try:
+            loaded_cot = load_cot_data(cot_path)
+            check("合法 COT schema v0 信封可读", loaded_cot == cot_data)
+        except ValueError as e:
+            check("合法 COT schema v0 信封可读", False, str(e))
+
+        for label, bare in (("裸数组", cot_data["weekly"]),
+                            ("裸字典", cot_data)):
+            with open(cot_path, "w", encoding="utf-8") as f:
+                json.dump(bare, f)
+            try:
+                load_cot_data(cot_path)
+                check(f"COT {label}被 strict reader 拒绝", False, "未抛错")
+            except ValueError as e:
+                check(f"COT {label}被 strict reader 拒绝",
+                      "期望信封格式" in str(e), str(e))
+
+        future = envelope("cftc_cot", "weekly", cot_data,
+                          dates=[r["date"] for r in good])
+        future["schema_version"] = 999
+        with open(cot_path, "w", encoding="utf-8") as f:
+            json.dump(future, f)
+        try:
+            load_cot_data(cot_path)
+            check("COT 未知 schema_version 被拒绝", False, "未抛错")
+        except ValueError as e:
+            check("COT 未知 schema_version 被拒绝",
+                  "未知的 schema_version" in str(e), str(e))
+
     print("\n[data:null 落盘形状]")
     # 真落盘再读回：只查内存对象会漏掉序列化环节（coverage 覆盖是在
     # envelope() 返回之后做的，若顺序写错则内存对的、落盘的错）
@@ -634,22 +666,22 @@ def run_tests():
 
         # 幂等比对：上一份是 data:null 时视为「无可比数据」，不该判相同
         check("load_existing_data() 读 data:null 得 None",
-              load_existing_data()[0] is None)
+              load_existing_data() is None)
         check("data:null 与真实序列不相等（不会误判幂等跳过）",
-              load_existing_data()[0] != good)
+              load_existing_data() != good)
 
         print("\n[幂等比对]")
         atomic_write_json(OUT_PATH, envelope(
             source="gold_price", freq="weekly", data=good,
             dates=[r["date"] for r in good]), compact=False)
         check("逐条相同 → 判定相同（跳过写入）",
-              load_existing_data()[0] == good)
+              load_existing_data() == good)
         revised = [dict(r) for r in good]
         revised[10]["price"] = revised[10]["price"] + 0.01
         check("历史第 11 周被修订 → 判定不同（只比末条会漏）",
-              load_existing_data()[0] != revised)
+              load_existing_data() != revised)
         check("末条被修订 → 判定不同",
-              load_existing_data()[0] != good[:-1] + [
+              load_existing_data() != good[:-1] + [
                   {**good[-1], "price": good[-1]["price"] + 1}])
 
         print("\n[三段 quarantine]")
@@ -743,11 +775,6 @@ def _assert_ok(payload) -> bool:
         return True
     except ValueError:
         return False
-
-
-def _bare_roundtrip(path: str, rows: list[dict]) -> bool:
-    """Removed: bare list compatibility test obsoleted by strict mode."""
-    pass
 
 
 if __name__ == "__main__":

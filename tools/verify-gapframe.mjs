@@ -14,8 +14,10 @@ page.on('console', m => { if (m.type() === 'error') errs.push('[console] ' + m.t
 await page.route('**/term-structure-series.json*', async route => {
   const res = await route.fetch();
   const payload = await res.json();
-  // 信封格式：业务数据在 data 里。兼容旧的平铺格式（与前端入口同一处理）。
-  const s = payload?.data ?? payload;
+  if (!payload || payload.schema_version !== 0 || !Object.hasOwn(payload, 'data')) {
+    throw new Error('term-structure-series.json: 期望 schema v0 信封');
+  }
+  const s = payload.data;
   // 把第 5 帧改成断层帧：oi_chg 全 null，移仓相关字段全 null
   const i = 5;
   s.frames[i].oi_chg = s.frames[i].oi_chg.map(() => null);

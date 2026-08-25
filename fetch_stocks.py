@@ -21,7 +21,7 @@ from io_utils import (
     upsert_by_key, apply_retention, quarantine_write,
     KEEP_OLD, TAKE_NEW,
 )
-from data_envelope import envelope, unwrap, is_envelope
+from data_envelope import envelope, unwrap
 
 GOLD_PAGE  = "https://www.cmegroup.com/markets/metals/precious/gold.html"
 REPORT_URL = "https://www.cmegroup.com/delivery_reports/Gold_Stocks.xls"
@@ -265,20 +265,18 @@ def parse(content: bytes) -> dict:
 
 # ── Storage ───────────────────────────────────────────────────────────────────
 
-def load_existing() -> tuple[list[dict], bool, any]:
+def load_existing(path: str = OUT_PATH) -> list[dict]:
     """
-    读已有记录。信封格式取 data，裸格式原样返回（过渡期两种都能读）。
-
-    返回 (业务数据, 是否信封格式, raw)。
-
-    read_json_or 的 default 是 [] —— 文件不存在或解析失败时返回空列表，
-    不抛。unwrap 会对坏信封（未知 schema_version 等）抛错，那是有意的：
-    宁可拒绝也不静默按旧格式解析出错的业务数据。
+    读已有信封记录。文件不存在表示首次运行，返回空列表；存在的 bare 文件或
+    损坏信封必须明确失败，不能与首次运行共用 [] sentinel。
     """
-    raw = read_json_or(OUT_PATH, [])
+    if not os.path.exists(path):
+        return []
+    raw = read_json_or(path, None)
+    if raw is None:
+        raise ValueError(f"已有库存文件无法解析：{path}")
     rows = unwrap(raw, strict=True)
-    data = rows if isinstance(rows, list) else []
-    return data, is_envelope(raw), raw
+    return rows if isinstance(rows, list) else []
 
 
 # ── 采集层校验 ────────────────────────────────────────────────────────────────
@@ -438,7 +436,7 @@ def main():
     print("  各仓库明细（depositories）：")
     print(json.dumps(entry.get("depositories", []), ensure_ascii=False, indent=4))
 
-    records, old_is_envelope, raw_old = load_existing()
+    records = load_existing()
 
     # ── 校验：坏数据不得写入 stocks.json ───────────────────────────────
     # 必须在幂等判断之前 —— 坏数据即使日期重复也该被隔离，
@@ -464,18 +462,11 @@ def main():
         records, entry, key="date", merge=merge_stocks)
 
     if action == KEEP_OLD:
-        if old_is_envelope:
-            # 数据逐字段相同 → 文件完全不变、git 无 diff。
-            # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
-            print(f"  {entry['date']} 与已有记录逐字段相同，跳过写入"
-                  f"（generated_at 不刷新）")
-            return
-        else:
-            # 格式迁移：旧文件是裸格式，业务数据相同但仍需写一次以升级到信封
-            old_shape = "bare dict" if isinstance(raw_old, dict) else "bare list"
-            migration_info = f"Format migration: upgraded from {old_shape} to envelope (business data unchanged)"
-            info.append(migration_info)
-            print(f"  {entry['date']} 格式迁移：{old_shape} → envelope（业务数据未变）")
+        # 数据逐字段相同 → 文件完全不变、git 无 diff。
+        # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
+        print(f"  {entry['date']} 与已有记录逐字段相同，跳过写入"
+              f"（generated_at 不刷新）")
+        return
 
     if action == TAKE_NEW:
         prev = next((r for r in records if r.get("date") == entry["date"]), None)
@@ -618,6 +609,50 @@ def run_tests():
     # 首次运行（库为空）→ c) e) 无从比对，但不应失败
     f = validate_stocks(entry_at("2026-07-29"), [])
     check("首次运行（库为空）→ 无失败", f == [], f)
+
+    print("\n[load_existing strict / 首次运行]")
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "stocks.json")
+        check("文件首次不存在 → []", load_existing(path) == [])
+
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(envelope("cme_gold_stocks", "daily", records,
+                               dates=[r["date"] for r in records]), fh)
+        try:
+            loaded = load_existing(path)
+            check("合法 stocks schema v0 信封可读", loaded == records)
+        except ValueError as e:
+            check("合法 stocks schema v0 信封可读", False, str(e))
+
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(records, fh)
+        try:
+            load_existing(path)
+            check("旧 bare stocks 文件被拒绝", False, "未抛错")
+        except ValueError as e:
+            check("旧 bare stocks 文件被拒绝",
+                  "期望信封格式" in str(e), str(e))
+
+        broken = envelope("cme_gold_stocks", "daily", records,
+                          dates=[r["date"] for r in records])
+        del broken["coverage"]
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(broken, fh)
+        try:
+            load_existing(path)
+            check("stocks 损坏信封被拒绝", False, "未抛错")
+        except ValueError as e:
+            check("stocks 损坏信封被拒绝", "信封缺字段" in str(e), str(e))
+
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("{")
+        try:
+            load_existing(path)
+            check("stocks 已存在但 JSON 损坏被拒绝", False, "未抛错")
+        except ValueError as e:
+            check("stocks 已存在但 JSON 损坏被拒绝",
+                  "无法解析" in str(e), str(e))
 
     print("\n[depot_sum_tolerance]")
     check("10 个仓库 → 32（max(20, 32)）", depot_sum_tolerance(10) == 32)

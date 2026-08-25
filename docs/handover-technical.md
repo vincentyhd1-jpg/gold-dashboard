@@ -141,25 +141,25 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 |---|---|---|
 | `derive_term_structure.py --test` | 0 | 21 passed, 0 failed |
 | `fetch_cot.py --test` | 0 | 26 passed, 0 failed |
-| `fetch_gold.py --test` | 0 | 38 passed, 0 failed |
-| `fetch_oi.py --test` | 0 | 62 passed, 0 failed |
-| `fetch_stocks.py --test` | 0 | 22 passed, 0 failed |
+| `fetch_gold.py --test` | 0 | 42 passed, 0 failed |
+| `fetch_oi.py --test` | 0 | 63 passed, 0 failed |
+| `fetch_stocks.py --test` | 0 | 27 passed, 0 failed |
 | `fetch_fred.py --test` | 0 | 43 passed, 0 failed |
 | `derive_macro.py --test` | 0 | 49 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 37 passed, 0 failed |
-| `tools/verify-io-utils.py` | 0 | 102 passed, 0 failed |
+| `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 22 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
 | `tools/verify-gapframe.mjs` | 0 | page errors: none |
 | `tools/verify-isolation.mjs` | 0 | 37 passed, 0 failed |
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
-| `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 5 passed, 0 failed |
+| `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
 | `tools/verify-macro-page.mjs` | 0 | 54 passed, 0 failed |
 
 前端 verify 中 ui-fixes(22)/contract-contango(29)/isolation(37)/
-schema-coupling(3)/envelope-helper-raw-inputs(5)/cot-sentinel-strict(4)/
+schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
 macro-page(54) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
@@ -297,15 +297,15 @@ PASS  2026-07-24: 窗口内 13 条 oi_chg 与 CME stored 相符
 `window_months()` 调用处共 6 个：:377、:381、:406、:432、:815（抽查 2，新增）、
 :1045（fixture 自检）。
 
-### 前端五个读取点（index.html）
+### 前端五个读取点（index.html，C6 strict）
 
-| 行 | 文件 | 解包 |
+| 读取点 | 文件 | 解包 |
 |---|---|---|
-| :1252 | `data/cot.json` | `p?.data ? {...p.data, generated_at: p.generated_at} : p` —— 双形状 |
-| :1255 | `data/gold_price.json` | 直接 `r.json()`，**无**双形状兼容 |
-| :1258 | `data/stocks.json` | 有双形状兼容 |
-| :1262 | `data/oi.json` | 直接 `r.json()`，`.catch(() => [])` |
-| :1263 | `data/derived/term-structure-series.json` | 有双形状兼容 |
+| COT | `data/cot.json` | `loadJson()` strict；map 保留信封 `generated_at` |
+| gold | `data/gold_price.json` | `loadJson()` strict |
+| stocks | `data/stocks.json` | `loadJson()` strict，模块级 catch 隔离 |
+| OI | `data/oi.json` | `loadJson()` strict，模块级 catch 隔离 |
+| term structure | `data/derived/term-structure-series.json` | 保留完整信封，`initOIPlayback()` strict 解包 |
 
 汇合于 :1266 `.then(([cotData, goldData, stocksData, oiData, seriesData])`。
 `_safeRender` 定义在 :1235，调用 :1269-1279（正常路径五处）、:1286-1290（mock 兜底五处）。
@@ -330,7 +330,7 @@ PASS  2026-07-24: 窗口内 13 条 oi_chg 与 CME stored 相符
 ### 时间戳
 
 ```
-index.html:479   const stamp = cot.generated_at ?? cot.updated_at;
+index.html       const stamp = cot.generated_at;
 index.html:480-482  缺失时 '未知'，不回退 new Date()
 index.html:484   label 文案「页面更新：」
 ```
@@ -376,8 +376,11 @@ index.html:484   label 文案「页面更新：」
   `fetch` 复查命中）。结果：六个 verify 全 exit 0 且通过数与基线相同、
   `pageerror` 0、`console error` 0、X 轴 15 列不含 `ZZZ99`、25 帧逐帧扫 DOM 文本
   命中 0。**该字段的护栏只能加在 Python 侧。**
-- **`index.html:1255`（gold_price.json）** 无双形状兼容 —— 该文件信封化时此处会断，
-  且断裂本地不暴露（磁盘文件要等下次 Actions 跑才变形）。
+- **schema v0 strict-reader 收口（C6）**：受跟踪生产 JSON 均已 envelope 化；
+  `fetch_gold` 的 COT 上游、四个采集器旧文件读取、`upstream_ref()` 与两个旧 `.mjs`
+  护栏不再接受 bare。文件首次不存在仍按原有业务语义处理。
+- **schema v1 未启动**：`SCHEMA_VERSION=0`、`KNOWN_SCHEMA_VERSIONS={0}` 保持不变，
+  等未来新源接入并冻结格式后再单独决策。
 - **`index.html:470`** COT Index 显示值 `mx===mn → 50`，与采集层 `cot_index()` 返
   `None` 语义不一致，无任何 verify 校验该显示值。
 

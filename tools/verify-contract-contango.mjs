@@ -16,7 +16,10 @@ await page.waitForTimeout(1000);
 const derived = await page.evaluate(async () => {
   const r = await fetch('data/derived/term-structure-series.json?_=' + Date.now());
   const p = await r.json();
-  const s = p?.data ?? p;
+  if (!p || p.schema_version !== 0 || !Object.hasOwn(p, 'data')) {
+    throw new Error('term-structure-series.json: 期望 schema v0 信封');
+  }
+  const s = p.data;
 
   // total_oi 的 B2 口径需要 ever_front（已当过持仓最大月的月份集合）。
   // 从帧序列独立重算一遍，不读 derive 的中间量 —— 这样才是真的交叉验证。

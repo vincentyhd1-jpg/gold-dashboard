@@ -21,6 +21,19 @@ const names = [
   'term-structure-series.json',
 ];
 
+const validEnvelope = data => ({
+  schema_version: 0,
+  source: 'fixture',
+  freq: 'daily',
+  generated_at: '2026-01-01T00:00:00Z',
+  date_field: 'date',
+  coverage: { first: null, last: null, count: 0 },
+  derived_from: [],
+  warnings: [],
+  info: [],
+  data,
+});
+
 let pass = 0;
 let fail = 0;
 for (const name of names) {
@@ -40,7 +53,7 @@ for (const name of names) {
       return { threw: true, message: err.message };
     }
   }, [name]);
-  const ok = result.threw && result.message === `${name}: 期望信封格式`;
+  const ok = result.threw && result.message.startsWith(`${name}: 期望信封格式`);
   if (ok) {
     pass++;
     console.log(`PASS ${name} 裸输入抛错: ${result.message}`);
@@ -48,6 +61,36 @@ for (const name of names) {
     fail++;
     console.log(`FAIL ${name} 裸输入未正确抛错: ${JSON.stringify(result)}`);
   }
+}
+
+const contractCases = await page.evaluate(valid => {
+  const probe = payload => {
+    try {
+      return { threw: false, value: window.unwrapEnvelope(payload, 'contract.json', true) };
+    } catch (err) {
+      return { threw: true, message: err.message };
+    }
+  };
+  const future = { ...valid, schema_version: 999 };
+  const missing = { ...valid };
+  delete missing.coverage;
+  return { valid: probe(valid), future: probe(future), missing: probe(missing) };
+}, validEnvelope({ rows: [1, 2] }));
+
+const contractChecks = [
+  ['合法 schema v0 信封正常解包',
+   !contractCases.valid.threw && contractCases.valid.value.rows.length === 2,
+   contractCases.valid],
+  ['未知 schema_version 被拒绝',
+   contractCases.future.threw && contractCases.future.message.includes('未知 schema_version=999'),
+   contractCases.future],
+  ['缺 required key 被拒绝',
+   contractCases.missing.threw && contractCases.missing.message.includes('coverage'),
+   contractCases.missing],
+];
+for (const [label, ok, detail] of contractChecks) {
+  if (ok) { pass++; console.log(`PASS ${label}`); }
+  else { fail++; console.log(`FAIL ${label}: ${JSON.stringify(detail)}`); }
 }
 
 await browser.close();

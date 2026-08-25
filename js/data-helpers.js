@@ -2,11 +2,21 @@
 // 只放纯数据处理，不碰 DOM。
 
 function unwrapEnvelope(payload, name = 'payload', strict = true, map = null) {
-  if (payload && typeof payload === 'object' && 'data' in payload) {
+  const required = [
+    'schema_version', 'source', 'freq', 'generated_at', 'date_field',
+    'coverage', 'derived_from', 'warnings', 'info', 'data',
+  ];
+  const isObject = payload && typeof payload === 'object' && !Array.isArray(payload);
+  const missing = isObject ? required.filter(k => !(k in payload)) : required;
+  if (isObject && missing.length === 0 && payload.schema_version === 0) {
     return typeof map === 'function' ? map(payload) : payload.data;
   }
   if (strict) {
-    throw new Error(name + ': 期望信封格式');
+    if (isObject && missing.length === 0) {
+      throw new Error(name + ': 未知 schema_version=' + String(payload.schema_version));
+    }
+    throw new Error(name + ': 期望信封格式' +
+      (isObject ? '（缺字段：' + missing.join(', ') + '）' : ''));
   }
   return payload;
 }
