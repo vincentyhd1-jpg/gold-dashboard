@@ -1,6 +1,5 @@
-import { chromium } from 'playwright';
-const execPath = String.raw`C:\Users\vince\AppData\Local\ms-playwright\chromium-1234\chrome-win64\chrome.exe`;
-const browser = await chromium.launch({ headless: true, executablePath: execPath });
+import { launchChromium } from './_browser.mjs';
+const browser = await launchChromium();
 const page = await browser.newPage({ viewport: { width: 1400, height: 1200 } });
 const errs = [];
 page.on('pageerror', e => errs.push(e.message));

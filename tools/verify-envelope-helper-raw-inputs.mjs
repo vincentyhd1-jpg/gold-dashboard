@@ -1,13 +1,10 @@
-import { chromium } from 'playwright';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { findChromiumExecutable } from './_browser.mjs';
+import { launchChromium } from './_browser.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const execPath = findChromiumExecutable();
-if (!execPath) throw new Error('找不到 Playwright Chromium chrome.exe');
-const browser = await chromium.launch({ headless: true, executablePath: execPath });
+const browser = await launchChromium();
 
 const page = await browser.newPage();
 await page.setContent('<!doctype html>');

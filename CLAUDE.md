@@ -65,7 +65,13 @@ data_envelope.py  统一落盘信封 + write_json 单点落盘
 tools/*.mjs       Playwright 验证脚本
 ```
 
-**TODO（verify 启动方式统一）**：本轮只抽公共 `tools/_browser.mjs` 供两个新增基线脚本使用；六个旧 Playwright verify 脚本仍保留各自的 `execPath + chromium.launch(...)` 写法，后续单独统一，避免和本轮 helper 边界回归混在一起。
+**Playwright 启动方式（C9）**：`tools/` 下 11 个 browser-owning 脚本统一调用
+`tools/_browser.mjs` 的 `launchChromium()`。helper 使用当前项目 Playwright 的
+`chromium.executablePath()` 取得同版本完整 Chromium，再显式启动；不扫描缓存、
+不选择最大 revision、不绑定用户目录、不 fallback 或自动下载。解析、访问或启动失败
+均抛 `BrowserEnvironmentError` 并保持非零；EPERM 属环境失败，不是 PASS/SKIP。
+`tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
+不 fallback 与 EPERM 继续抛出。
 
 ### 落盘统一信封（schema_version = 0）
 

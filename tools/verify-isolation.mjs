@@ -5,10 +5,9 @@
 // 此前本脚本只打印状态、无任何断言，退出码仅反映「脚本自身是否抛异常」——
 // 三个模块全挂只要脚本不抛也是 exit 0，等于这条护栏一直不携带信息。
 // 所有断言跑完才退出（不首个失败就 return），否则看不到全部问题。
-import { chromium } from 'playwright';
+import { launchChromium } from './_browser.mjs';
 
-const execPath = 'C:\\Users\\vince\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe';
-const browser = await chromium.launch({ headless: true, executablePath: execPath });
+const browser = await launchChromium();
 
 let pass = 0, fail = 0;
 const check = (name, ok, detail = '') => {

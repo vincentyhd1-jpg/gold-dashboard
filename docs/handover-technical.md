@@ -148,6 +148,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `derive_macro.py --test` | 0 | 49 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
+| `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 22 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
@@ -500,3 +501,29 @@ workflow 的 COT step 将 Python 的真实退出码写入 `steps.cot.outputs.cod
 跳过时 60 passed / 1 failed，明确命中“相同输入发生第二次写盘”；把 `"."` 伪造为
 0 时 60 passed / 4 failed，data 精确列表、coverage.count 与无伪点断言同时变红。
 三项破坏均已恢复，恢复后重新为 60 passed / 0 failed。C8 未修改 FRED 生产逻辑。
+
+## 11. C9 Playwright Chromium 启动基础设施
+
+`tools/` 下 11 个直接持有 Browser 生命周期的脚本现全部经
+`tools/_browser.mjs::launchChromium()` 启动。helper 调用当前项目 Playwright 的
+`chromium.executablePath()`，验证该完整 Chromium executable 可访问后显式传给
+`chromium.launch()`；不再扫描 `LOCALAPPDATA`/`HOME` 缓存、不选择最大 revision，
+也不 fallback 到系统 Chrome、其它缓存或自动下载。
+
+当前 Windows 环境中，Playwright 默认 headless 启动会寻找未安装的独立 headless
+shell；完整 Chromium 已安装且与项目 Playwright revision 对应。新 helper 的真实动态
+测试已成功创建 Browser/context/page，并执行 DOM 与 JavaScript。
+
+解析、访问或启动失败统一抛 `BrowserEnvironmentError`，诊断含 browser type、尝试
+路径、原始 code 与错误信息。Codex 受限沙箱不能启动用户缓存中的浏览器时，guard
+如实 exit 1；授权宿主环境重跑为 **13 passed, 0 failed**。环境失败不得转成
+PASS/SKIP。
+
+静态 guard 锁死：普通脚本不得直接 `chromium.launch()`，不得包含用户缓存绝对路径、
+固定 Chromium revision 或自行扫描缓存，`executablePath` 只允许出现在 helper 与其
+基础设施测试。反恒真结果：固定 revision 注入为 12/1；普通脚本直接 launch 注入为
+12/1；不存在 executable 的独立调用抛 ENOENT 且 exit 1。全部注入已恢复。
+
+迁移后 11 个 browser-owning 脚本及四个既有 injection wrapper 全部 exit 0；原有
+22/29/37/3/8/4/54 等业务断言基线与 page/console error 语义未变化。C9 未修改生产
+页面、数据、Python、workflow、package 版本或依赖。

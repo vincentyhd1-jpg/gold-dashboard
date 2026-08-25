@@ -1,9 +1,6 @@
-import { chromium } from 'playwright';
-import { findChromiumExecutable } from './_browser.mjs';
+import { launchChromium } from './_browser.mjs';
 
-const execPath = findChromiumExecutable();
-if (!execPath) throw new Error('找不到 Playwright Chromium chrome.exe');
-const browser = await chromium.launch({ headless: true, executablePath: execPath });
+const browser = await launchChromium();
 const page = await browser.newPage({ viewport: { width: 1400, height: 1200 } });
 
 const errors = [];
