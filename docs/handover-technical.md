@@ -144,7 +144,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_gold.py --test` | 0 | 42 passed, 0 failed |
 | `fetch_oi.py --test` | 0 | 63 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 27 passed, 0 failed |
-| `fetch_fred.py --test` | 0 | 43 passed, 0 failed |
+| `fetch_fred.py --test` | 0 | 60 passed, 0 failed |
 | `derive_macro.py --test` | 0 | 49 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
@@ -479,3 +479,24 @@ workflow 的 COT step 将 Python 的真实退出码写入 `steps.cot.outputs.cod
 按 `0/1/2/*` 分流：1 和未预期值报红，2 只 warning 并等待下一次任务重试。
 `fetch_cot.py --test` 的临时目录 sentinel SHA-256 测试与
 `tools/verify-fetch-gates.py` 的子进程/workflow 结构断言共同保护该契约。
+
+## 10. C8 FRED 数据安全回归
+
+`fetch_fred.py --test` 当前为 **60 passed, 0 failed**。新增测试全部使用
+`TemporaryDirectory` 与固定 fake response，不访问 FRED 网络、不写真实 `data/`：
+
+- 相同业务输入第二次处理时，`atomic_write_json` spy 必须保持零调用，目标文件
+  bytes 与 SHA-256 同时不变。
+- `"."` 观测不会生成 0、前值或插值点；输出 data 精确为两个硬编码有效点，
+  coverage 固定为 `first=2026-01-01 / last=2026-01-03 / count=2`。
+- c 类写入独立的 payload/raw quarantine，原因与原响应可追溯，同时旧主文件
+  bytes/SHA-256 不变。
+- d 类写入 schema v0 failure envelope：`data:null`、`coverage:null`、真实原因、
+  series_id 与 units 完整，旧 sentinel 不得泄漏；payload/raw quarantine 均存在。
+- 四序列 fixture 证明 a/c 失败后后续两个成功序列仍按顺序执行并实际落盘，最终
+  严重度为 1。
+
+反恒真证据：`worse_exit()` 临时退回 `max()` 时 60 passed / 3 failed；禁用幂等
+跳过时 60 passed / 1 failed，明确命中“相同输入发生第二次写盘”；把 `"."` 伪造为
+0 时 60 passed / 4 failed，data 精确列表、coverage.count 与无伪点断言同时变红。
+三项破坏均已恢复，恢复后重新为 60 passed / 0 failed。C8 未修改 FRED 生产逻辑。

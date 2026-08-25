@@ -360,31 +360,228 @@ def run_tests() -> None:
             )
             == "c",
         )
+        # —— 磁盘级幂等：相同业务输入不得第二次调用 writer ——
+        idempotent_payload = {
+            "observations": [
+                {"date": "2026-01-01", "value": "1.25"},
+                {"date": "2026-01-03", "value": "1.50"},
+            ]
+        }
+        idempotent_raw = json.dumps(idempotent_payload).encode()
+
+        def idempotent_fetch(series_id):
+            return idempotent_payload, idempotent_raw
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_root = Path(tmp)
+            target = tmp_root / "data" / "idempotent.json"
+            first_kind, first_code, _ = process_one(
+                "TESTIDEMP", "data/idempotent.json", "daily", "rate",
+                fetcher=idempotent_fetch, base_dir=tmp_root,
+                quarantine_dir=tmp_root / "quarantine",
+            )
+            before_bytes = target.read_bytes()
+            before_hash = file_hash(target)
+            writer_calls = []
+            real_writer = globals()["atomic_write_json"]
+
+            def writer_spy(*args, **kwargs):
+                writer_calls.append((args, kwargs))
+                return real_writer(*args, **kwargs)
+
+            globals()["atomic_write_json"] = writer_spy
+            try:
+                second_kind, second_code, _ = process_one(
+                    "TESTIDEMP", "data/idempotent.json", "daily", "rate",
+                    fetcher=idempotent_fetch, base_dir=tmp_root,
+                    quarantine_dir=tmp_root / "quarantine",
+                )
+            finally:
+                globals()["atomic_write_json"] = real_writer
+            check(
+                "相同输入两次均 exit 0",
+                first_kind == second_kind == "ok" and first_code == second_code == 0,
+            )
+            check(
+                "相同输入第二次未调用 atomic_write_json",
+                not writer_calls,
+                f"writer_calls={len(writer_calls)}（相同输入发生了第二次写盘）",
+            )
+            check(
+                "相同输入第二次文件 bytes 与 SHA-256 均不变",
+                target.read_bytes() == before_bytes and file_hash(target) == before_hash,
+            )
+
+        # —— 缺日期集成：期望值硬编码，不从被测输出反算 coverage ——
+        missing_payload = {
+            "observations": [
+                {"date": "2026-01-01", "value": "1.25"},
+                {"date": "2026-01-02", "value": "."},
+                {"date": "2026-01-03", "value": "1.50"},
+            ]
+        }
+
+        def missing_fetch(series_id):
+            return missing_payload, json.dumps(missing_payload).encode()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_root = Path(tmp)
+            kind, code, _ = process_one(
+                "TESTGAP", "data/gap.json", "daily", "rate",
+                fetcher=missing_fetch, base_dir=tmp_root,
+                quarantine_dir=tmp_root / "quarantine",
+            )
+            landed = json.loads(
+                (tmp_root / "data" / "gap.json").read_text(encoding="utf-8")
+            )
+            expected_points = [
+                {"date": "2026-01-01", "value": 1.25},
+                {"date": "2026-01-03", "value": 1.50},
+            ]
+            expected_coverage = {
+                "first": "2026-01-01", "last": "2026-01-03", "count": 2,
+            }
+            check(
+                "缺日期 process_one 成功且 data 精确保留两个有效点",
+                kind == "ok" and code == 0 and landed["data"] == expected_points,
+                f"data={landed.get('data')!r}",
+            )
+            check(
+                "缺日期 coverage 严格对应有效点（count=2）",
+                landed["coverage"] == expected_coverage,
+                f"coverage={landed.get('coverage')!r}",
+            )
+            check(
+                "缺日期不补 0、不前值填充、不插值",
+                all(p["date"] != "2026-01-02" and p["value"] != 0
+                    for p in landed["data"]),
+                f"data={landed.get('data')!r}",
+            )
+
+        # —— c 类端到端：两份 quarantine 证据齐全，旧主文件逐字节保留 ——
+        c_payload = {
+            "observations": [{"date": "bad-date", "value": "1.0"}],
+        }
+        c_raw = json.dumps(c_payload, separators=(",", ":")).encode()
+
+        def c_fetch(series_id):
+            return c_payload, c_raw
+
         with tempfile.TemporaryDirectory() as tmp:
             tmp_root = Path(tmp)
             tmp_quar = tmp_root / "quarantine"
-
-            def d_fetch(series_id):
-                raw = b'{"observations":[{"date":"2026-01-01","value":"0"}]}'
-                return ({"observations": [{"date": "2026-01-01", "value": "0"}]}, raw)
-
+            target = tmp_root / "data" / "class_c.json"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            sentinel_bytes = b'{"sentinel":"KEEP-CLASS-C","data":[{"date":"1999-01-01","value":987654321}]}\n'
+            target.write_bytes(sentinel_bytes)
+            before_hash = file_hash(target)
             kind, code, _ = process_one(
-                "CPIAUCSL",
-                "data/cpi_cpiaucsl.json",
-                "monthly",
-                "cpi",
-                fetcher=d_fetch,
-                base_dir=tmp_root,
+                "TESTC", "data/class_c.json", "daily", "rate",
+                fetcher=c_fetch, base_dir=tmp_root, quarantine_dir=tmp_quar,
+            )
+            payload_files = [p for p in tmp_quar.glob("testc-*.json")
+                             if not p.name.endswith(".raw.json")]
+            raw_files = list(tmp_quar.glob("testc-*.raw.json"))
+            payload_evidence = (json.loads(payload_files[0].read_text(encoding="utf-8"))
+                                if len(payload_files) == 1 else {})
+            check(
+                "c 类返回 parse/1 且旧主文件 bytes/hash 不变",
+                kind == "parse" and code == 1
+                and target.read_bytes() == sentinel_bytes
+                and file_hash(target) == before_hash,
+            )
+            check(
+                "c 类 quarantine payload/raw 各一份且路径不撞名",
+                len(payload_files) == len(raw_files) == 1
+                and payload_files[0] != raw_files[0],
+                f"payload={payload_files}, raw={raw_files}",
+            )
+            check(
+                "c 类 payload quarantine 可追溯 ParseFailure 与 source_payload",
+                payload_evidence.get("source_payload") == c_payload
+                and any("date 格式非法" in reason
+                        for reason in payload_evidence.get("reason", [])),
+                f"evidence={payload_evidence!r}",
+            )
+            check(
+                "c 类 raw quarantine 逐字节等于本次原始响应",
+                len(raw_files) == 1 and raw_files[0].read_bytes() == c_raw,
+            )
+
+        # —— d 类端到端：主动覆盖为明确 failure envelope，不泄漏旧业务数据 ——
+        d_payload = {
+            "observations": [{"date": "2026-01-01", "value": "0"}],
+        }
+        d_raw = json.dumps(d_payload, separators=(",", ":")).encode()
+
+        def d_fetch(series_id):
+            return d_payload, d_raw
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_root = Path(tmp)
+            tmp_quar = tmp_root / "quarantine"
+            target = tmp_root / "data" / "debt_total.json"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            old_sentinel = "OLD-D-BUSINESS-SENTINEL-987654321"
+            atomic_write_json(
+                str(target),
+                envelope(
+                    "FRED", "quarterly",
+                    [{"date": "1999-01-01", "value": old_sentinel}],
+                    dates=["1999-01-01"], info=["series_id=GFDEBTN", old_sentinel],
+                ),
+                compact=False,
+            )
+            kind, code, _ = process_one(
+                "GFDEBTN", "data/debt_total.json", "quarterly", "debt",
+                "Millions of Dollars", fetcher=d_fetch, base_dir=tmp_root,
                 quarantine_dir=tmp_quar,
             )
-            failure_file = json.loads((tmp_root / "data" / "cpi_cpiaucsl.json").read_text(encoding="utf-8"))
+            failure_file = json.loads(target.read_text(encoding="utf-8"))
+            payload_files = [p for p in tmp_quar.glob("gfdebtn-*.json")
+                             if not p.name.endswith(".raw.json")]
+            raw_files = list(tmp_quar.glob("gfdebtn-*.raw.json"))
+            payload_evidence = (json.loads(payload_files[0].read_text(encoding="utf-8"))
+                                if len(payload_files) == 1 else {})
+            leaked_fields = {
+                key: failure_file.get(key)
+                for key in ("data", "warnings", "coverage", "info")
+            }
             check(
-                "CPI 非正值归 d 且 d mock 只写 tmpdir",
-                kind == "validation"
-                and code == 1
-                and failure_file["data"] is None
-                and failure_file["coverage"] is None
-                and any(tmp_quar.glob("cpiaucsl-*.json")),
+                "d 类返回 validation/1 并写合法 schema v0 failure envelope",
+                kind == "validation" and code == 1
+                and failure_file.get("schema_version") == 0
+                and failure_file.get("source") == "FRED"
+                and failure_file.get("freq") == "quarterly"
+                and failure_file.get("date_field") == "date"
+                and failure_file.get("derived_from") == [],
+                f"failure_file={failure_file!r}",
+            )
+            check(
+                "d 类 failure envelope 为 data:null/coverage:null 且含真实原因",
+                failure_file.get("data", "MISSING") is None
+                and failure_file.get("coverage", "MISSING") is None
+                and failure_file.get("warnings") == ["debt 值 ≤ 0"],
+                f"failure_file={failure_file!r}",
+            )
+            check(
+                "d 类 info 保留 series_id 与 units",
+                "series_id=GFDEBTN" in failure_file.get("info", [])
+                and "units=Millions of Dollars" in failure_file.get("info", []),
+                f"info={failure_file.get('info')!r}",
+            )
+            check(
+                "d 类旧业务 sentinel 不泄漏进 data/warnings/coverage/info",
+                old_sentinel not in json.dumps(leaked_fields, ensure_ascii=False),
+                f"fields={leaked_fields!r}",
+            )
+            check(
+                "d 类 quarantine payload/raw 各一份且坏响应可追溯",
+                len(payload_files) == len(raw_files) == 1
+                and payload_evidence.get("source_payload") == d_payload
+                and payload_evidence.get("reason") == ["debt 值 ≤ 0"]
+                and raw_files[0].read_bytes() == d_raw,
+                f"payload={payload_files}, raw={raw_files}",
             )
         check(
             "利率值域仅 warning",
@@ -526,6 +723,81 @@ def run_tests() -> None:
                 return process_one(series_id, relpath, freq, kind, units, fetcher=fetcher,
                                    base_dir=root, quarantine_dir=root / "quarantine")
             return proc
+
+        # 文件级隔离与调用顺序另测：只看最终 rc 不能证明失败后仍继续执行。
+        isolation_configs = (
+            ("ISO_A", "data/iso_a.json", "daily", "rate", ""),
+            ("ISO_C", "data/iso_c.json", "daily", "rate", ""),
+            ("ISO_OK_1", "data/iso_ok_1.json", "daily", "rate", ""),
+            ("ISO_OK_2", "data/iso_ok_2.json", "daily", "rate", ""),
+        )
+        isolation_calls = []
+        isolation_good = {
+            "ISO_OK_1": {
+                "observations": [{"date": "2026-02-01", "value": "2.5"}],
+            },
+            "ISO_OK_2": {
+                "observations": [{"date": "2026-03-01", "value": "3.5"}],
+            },
+        }
+
+        def isolation_fetch(series_id):
+            isolation_calls.append(series_id)
+            if series_id == "ISO_A":
+                raise FetchFailure("模拟下载失败")
+            if series_id == "ISO_C":
+                payload = {
+                    "observations": [{"date": "bad-date", "value": "1"}],
+                }
+            else:
+                payload = isolation_good[series_id]
+            return payload, json.dumps(payload, separators=(",", ":")).encode()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            a_target = root / "data" / "iso_a.json"
+            c_target = root / "data" / "iso_c.json"
+            a_target.parent.mkdir(parents=True, exist_ok=True)
+            a_sentinel = b'{"sentinel":"KEEP-ISO-A"}\n'
+            c_sentinel = b'{"sentinel":"KEEP-ISO-C"}\n'
+            a_target.write_bytes(a_sentinel)
+            c_target.write_bytes(c_sentinel)
+            rc = run_all(
+                isolation_configs,
+                processor=batch_processor(root, isolation_fetch),
+            )
+            ok_1 = json.loads(
+                (root / "data" / "iso_ok_1.json").read_text(encoding="utf-8")
+            )
+            ok_2 = json.loads(
+                (root / "data" / "iso_ok_2.json").read_text(encoding="utf-8")
+            )
+            c_payload_files = [p for p in (root / "quarantine").glob("iso_c-*.json")
+                               if not p.name.endswith(".raw.json")]
+            c_raw_files = list((root / "quarantine").glob("iso_c-*.raw.json"))
+            check(
+                "多序列按配置顺序全部执行且严重度汇总为 1",
+                rc == 1 and isolation_calls == [c[0] for c in isolation_configs],
+                f"rc={rc}, calls={isolation_calls!r}",
+            )
+            check(
+                "多序列 a/c 失败各自不覆盖旧主文件，c 证据完整",
+                a_target.read_bytes() == a_sentinel
+                and c_target.read_bytes() == c_sentinel
+                and len(c_payload_files) == len(c_raw_files) == 1,
+            )
+            check(
+                "前序 a/c 失败后两个成功序列仍落盘真实 data/coverage",
+                ok_1["data"] == [{"date": "2026-02-01", "value": 2.5}]
+                and ok_1["coverage"] == {
+                    "first": "2026-02-01", "last": "2026-02-01", "count": 1,
+                }
+                and ok_2["data"] == [{"date": "2026-03-01", "value": 3.5}]
+                and ok_2["coverage"] == {
+                    "first": "2026-03-01", "last": "2026-03-01", "count": 1,
+                },
+                f"ok_1={ok_1!r}, ok_2={ok_2!r}",
+            )
 
         def raise_missing_key(series_id):
             # 刻意走真实 _key()（清空环境变量后调 fetch_payload），而不是直接
