@@ -132,6 +132,20 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - 债务图可在 fine pointer 环境左键拖框缩放 X 轴；Y 轴保持全历史范围。移动端不启用
   drag zoom，reset 按钮始终存在。真实鼠标操作而非源码 grep 是验收依据。
 
+### 债务堆叠与 mixed-frequency tooltip（C15）
+
+- 用户可见 dataset 固定为六个：三条季度结构柱、`total_bn` hybrid 折线、季度 GDP
+  折线和季度 debt/GDP 折线。公众持有、政府内部持有不再另画日频独立线；图例不使用
+  “结构快照”等实现术语。
+- 三条结构柱只消费三分量同时有效季度的真实 `{x, y}` observation，共用同一 stack
+  和金额轴，并以固定可见宽度呈现。任一分量缺失时整个季度结构不画，不允许 0、前值、
+  插值或不完整堆叠；这不阻止同季度有效的 total、GDP、debt/GDP 延伸。
+- tooltip 是展示期查询，不是数据变换：hover 任一真实日期时统一展示六项；日频 total
+  使用该日真实 Treasury 值，结构、GDP、debt/GDP 分别取不晚于 hover 日期的最近真实
+  低频 observation，并各自标明 as-of。查询值不得写回 dataset，也不产生任何日频低频值。
+- C14 的 fine-pointer X 轴拖框、按钮/双击 reset、固定 Y 轴与移动端无溢出继续保留；
+  真实 Playwright hover 与 drag 是主要验收证据。
+
 ### 帧级 vs 展示视图二分（重要）
 **帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）是两类东西。**
 取证字段不得经任何**随时间移动的边界**过滤：

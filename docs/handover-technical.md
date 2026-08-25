@@ -129,7 +129,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 
 ## 4. 护栏清单与当前状态
 
-全部在 `3995959` 上实测。**Python 侧经 `wsl -d Ubuntu-22.04 --cd <repo> -- python3`，
+全部在 C15 分支（基于 `97d946d`）上实测。**Python 侧经 `wsl -d Ubuntu-22.04 --cd <repo> -- python3`，
 前端 `.mjs` 从 PowerShell 原生调 `node`** —— 执行侧错配会产生假红/假绿，见 CLAUDE.md
 「执行侧陷阱」一节。
 
@@ -159,11 +159,11 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
 | `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
-| `tools/verify-macro-page.mjs` | 0 | 88 passed, 0 failed；page errors: none |
+| `tools/verify-macro-page.mjs` | 0 | 86 passed, 0 failed；page errors: none |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
-macro-page(68) 有计数；
+macro-page(86) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -182,11 +182,11 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-totaloi-injection.mjs` | 0 | wrapper 11/0；基线 29/0 → 旧 total_oi 口径 28/1 → 恢复 29/0 + hash 一致 |
 | `tools/verify-isolation-injection.mjs` | 0 | wrapper 18/0；基线 37/0 → 两种隔离破坏分别红 → 恢复 37/0 + hash 一致 |
 | `tools/verify-cot-index-null-injection.mjs` | 0 | wrapper 18/0；基线 38/0 → current null→50 为 31/7、chart null→50 为 36/2 → 恢复 38/0 + hash 一致 |
-| `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 53/0；基线 88/0 → 原六项及低频 null-array 不可见表示均真实变红 → 恢复 88/0 + hash 一致 |
+| `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 81/0；基线 86/0 → C15 四项及 C14 七项注入均真实变红 → 恢复 86/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
 | `tools/verify-injection-wrappers.mjs` | 0 | 34/0；静态锁六 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
 
-C10-C12 的六个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
+C10-C15 的六个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
 exit 0 已包含「未污染下一个 wrapper」的证据，不再需要在 wrapper 之间重跑 derive。
 `verify-noise-injection.py` 继续独立使用同等严格的 WSL/Python 恢复契约。
@@ -466,10 +466,11 @@ PowerShell 侧 `$?` 是布尔值，取码须用 `$LASTEXITCODE`。
 之后三个结构字段保持 null；同季度 `total_bn`、`gdp_bn` 与 `debt_gdp_pct` 若派生
 文件仍有值，三条线继续按真实 coverage 显示。
 
-`tools/verify-macro-page.mjs` 当前为 **62 passed, 0 failed**，覆盖真实请求、单一
-canvas、六 dataset 逐点对账、共同 stack、左右轴/单位/tooltip、完整季度恒等式映射、
-foreign 右端缺口、金额/比例独立延伸，以及 debt ↔ rates/CPI 双向加载故障隔离。
-`verify-debt-overview-injection.mjs` 当前 **25/0**，三项破坏均红且恢复后重新 68/0。
+`tools/verify-macro-page.mjs` 当前为 **86 passed, 0 failed**，覆盖真实请求、单一
+canvas、六 dataset 逐点对账、共同 stack 与像素几何、左右轴/单位、真实鼠标统一
+tooltip、完整季度恒等式映射、foreign 右端缺口、金额/比例独立延伸、drag/reset/移动端，
+以及 debt ↔ rates/CPI 双向加载故障隔离。`verify-debt-overview-injection.mjs` 当前
+**81/0**，11 项破坏均红且恢复后重新 86/0、文件 SHA-256 一致。
 
 `.github/workflows/update-cot.yml` 的 FRED 基线为 13 个序列。提交清单包含五个
 债务/GDP 原始信封（`debt_total.json`、`debt_held_public.json`、
@@ -552,7 +553,7 @@ restore mismatch 与 patch throw 后恢复。反恒真结果：吞掉“注入�
 no-op、禁用 restore hash 三次均使 meta guard exit 1；所有临时破坏均已恢复。
 
 真实 wrapper 最终结果：total_oi 11/0、spread 11/0、KPI 32/0、isolation 18/0、
-COT Index null 18/0、debt overview 25/0；目标 guard 恢复后分别保持各自基线。
+COT Index null 18/0、debt overview 81/0；目标 guard 恢复后分别保持各自基线。
 C10 未修改
 `index.html`、派生 JSON、业务断言、浏览器 helper、workflow 或生产逻辑。
 
@@ -612,16 +613,38 @@ public/intragov 的早期官方字段为字符串 `"null"`，原样落 JSON null
 债务图使用 1990 起季度日期与 Treasury 日日期的去重并集。金额字段各按自身首个
 Treasury 真实观测衔接，此前保留 C13 FRED 季度值；起点后 Treasury 某日缺值就留
 gap，不回退季度。foreign、GDP 与正式 debt/GDP 继续季度，结构 stack 也只保留真实
-季度 snapshot。三条低频折线只把真实 `{x, y}` observation 交给 Chart.js；不创建
-日频值，但所有真实季度观测都形成可见 point/segment。页面分别显示 debt
+完整季度 observation。C15 后 GDP 与 debt/GDP 两条低频折线只把真实 `{x, y}`
+交给 Chart.js；不创建日频值，但所有真实季度观测都形成可见 point/segment。页面分别显示 debt
 `YYYY-MM-DD`、foreign `YYYY-MM`、GDP `YYYY-Qn`。
 
 Chart.js 仍为 4.4.0，只增加兼容的 chartjs-plugin-zoom 2.2.0 + Hammer.js 2.0.8。
 fine pointer 下左键右向左/左向右拖框只缩 X，threshold=12；两条 Y 轴冻结全历史范围。
 reset 按钮与双击可恢复，touch 环境 drag 关闭且页面可滚动。真实 Playwright 基线为
-88/0；七项 wrapper 为 53/0，其中 drag disabled、reset handler 删除、季度字段
+86/0；C15 扩展后的十一项 wrapper 为 81/0，其中 drag disabled、reset handler 删除、季度字段
 forward-fill 与 reviewer 指出的 daily-union null-array / pointRadius=0 表示均使对应 guard
-非零且命中稳定 FAIL marker，恢复后 88/0、SHA-256 一致。
+非零且命中稳定 FAIL marker，恢复后 86/0、SHA-256 一致。
 
 workflow 每日 UTC 22:00 运行 Treasury；周六 UTC 18:00 COT 专场跳过该步，避免同日
 重复。commit 清单含 `data/treasury_debt_daily.json`，末尾 gate 按 0/1/2 三态处理。
+
+## 16. C15 债务结构堆叠与统一 tooltip
+
+`debtOverviewChart` 最终恰有六个用户可见 dataset。前三个是完整季度
+`intragov_bn` / `domestic_public_bn` / `foreign_bn` 的共同 `debtStructure` stack；
+每条只含三分量同时有效季度的真实 `{x,y}`，固定 `barThickness=6`、
+`maxBarThickness=8`。其余是 `total_bn` 季度→Treasury 日频 hybrid 折线、真实季度
+GDP 折线和真实季度 debt/GDP 折线。公众/政府内部日频独立折线与“结构快照”技术文案
+已移除，派生文件及 source frequency 未改。
+
+统一 tooltip 由 hover 日期驱动，显示总额、三项结构、GDP、debt/GDP 六项。总额在
+Treasury 覆盖期只认该日真实记录；三项结构只认不晚于 hover 日期的最近完整季度，
+GDP 与 debt/GDP 各按自身最近真实季度，并分别显示 as-of。lookup 不修改 dataset，
+因此不会制造日频 foreign/GDP/ratio。真实 Playwright 分别 hover 最新日频点和历史
+结构柱；全历史及 2022-08-16..2026-06-30 约 3.9 年窗口完成截图验收，缩放前后 Y 轴
+固定且移动端无溢出。
+
+`verify-debt-overview-injection.mjs` 覆盖 11 案：C15 必需的删除 GDP tooltip 行、拆散
+foreign stack、恢复“结构快照”标签、恢复公众/政府内部日频线，以及错误 ratio 轴、
+重复 public、删除 GDP dataset、禁用 drag、删除 reset、结构 forward-fill、恢复不可见
+daily-union null-array 表示。每案目标 guard 都非零并命中 marker；最终 81/0，恢复主
+guard 86/0，`macro.html` SHA-256 与注入前一致。

@@ -74,7 +74,7 @@ tools/*.mjs       Playwright 验证脚本
 `tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
 不 fallback 与 EPERM 继续抛出。
 
-**前端破坏注入（C10-C12）**：六个 `verify-*-injection.mjs` 统一经
+**前端破坏注入（C10-C15）**：六个 `verify-*-injection.mjs` 统一经
 `tools/_injection.mjs` 执行 `baseline green → injection red → restore green`。
 每个 case 必须证明 patch 与业务锚点真实改变、目标 guard 非零且命中稳定 FAIL
 marker；备份只进系统临时目录，每 case 与最外层 `finally` 都按原始 bytes/SHA-256
@@ -136,13 +136,21 @@ public/intragov 早期字段本身稀疏，原样保留 null。官方 `2025-08-0
 任何值修补。网络失败 exit 2 保留旧文件，格式/数据失败 exit 1 隔离且不覆盖，
 相同业务数据不刷新 generated_at。workflow 每日 UTC 22:00 检查一次。
 
-`macro.html` 的金额线按字段各自真实 Treasury 起点衔接：此前保留 FRED 季度历史，
-起点后只在 Treasury 有真实记录的日期取值；GDP、foreign、正式 debt/GDP 继续季度
-点，不复制成日频。三条低频折线只传真实 `{x: date, y: value}` observation 给
-Chart.js 并连接这些观测；不得恢复为 daily union 等长 null 数组，否则季度线会退化
-为不可见孤点。债务图用 chartjs-plugin-zoom 2.2.0（兼容现有 Chart.js 4.4.0）
+`macro.html` 的总债务线按真实 Treasury 起点衔接：此前保留 FRED 季度历史，起点后
+只在 Treasury 有真实记录的日期取值；GDP 与正式 debt/GDP 继续季度点，不复制成
+日频。两条低频折线只传真实 `{x: date, y: value}` observation 给 Chart.js 并连接
+这些观测；结构三分量则只传共同完整季度的真实 object points。不得恢复为 daily
+union 等长 null 数组，否则季度线会退化为不可见孤点。债务图用
+chartjs-plugin-zoom 2.2.0（兼容现有 Chart.js 4.4.0）
 在 fine pointer 环境启用左键 X 轴拖框，移动端禁用；按钮与双击均可 reset。两条 Y
 轴锁定全历史范围，不随 X 缩放重算。
+
+**债务堆叠与统一 tooltip（C15）**：债务总览最终只显示六个 dataset：三条完整季度
+结构柱（政府内部、国内公众、外国投资者）共用 `debtStructure` stack，另有总债务
+hybrid 折线、季度 GDP 与季度 debt/GDP。结构柱只含三分量同时有效的真实 `{x,y}`，
+固定 6px（上限 8px），缺口季度三项一起不画；不得恢复公众/政府内部日频独立线或
+“结构快照”技术标签。tooltip 以 hover 日期统一查询六项，但每项只读取不晚于该日期
+的真实观测并标明各自 as-of；查询结果不得写回 dataset，禁止日频填充、复制或插值。
 
 ## 常见陷阱
 
@@ -713,10 +721,11 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
   任一侧 null 时有效侧可以单独展示，但综合信号必须暂不判断、不高亮规则；管理基金
   Index 区间只在自身值有效时高亮，图表 null 保持缺口。
 - `macro.html` 的联邦债务总览是一张双 Y 轴 mixed-frequency 综合图：季度
-  `intragov_bn` / `domestic_public_bn` / `foreign_bn` 保留共同 stack 快照；
-  total/public/intragov 金额线按字段各自的 FRED→Treasury 真实日期衔接；foreign、
-  GDP 与 debt/GDP 仍只映射季度观测。前端不做 `/1000`、不重算本国公众持有、
-  不 forward-fill；`public_gdp_pct` 仍保留在派生文件但不展示。
+  `intragov_bn` / `domestic_public_bn` / `foreign_bn` 是共同 stack 的三条可见柱；
+  仅 `total_bn` 按 FRED→Treasury 真实日期衔接为日频 hybrid 金额线，GDP 与
+  debt/GDP 仍只映射季度观测。统一 tooltip 按各字段真实 observation 显示独立
+  as-of。前端不做 `/1000`、不重算本国公众持有、不 forward-fill；
+  `public_gdp_pct` 仍保留在派生文件但不展示。
 - C13 后债务图直接展示 `macro_debt.json` 的 1990-Q1 至今全量季度；X 轴仍由
   Chart.js `maxTicksLimit=12` 自动减刻度，不裁历史。宏观页 grid 卡片须保留
   `min-width:0`，否则桌面宽度初始化后缩到移动端会被 canvas 的 min-content 撑出
@@ -768,8 +777,8 @@ node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证�
 node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
 node tools/verify-cot-index-null-injection.mjs  # 注入 COT null→50，验证 UI 会变红
 node tools/verify-injection-wrappers.mjs   # wrapper 状态机/恢复/退出码基础设施
-node tools/verify-debt-overview-injection.mjs  # C12/C14 双轴/stack/drag/reset/fill 六项注入
-node tools/verify-macro-page.mjs           # macro mixed-frequency 契约 + 真实 drag/reset/移动端
+node tools/verify-debt-overview-injection.mjs  # C15 tooltip/stack/文案/冗余线 + C14 关键注入
+node tools/verify-macro-page.mjs           # macro mixed-frequency + 真实 hover/drag/reset/移动端
 python3 tools/verify-noise-injection.py    # WSL 内运行；三种 noise 注入必须红，恢复后绿
 node tools/verify-live.mjs                 # 线上端到端
 ```
