@@ -2,72 +2,74 @@
   "schema_version": 0,
   "source": "derived_macro_debt",
   "freq": "quarterly",
-  "generated_at": "2026-08-23T13:21:46Z",
+  "generated_at": "2026-08-25T07:30:33Z",
   "date_field": "date",
   "coverage": {
-    "first": "2016-01-01",
+    "first": "1990-01-01",
     "last": "2026-04-01",
-    "count": 42
+    "count": 146
   },
   "derived_from": [
     {
       "source": "FRED",
-      "generated_at": "2026-08-22T15:15:45Z",
+      "generated_at": "2026-08-25T07:29:29Z",
       "coverage": {
-        "first": "2016-01-01",
+        "first": "1990-01-01",
         "last": "2026-01-01",
-        "count": 41
+        "count": 145
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-08-22T15:15:46Z",
+      "generated_at": "2026-08-25T07:29:29Z",
       "coverage": {
-        "first": "2016-01-01",
+        "first": "1990-01-01",
         "last": "2026-01-01",
-        "count": 41
+        "count": 145
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-08-22T15:15:48Z",
+      "generated_at": "2026-08-25T07:29:29Z",
       "coverage": {
-        "first": "2016-01-01",
+        "first": "1990-01-01",
         "last": "2026-01-01",
-        "count": 41
+        "count": 145
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-08-22T15:15:50Z",
+      "generated_at": "2026-08-25T07:29:29Z",
       "coverage": {
-        "first": "2016-01-01",
+        "first": "1990-01-01",
         "last": "2025-10-01",
-        "count": 40
+        "count": 144
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-08-22T15:15:53Z",
+      "generated_at": "2026-08-25T07:29:29Z",
       "coverage": {
-        "first": "2016-01-01",
+        "first": "1990-01-01",
         "last": "2026-04-01",
-        "count": 42
+        "count": 146
       },
       "envelope": true
     }
   ],
-  "warnings": [],
+  "warnings": [
+    "恒等式个别季破裂（max_abs_rel=1.142e-02），该季三分量置 null: 2000-07-01, 2013-10-01, 2014-01-01"
+  ],
   "info": [
     "units_source=FRED metadata: GFDEBTN/FYGFDPUN/FDHBATN=Millions of Dollars, FDHBFIN/GDP=Billions of Dollars",
     "units_normalized=millions_divided_by_1000",
-    "debt_coverage=2016-01-01..2026-01-01 count=41",
-    "stack_coverage=2016-01-01..2025-10-01 count=40",
-    "ratio_coverage=2016-01-01..2026-01-01 count=41",
+    "debt_coverage=1990-01-01..2026-01-01 count=145",
+    "stack_coverage=1990-01-01..2025-10-01 count=141",
+    "ratio_coverage=1990-01-01..2026-01-01 count=145",
     "date_alignment=outer_join",
     "ratio=debt_bn/gdp_bn*100 same_quarter",
     "gdp_basis=SAAR_raw_not_divided_by_4",
@@ -78,6 +80,1150 @@
   ],
   "data": {
     "debt": [
+      {
+        "date": "1990-01-01",
+        "quarter": "1990-Q1",
+        "total_bn": 3051.958,
+        "intragov_bn": 722.694,
+        "domestic_public_bn": 1883.864,
+        "foreign_bn": 445.4,
+        "gdp_bn": 5872.701,
+        "debt_gdp_pct": 51.96855756831482,
+        "public_gdp_pct": 39.66256753068137
+      },
+      {
+        "date": "1990-04-01",
+        "quarter": "1990-Q2",
+        "total_bn": 3143.754,
+        "intragov_bn": 774.982,
+        "domestic_public_bn": 1917.772,
+        "foreign_bn": 451.0,
+        "gdp_bn": 5960.028,
+        "debt_gdp_pct": 52.747302529451204,
+        "public_gdp_pct": 39.744309926060744
+      },
+      {
+        "date": "1990-07-01",
+        "quarter": "1990-Q3",
+        "total_bn": 3233.313,
+        "intragov_bn": 795.762,
+        "domestic_public_bn": 1973.751,
+        "foreign_bn": 463.8,
+        "gdp_bn": 6015.116,
+        "debt_gdp_pct": 53.75312795297713,
+        "public_gdp_pct": 40.52375714782558
+      },
+      {
+        "date": "1990-10-01",
+        "quarter": "1990-Q4",
+        "total_bn": 3364.82,
+        "intragov_bn": 828.275,
+        "domestic_public_bn": 2049.445,
+        "foreign_bn": 487.1,
+        "gdp_bn": 6004.733,
+        "debt_gdp_pct": 56.036130165987394,
+        "public_gdp_pct": 42.242427764898125
+      },
+      {
+        "date": "1991-01-01",
+        "quarter": "1991-Q1",
+        "total_bn": 3465.189,
+        "intragov_bn": 866.838,
+        "domestic_public_bn": 2106.351,
+        "foreign_bn": 492.0,
+        "gdp_bn": 6035.178,
+        "debt_gdp_pct": 57.41651696105732,
+        "public_gdp_pct": 43.053427753083675
+      },
+      {
+        "date": "1991-04-01",
+        "quarter": "1991-Q2",
+        "total_bn": 3537.988,
+        "intragov_bn": 895.125,
+        "domestic_public_bn": 2140.863,
+        "foreign_bn": 502.0,
+        "gdp_bn": 6126.862,
+        "debt_gdp_pct": 57.74551475127071,
+        "public_gdp_pct": 43.13567042965877
+      },
+      {
+        "date": "1991-07-01",
+        "quarter": "1991-Q3",
+        "total_bn": 3665.303,
+        "intragov_bn": 919.573,
+        "domestic_public_bn": 2239.4289999999996,
+        "foreign_bn": 506.3,
+        "gdp_bn": 6205.937,
+        "debt_gdp_pct": 59.06123442761343,
+        "public_gdp_pct": 44.243584812414305
+      },
+      {
+        "date": "1991-10-01",
+        "quarter": "1991-Q4",
+        "total_bn": 3801.698,
+        "intragov_bn": 968.664,
+        "domestic_public_bn": 2312.134,
+        "foreign_bn": 520.9,
+        "gdp_bn": 6264.54,
+        "debt_gdp_pct": 60.68598811724404,
+        "public_gdp_pct": 45.22333643012895
+      },
+      {
+        "date": "1992-01-01",
+        "quarter": "1992-Q1",
+        "total_bn": 3881.288,
+        "intragov_bn": 963.658,
+        "domestic_public_bn": 2381.23,
+        "foreign_bn": 536.4,
+        "gdp_bn": 6363.102,
+        "debt_gdp_pct": 60.99679055907009,
+        "public_gdp_pct": 45.85232171352903
+      },
+      {
+        "date": "1992-04-01",
+        "quarter": "1992-Q2",
+        "total_bn": 3984.656,
+        "intragov_bn": 1007.882,
+        "domestic_public_bn": 2418.5739999999996,
+        "foreign_bn": 558.2,
+        "gdp_bn": 6470.763,
+        "debt_gdp_pct": 61.579384069544815,
+        "public_gdp_pct": 46.00344657963829
+      },
+      {
+        "date": "1992-07-01",
+        "quarter": "1992-Q3",
+        "total_bn": 4064.621,
+        "intragov_bn": 1016.33,
+        "domestic_public_bn": 2485.491,
+        "foreign_bn": 562.8,
+        "gdp_bn": 6566.641,
+        "debt_gdp_pct": 61.898023662326,
+        "public_gdp_pct": 46.420856568830246
+      },
+      {
+        "date": "1992-10-01",
+        "quarter": "1992-Q4",
+        "total_bn": 4177.009,
+        "intragov_bn": 1047.701,
+        "domestic_public_bn": 2552.608,
+        "foreign_bn": 576.7,
+        "gdp_bn": 6680.803,
+        "debt_gdp_pct": 62.5225590396843,
+        "public_gdp_pct": 46.84029749118482
+      },
+      {
+        "date": "1993-01-01",
+        "quarter": "1993-Q1",
+        "total_bn": 4230.58,
+        "intragov_bn": 1043.024,
+        "domestic_public_bn": 2601.656,
+        "foreign_bn": 585.9,
+        "gdp_bn": 6729.459,
+        "debt_gdp_pct": 62.8665692145535,
+        "public_gdp_pct": 47.36719549075193
+      },
+      {
+        "date": "1993-04-01",
+        "quarter": "1993-Q2",
+        "total_bn": 4351.95,
+        "intragov_bn": 1099.665,
+        "domestic_public_bn": 2655.4849999999997,
+        "foreign_bn": 596.8,
+        "gdp_bn": 6808.939,
+        "debt_gdp_pct": 63.91524435745421,
+        "public_gdp_pct": 47.764930777027075
+      },
+      {
+        "date": "1993-07-01",
+        "quarter": "1993-Q3",
+        "total_bn": 4411.489,
+        "intragov_bn": 1116.693,
+        "domestic_public_bn": 2675.696,
+        "foreign_bn": 619.1,
+        "gdp_bn": 6882.098,
+        "debt_gdp_pct": 64.10093259352017,
+        "public_gdp_pct": 47.874877689913745
+      },
+      {
+        "date": "1993-10-01",
+        "quarter": "1993-Q4",
+        "total_bn": 4535.687,
+        "intragov_bn": 1153.49,
+        "domestic_public_bn": 2731.897,
+        "foreign_bn": 650.3,
+        "gdp_bn": 7013.738,
+        "debt_gdp_pct": 64.6686118015814,
+        "public_gdp_pct": 48.222459977832074
+      },
+      {
+        "date": "1994-01-01",
+        "quarter": "1994-Q1",
+        "total_bn": 4575.869,
+        "intragov_bn": 1141.661,
+        "domestic_public_bn": 2773.108,
+        "foreign_bn": 661.1,
+        "gdp_bn": 7115.652,
+        "debt_gdp_pct": 64.30709371397026,
+        "public_gdp_pct": 48.262731229689145
+      },
+      {
+        "date": "1994-04-01",
+        "quarter": "1994-Q2",
+        "total_bn": 4645.802,
+        "intragov_bn": 1202.934,
+        "domestic_public_bn": 2782.968,
+        "foreign_bn": 659.9,
+        "gdp_bn": 7246.931,
+        "debt_gdp_pct": 64.10716481224948,
+        "public_gdp_pct": 47.50794508737561
+      },
+      {
+        "date": "1994-07-01",
+        "quarter": "1994-Q3",
+        "total_bn": 4692.75,
+        "intragov_bn": 1213.098,
+        "domestic_public_bn": 2797.652,
+        "foreign_bn": 682.0,
+        "gdp_bn": 7331.075,
+        "debt_gdp_pct": 64.01175816643536,
+        "public_gdp_pct": 47.46441688292645
+      },
+      {
+        "date": "1994-10-01",
+        "quarter": "1994-Q4",
+        "total_bn": 4800.15,
+        "intragov_bn": 1257.032,
+        "domestic_public_bn": 2875.818,
+        "foreign_bn": 667.3,
+        "gdp_bn": 7455.288,
+        "debt_gdp_pct": 64.38584263947952,
+        "public_gdp_pct": 47.524897763842255
+      },
+      {
+        "date": "1995-01-01",
+        "quarter": "1995-Q1",
+        "total_bn": 4864.116,
+        "intragov_bn": 1254.657,
+        "domestic_public_bn": 2902.459,
+        "foreign_bn": 707.0,
+        "gdp_bn": 7522.289,
+        "debt_gdp_pct": 64.66271104447064,
+        "public_gdp_pct": 47.983519378210545
+      },
+      {
+        "date": "1995-04-01",
+        "quarter": "1995-Q2",
+        "total_bn": 4951.372,
+        "intragov_bn": 1316.564,
+        "domestic_public_bn": 2872.308,
+        "foreign_bn": 762.5,
+        "gdp_bn": 7580.997,
+        "debt_gdp_pct": 65.31293970964505,
+        "public_gdp_pct": 47.9463057431628
+      },
+      {
+        "date": "1995-07-01",
+        "quarter": "1995-Q3",
+        "total_bn": 4973.983,
+        "intragov_bn": 1320.784,
+        "domestic_public_bn": 2832.799,
+        "foreign_bn": 820.4,
+        "gdp_bn": 7683.125,
+        "debt_gdp_pct": 64.73906125437242,
+        "public_gdp_pct": 47.54834784023428
+      },
+      {
+        "date": "1995-10-01",
+        "quarter": "1995-Q4",
+        "total_bn": 4988.665,
+        "intragov_bn": 1304.456,
+        "domestic_public_bn": 2849.009,
+        "foreign_bn": 835.2,
+        "gdp_bn": 7772.586,
+        "debt_gdp_pct": 64.18282152169175,
+        "public_gdp_pct": 47.40004163350524
+      },
+      {
+        "date": "1996-01-01",
+        "quarter": "1996-Q1",
+        "total_bn": 5117.786,
+        "intragov_bn": 1353.767,
+        "domestic_public_bn": 2855.919,
+        "foreign_bn": 908.1,
+        "gdp_bn": 7868.468,
+        "debt_gdp_pct": 65.04170824612872,
+        "public_gdp_pct": 47.83674534864982
+      },
+      {
+        "date": "1996-04-01",
+        "quarter": "1996-Q2",
+        "total_bn": 5161.076,
+        "intragov_bn": 1422.443,
+        "domestic_public_bn": 2808.933,
+        "foreign_bn": 929.7,
+        "gdp_bn": 8032.84,
+        "debt_gdp_pct": 64.24970496113454,
+        "public_gdp_pct": 46.541858172203106
+      },
+      {
+        "date": "1996-07-01",
+        "quarter": "1996-Q3",
+        "total_bn": 5224.811,
+        "intragov_bn": 1447.003,
+        "domestic_public_bn": 2784.408,
+        "foreign_bn": 993.4,
+        "gdp_bn": 8131.408,
+        "debt_gdp_pct": 64.25468996267313,
+        "public_gdp_pct": 46.45945695997544
+      },
+      {
+        "date": "1996-10-01",
+        "quarter": "1996-Q4",
+        "total_bn": 5323.172,
+        "intragov_bn": 1497.178,
+        "domestic_public_bn": 2723.8940000000002,
+        "foreign_bn": 1102.1,
+        "gdp_bn": 8259.771,
+        "debt_gdp_pct": 64.4469683239402,
+        "public_gdp_pct": 46.320824148756664
+      },
+      {
+        "date": "1997-01-01",
+        "quarter": "1997-Q1",
+        "total_bn": 5380.89,
+        "intragov_bn": 1506.784,
+        "domestic_public_bn": 2716.5060000000003,
+        "foreign_bn": 1157.6,
+        "gdp_bn": 8362.655,
+        "debt_gdp_pct": 64.3442782226458,
+        "public_gdp_pct": 46.32626839203578
+      },
+      {
+        "date": "1997-04-01",
+        "quarter": "1997-Q2",
+        "total_bn": 5376.151,
+        "intragov_bn": 1571.583,
+        "domestic_public_bn": 2621.8680000000004,
+        "foreign_bn": 1182.7,
+        "gdp_bn": 8518.825,
+        "debt_gdp_pct": 63.10906727160142,
+        "public_gdp_pct": 44.6607131852104
+      },
+      {
+        "date": "1997-07-01",
+        "quarter": "1997-Q3",
+        "total_bn": 5413.146,
+        "intragov_bn": 1596.765,
+        "domestic_public_bn": 2585.881,
+        "foreign_bn": 1230.5,
+        "gdp_bn": 8662.823,
+        "debt_gdp_pct": 62.48708994746862,
+        "public_gdp_pct": 44.05470364568224
+      },
+      {
+        "date": "1997-10-01",
+        "quarter": "1997-Q4",
+        "total_bn": 5502.388,
+        "intragov_bn": 1655.682,
+        "domestic_public_bn": 2605.106,
+        "foreign_bn": 1241.6,
+        "gdp_bn": 8765.907,
+        "debt_gdp_pct": 62.77032142823328,
+        "public_gdp_pct": 43.8825782660026
+      },
+      {
+        "date": "1998-01-01",
+        "quarter": "1998-Q1",
+        "total_bn": 5542.426,
+        "intragov_bn": 1670.378,
+        "domestic_public_bn": 2621.548,
+        "foreign_bn": 1250.5,
+        "gdp_bn": 8866.48,
+        "debt_gdp_pct": 62.50987990724618,
+        "public_gdp_pct": 43.670633667475705
+      },
+      {
+        "date": "1998-04-01",
+        "quarter": "1998-Q2",
+        "total_bn": 5547.935,
+        "intragov_bn": 1757.556,
+        "domestic_public_bn": 2534.379,
+        "foreign_bn": 1256.0,
+        "gdp_bn": 8969.699,
+        "debt_gdp_pct": 61.851964040264896,
+        "public_gdp_pct": 42.257594151152674
+      },
+      {
+        "date": "1998-07-01",
+        "quarter": "1998-Q3",
+        "total_bn": 5526.193,
+        "intragov_bn": 1763.86,
+        "domestic_public_bn": 2538.133,
+        "foreign_bn": 1224.2,
+        "gdp_bn": 9121.097,
+        "debt_gdp_pct": 60.58693378658291,
+        "public_gdp_pct": 41.24868971352898
+      },
+      {
+        "date": "1998-10-01",
+        "quarter": "1998-Q4",
+        "total_bn": 5614.217,
+        "intragov_bn": 1826.826,
+        "domestic_public_bn": 2508.691,
+        "foreign_bn": 1278.7,
+        "gdp_bn": 9293.991,
+        "debt_gdp_pct": 60.40695541882921,
+        "public_gdp_pct": 40.75096479004552
+      },
+      {
+        "date": "1999-01-01",
+        "quarter": "1999-Q1",
+        "total_bn": 5651.615,
+        "intragov_bn": 1857.066,
+        "domestic_public_bn": 2522.249,
+        "foreign_bn": 1272.3,
+        "gdp_bn": 9411.682,
+        "debt_gdp_pct": 60.048937055034365,
+        "public_gdp_pct": 40.317437414481276
+      },
+      {
+        "date": "1999-04-01",
+        "quarter": "1999-Q2",
+        "total_bn": 5638.78,
+        "intragov_bn": 1953.613,
+        "domestic_public_bn": 2426.367,
+        "foreign_bn": 1258.8,
+        "gdp_bn": 9526.21,
+        "debt_gdp_pct": 59.19227058819825,
+        "public_gdp_pct": 38.68450307100096
+      },
+      {
+        "date": "1999-07-01",
+        "quarter": "1999-Q3",
+        "total_bn": 5656.271,
+        "intragov_bn": 1988.674,
+        "domestic_public_bn": 2386.197,
+        "foreign_bn": 1281.4,
+        "gdp_bn": 9686.626,
+        "debt_gdp_pct": 58.39258168943447,
+        "public_gdp_pct": 37.86248173512635
+      },
+      {
+        "date": "1999-10-01",
+        "quarter": "1999-Q4",
+        "total_bn": 5776.091,
+        "intragov_bn": 2060.56,
+        "domestic_public_bn": 2446.831,
+        "foreign_bn": 1268.7,
+        "gdp_bn": 9900.169,
+        "debt_gdp_pct": 58.34335757298689,
+        "public_gdp_pct": 37.52997549839805
+      },
+      {
+        "date": "2000-01-01",
+        "quarter": "2000-Q1",
+        "total_bn": 5773.392,
+        "intragov_bn": 2085.418,
+        "domestic_public_bn": 2602.974,
+        "foreign_bn": 1085.0,
+        "gdp_bn": 10002.179,
+        "debt_gdp_pct": 57.721342519465004,
+        "public_gdp_pct": 36.871705655337706
+      },
+      {
+        "date": "2000-04-01",
+        "quarter": "2000-Q2",
+        "total_bn": 5685.938,
+        "intragov_bn": 2190.225,
+        "domestic_public_bn": 2435.013,
+        "foreign_bn": 1060.7,
+        "gdp_bn": 10247.72,
+        "debt_gdp_pct": 55.48490786243184,
+        "public_gdp_pct": 34.11210493651271
+      },
+      {
+        "date": "2000-07-01",
+        "quarter": "2000-Q3",
+        "total_bn": 5674.179,
+        "intragov_bn": null,
+        "domestic_public_bn": null,
+        "foreign_bn": null,
+        "gdp_bn": 10318.165,
+        "debt_gdp_pct": 54.99213280656008,
+        "public_gdp_pct": 33.32390982311292
+      },
+      {
+        "date": "2000-10-01",
+        "quarter": "2000-Q4",
+        "total_bn": 5662.216,
+        "intragov_bn": 2248.675,
+        "domestic_public_bn": 2398.3410000000003,
+        "foreign_bn": 1015.2,
+        "gdp_bn": 10435.744,
+        "debt_gdp_pct": 54.257904371743884,
+        "public_gdp_pct": 32.71008756059942
+      },
+      {
+        "date": "2001-01-01",
+        "quarter": "2001-Q1",
+        "total_bn": 5773.74,
+        "intragov_bn": 2339.354,
+        "domestic_public_bn": 2421.886,
+        "foreign_bn": 1012.5,
+        "gdp_bn": 10470.231,
+        "debt_gdp_pct": 55.14434208758144,
+        "public_gdp_pct": 32.801434848954145
+      },
+      {
+        "date": "2001-04-01",
+        "quarter": "2001-Q2",
+        "total_bn": 5726.815,
+        "intragov_bn": 2452.639,
+        "domestic_public_bn": 2290.876,
+        "foreign_bn": 983.3,
+        "gdp_bn": 10599.0,
+        "debt_gdp_pct": 54.031653929616,
+        "public_gdp_pct": 30.891367110104728
+      },
+      {
+        "date": "2001-07-01",
+        "quarter": "2001-Q3",
+        "total_bn": 5807.464,
+        "intragov_bn": 2468.757,
+        "domestic_public_bn": 2346.5069999999996,
+        "foreign_bn": 992.2,
+        "gdp_bn": 10598.02,
+        "debt_gdp_pct": 54.79763201050763,
+        "public_gdp_pct": 31.503120394186833
+      },
+      {
+        "date": "2001-10-01",
+        "quarter": "2001-Q4",
+        "total_bn": 5943.439,
+        "intragov_bn": 2549.681,
+        "domestic_public_bn": 2353.658,
+        "foreign_bn": 1040.1,
+        "gdp_bn": 10660.465,
+        "debt_gdp_pct": 55.75215527652875,
+        "public_gdp_pct": 31.83499031233628
+      },
+      {
+        "date": "2002-01-01",
+        "quarter": "2002-Q1",
+        "total_bn": 6006.032,
+        "intragov_bn": 2562.358,
+        "domestic_public_bn": 2386.474,
+        "foreign_bn": 1057.2,
+        "gdp_bn": 10783.5,
+        "debt_gdp_pct": 55.69649928130941,
+        "public_gdp_pct": 31.93465943339361
+      },
+      {
+        "date": "2002-04-01",
+        "quarter": "2002-Q2",
+        "total_bn": 6126.469,
+        "intragov_bn": 2662.925,
+        "domestic_public_bn": 2340.444,
+        "foreign_bn": 1123.1,
+        "gdp_bn": 10887.46,
+        "debt_gdp_pct": 56.27087493318002,
+        "public_gdp_pct": 31.812231686729504
+      },
+      {
+        "date": "2002-07-01",
+        "quarter": "2002-Q3",
+        "total_bn": 6228.236,
+        "intragov_bn": 2675.648,
+        "domestic_public_bn": 2363.9880000000003,
+        "foreign_bn": 1188.6,
+        "gdp_bn": 10984.04,
+        "debt_gdp_pct": 56.702597587044465,
+        "public_gdp_pct": 32.34318156161121
+      },
+      {
+        "date": "2002-10-01",
+        "quarter": "2002-Q4",
+        "total_bn": 6405.707,
+        "intragov_bn": 2758.322,
+        "domestic_public_bn": 2411.7850000000003,
+        "foreign_bn": 1235.6,
+        "gdp_bn": 11061.433,
+        "debt_gdp_pct": 57.91028160637053,
+        "public_gdp_pct": 32.97389226151801
+      },
+      {
+        "date": "2003-01-01",
+        "quarter": "2003-Q1",
+        "total_bn": 6460.776,
+        "intragov_bn": 2749.997,
+        "domestic_public_bn": 2435.5789999999997,
+        "foreign_bn": 1275.2,
+        "gdp_bn": 11174.129,
+        "debt_gdp_pct": 57.81905685892833,
+        "public_gdp_pct": 33.208664406863384
+      },
+      {
+        "date": "2003-04-01",
+        "quarter": "2003-Q2",
+        "total_bn": 6670.121,
+        "intragov_bn": 2853.842,
+        "domestic_public_bn": 2444.379,
+        "foreign_bn": 1371.9,
+        "gdp_bn": 11312.766,
+        "debt_gdp_pct": 58.96100918201614,
+        "public_gdp_pct": 33.73426976214306
+      },
+      {
+        "date": "2003-07-01",
+        "quarter": "2003-Q3",
+        "total_bn": 6783.32,
+        "intragov_bn": 2859.275,
+        "domestic_public_bn": 2480.745,
+        "foreign_bn": 1443.3,
+        "gdp_bn": 11566.669,
+        "debt_gdp_pct": 58.64540603694979,
+        "public_gdp_pct": 33.92545425134929
+      },
+      {
+        "date": "2003-10-01",
+        "quarter": "2003-Q4",
+        "total_bn": 6997.964,
+        "intragov_bn": 2953.91,
+        "domestic_public_bn": 2520.954,
+        "foreign_bn": 1523.1,
+        "gdp_bn": 11772.234,
+        "debt_gdp_pct": 59.44465595909833,
+        "public_gdp_pct": 34.352477193368735
+      },
+      {
+        "date": "2004-01-01",
+        "quarter": "2004-Q1",
+        "total_bn": 7131.068,
+        "intragov_bn": 2954.401,
+        "domestic_public_bn": 2506.6670000000004,
+        "foreign_bn": 1670.0,
+        "gdp_bn": 11923.447,
+        "debt_gdp_pct": 59.807101084107636,
+        "public_gdp_pct": 35.02902306690339
+      },
+      {
+        "date": "2004-04-01",
+        "quarter": "2004-Q2",
+        "total_bn": 7274.335,
+        "intragov_bn": 3055.601,
+        "domestic_public_bn": 2483.3340000000003,
+        "foreign_bn": 1735.4,
+        "gdp_bn": 12112.815,
+        "debt_gdp_pct": 60.0548675101535,
+        "public_gdp_pct": 34.82868350585723
+      },
+      {
+        "date": "2004-07-01",
+        "quarter": "2004-Q3",
+        "total_bn": 7379.053,
+        "intragov_bn": 3075.687,
+        "domestic_public_bn": 2508.866,
+        "foreign_bn": 1794.5,
+        "gdp_bn": 12305.307,
+        "debt_gdp_pct": 59.9664274934384,
+        "public_gdp_pct": 34.97162646978251
+      },
+      {
+        "date": "2004-10-01",
+        "quarter": "2004-Q4",
+        "total_bn": 7596.143,
+        "intragov_bn": 3189.791,
+        "domestic_public_bn": 2557.0519999999997,
+        "foreign_bn": 1849.3,
+        "gdp_bn": 12527.214,
+        "debt_gdp_pct": 60.6371296922045,
+        "public_gdp_pct": 35.174237464132084
+      },
+      {
+        "date": "2005-01-01",
+        "quarter": "2005-Q1",
+        "total_bn": 7776.939,
+        "intragov_bn": 3204.543,
+        "domestic_public_bn": 2620.397,
+        "foreign_bn": 1952.0,
+        "gdp_bn": 12767.286,
+        "debt_gdp_pct": 60.913016282395496,
+        "public_gdp_pct": 35.81338273459214
+      },
+      {
+        "date": "2005-04-01",
+        "quarter": "2005-Q2",
+        "total_bn": 7836.496,
+        "intragov_bn": 3308.866,
+        "domestic_public_bn": 2649.63,
+        "foreign_bn": 1878.0,
+        "gdp_bn": 12922.656,
+        "debt_gdp_pct": 60.641527562135835,
+        "public_gdp_pct": 35.036373327588386
+      },
+      {
+        "date": "2005-07-01",
+        "quarter": "2005-Q3",
+        "total_bn": 7932.71,
+        "intragov_bn": 3331.332,
+        "domestic_public_bn": 2671.3779999999997,
+        "foreign_bn": 1930.0,
+        "gdp_bn": 13142.642,
+        "debt_gdp_pct": 60.35856413040849,
+        "public_gdp_pct": 35.01105789840429
+      },
+      {
+        "date": "2005-10-01",
+        "quarter": "2005-Q4",
+        "total_bn": 8170.413,
+        "intragov_bn": 3455.806,
+        "domestic_public_bn": 2680.607,
+        "foreign_bn": 2034.0,
+        "gdp_bn": 13324.204,
+        "debt_gdp_pct": 61.32008336107732,
+        "public_gdp_pct": 35.383779774011266
+      },
+      {
+        "date": "2006-01-01",
+        "quarter": "2006-Q1",
+        "total_bn": 8371.156,
+        "intragov_bn": 3498.352,
+        "domestic_public_bn": 2790.704,
+        "foreign_bn": 2082.1,
+        "gdp_bn": 13599.16,
+        "debt_gdp_pct": 61.55641966121438,
+        "public_gdp_pct": 35.83165430806021
+      },
+      {
+        "date": "2006-04-01",
+        "quarter": "2006-Q2",
+        "total_bn": 8420.042,
+        "intragov_bn": 3622.592,
+        "domestic_public_bn": 2819.6499999999996,
+        "foreign_bn": 1977.8,
+        "gdp_bn": 13753.424,
+        "debt_gdp_pct": 61.221423843255316,
+        "public_gdp_pct": 34.88185923737972
+      },
+      {
+        "date": "2006-07-01",
+        "quarter": "2006-Q3",
+        "total_bn": 8506.974,
+        "intragov_bn": 3663.766,
+        "domestic_public_bn": 2817.9079999999994,
+        "foreign_bn": 2025.3,
+        "gdp_bn": 13870.188,
+        "debt_gdp_pct": 61.3327952007572,
+        "public_gdp_pct": 34.918113582887266
+      },
+      {
+        "date": "2006-10-01",
+        "quarter": "2006-Q4",
+        "total_bn": 8680.224,
+        "intragov_bn": 3779.016,
+        "domestic_public_bn": 2798.1079999999997,
+        "foreign_bn": 2103.1,
+        "gdp_bn": 14039.56,
+        "debt_gdp_pct": 61.82689485995287,
+        "public_gdp_pct": 34.909982933938096
+      },
+      {
+        "date": "2007-01-01",
+        "quarter": "2007-Q1",
+        "total_bn": 8849.665,
+        "intragov_bn": 3795.387,
+        "domestic_public_bn": 2859.478,
+        "foreign_bn": 2194.8,
+        "gdp_bn": 14215.651,
+        "debt_gdp_pct": 62.25297033530157,
+        "public_gdp_pct": 35.554319672029095
+      },
+      {
+        "date": "2007-04-01",
+        "quarter": "2007-Q2",
+        "total_bn": 8867.677,
+        "intragov_bn": 3924.644,
+        "domestic_public_bn": 2751.0330000000004,
+        "foreign_bn": 2192.0,
+        "gdp_bn": 14402.082,
+        "debt_gdp_pct": 61.572187965601074,
+        "public_gdp_pct": 34.321655716166596
+      },
+      {
+        "date": "2007-07-01",
+        "quarter": "2007-Q3",
+        "total_bn": 9007.653,
+        "intragov_bn": 3958.411,
+        "domestic_public_bn": 2813.942,
+        "foreign_bn": 2235.3,
+        "gdp_bn": 14564.117,
+        "debt_gdp_pct": 61.848260351108145,
+        "public_gdp_pct": 34.66905683331162
+      },
+      {
+        "date": "2007-10-01",
+        "quarter": "2007-Q4",
+        "total_bn": 9229.172,
+        "intragov_bn": 4092.884,
+        "domestic_public_bn": 2783.0879999999997,
+        "foreign_bn": 2353.2,
+        "gdp_bn": 14715.058,
+        "debt_gdp_pct": 62.71923630882053,
+        "public_gdp_pct": 34.904979647378894
+      },
+      {
+        "date": "2008-01-01",
+        "quarter": "2008-Q1",
+        "total_bn": 9437.594,
+        "intragov_bn": 4103.546,
+        "domestic_public_bn": 2827.7479999999996,
+        "foreign_bn": 2506.3,
+        "gdp_bn": 14706.538,
+        "debt_gdp_pct": 64.17277812086026,
+        "public_gdp_pct": 36.26990934236188
+      },
+      {
+        "date": "2008-04-01",
+        "quarter": "2008-Q2",
+        "total_bn": 9492.006,
+        "intragov_bn": 4206.981,
+        "domestic_public_bn": 2697.6249999999995,
+        "foreign_bn": 2587.4,
+        "gdp_bn": 14865.701,
+        "debt_gdp_pct": 63.851721489622314,
+        "public_gdp_pct": 35.551804788755
+      },
+      {
+        "date": "2008-07-01",
+        "quarter": "2008-Q3",
+        "total_bn": 10024.725,
+        "intragov_bn": 4210.485,
+        "domestic_public_bn": 3011.8399999999997,
+        "foreign_bn": 2802.4,
+        "gdp_bn": 14898.999,
+        "debt_gdp_pct": 67.2845538146556,
+        "public_gdp_pct": 39.02436667053941
+      },
+      {
+        "date": "2008-10-01",
+        "quarter": "2008-Q4",
+        "total_bn": 10699.805,
+        "intragov_bn": 4327.154,
+        "domestic_public_bn": 3295.451,
+        "foreign_bn": 3077.2,
+        "gdp_bn": 14608.209,
+        "debt_gdp_pct": 73.24515277677092,
+        "public_gdp_pct": 43.62376660958232
+      },
+      {
+        "date": "2009-01-01",
+        "quarter": "2009-Q1",
+        "total_bn": 11126.941,
+        "intragov_bn": 4290.603,
+        "domestic_public_bn": 3570.638,
+        "foreign_bn": 3265.7,
+        "gdp_bn": 14430.902,
+        "debt_gdp_pct": 77.10495851194888,
+        "public_gdp_pct": 47.372908498720314
+      },
+      {
+        "date": "2009-04-01",
+        "quarter": "2009-Q2",
+        "total_bn": 11545.275,
+        "intragov_bn": 4368.811,
+        "domestic_public_bn": 3715.6639999999998,
+        "foreign_bn": 3460.8,
+        "gdp_bn": 14381.236,
+        "debt_gdp_pct": 80.28013030312555,
+        "public_gdp_pct": 49.90158008671855
+      },
+      {
+        "date": "2009-07-01",
+        "quarter": "2009-Q3",
+        "total_bn": 11909.828,
+        "intragov_bn": 4355.291,
+        "domestic_public_bn": 3983.9370000000004,
+        "foreign_bn": 3570.6,
+        "gdp_bn": 14448.882,
+        "debt_gdp_pct": 82.42733243997702,
+        "public_gdp_pct": 52.28457814244729
+      },
+      {
+        "date": "2009-10-01",
+        "quarter": "2009-Q4",
+        "total_bn": 12311.349,
+        "intragov_bn": 4496.99,
+        "domestic_public_bn": 4129.259,
+        "foreign_bn": 3685.1,
+        "gdp_bn": 14651.249,
+        "debt_gdp_pct": 84.0293479415987,
+        "public_gdp_pct": 53.33578727656598
+      },
+      {
+        "date": "2010-01-01",
+        "quarter": "2010-Q1",
+        "total_bn": 12773.123,
+        "intragov_bn": 4478.872,
+        "domestic_public_bn": 4416.351000000001,
+        "foreign_bn": 3877.9,
+        "gdp_bn": 14764.61,
+        "debt_gdp_pct": 86.51175344286099,
+        "public_gdp_pct": 56.17656680399956
+      },
+      {
+        "date": "2010-04-01",
+        "quarter": "2010-Q2",
+        "total_bn": 13201.792,
+        "intragov_bn": 4562.572,
+        "domestic_public_bn": 4569.219999999999,
+        "foreign_bn": 4070.0,
+        "gdp_bn": 14980.193,
+        "debt_gdp_pct": 88.12831717188156,
+        "public_gdp_pct": 57.67095257050426
+      },
+      {
+        "date": "2010-07-01",
+        "quarter": "2010-Q3",
+        "total_bn": 13561.622,
+        "intragov_bn": 4534.011,
+        "domestic_public_bn": 4703.411000000001,
+        "foreign_bn": 4324.2,
+        "gdp_bn": 15141.607,
+        "debt_gdp_pct": 89.56527533702334,
+        "public_gdp_pct": 59.621221182137404
+      },
+      {
+        "date": "2010-10-01",
+        "quarter": "2010-Q4",
+        "total_bn": 14025.215,
+        "intragov_bn": 4629.804,
+        "domestic_public_bn": 4959.811,
+        "foreign_bn": 4435.6,
+        "gdp_bn": 15309.474,
+        "debt_gdp_pct": 91.61134471373738,
+        "public_gdp_pct": 61.369913819377466
+      },
+      {
+        "date": "2011-01-01",
+        "quarter": "2011-Q1",
+        "total_bn": 14270.114,
+        "intragov_bn": 4613.541,
+        "domestic_public_bn": 5175.173000000001,
+        "foreign_bn": 4481.4,
+        "gdp_bn": 15351.448,
+        "debt_gdp_pct": 92.95614329019647,
+        "public_gdp_pct": 62.903336545191046
+      },
+      {
+        "date": "2011-04-01",
+        "quarter": "2011-Q2",
+        "total_bn": 14343.087,
+        "intragov_bn": 4596.208,
+        "domestic_public_bn": 5056.279,
+        "foreign_bn": 4690.6,
+        "gdp_bn": 15557.539,
+        "debt_gdp_pct": 92.19380391718767,
+        "public_gdp_pct": 62.65051946840693
+      },
+      {
+        "date": "2011-07-01",
+        "quarter": "2011-Q3",
+        "total_bn": 14790.34,
+        "intragov_bn": 4658.307,
+        "domestic_public_bn": 5219.939,
+        "foreign_bn": 4912.1,
+        "gdp_bn": 15647.68,
+        "debt_gdp_pct": 94.52097691159328,
+        "public_gdp_pct": 64.75106213828504
+      },
+      {
+        "date": "2011-10-01",
+        "quarter": "2011-Q4",
+        "total_bn": 15222.94,
+        "intragov_bn": 4770.443,
+        "domestic_public_bn": 5445.603000000001,
+        "foreign_bn": 5006.9,
+        "gdp_bn": 15842.259,
+        "debt_gdp_pct": 96.09071534558298,
+        "public_gdp_pct": 65.97861453975725
+      },
+      {
+        "date": "2012-01-01",
+        "quarter": "2012-Q1",
+        "total_bn": 15606.518,
+        "intragov_bn": 4730.118,
+        "domestic_public_bn": 5731.294,
+        "foreign_bn": 5145.1,
+        "gdp_bn": 16068.805,
+        "debt_gdp_pct": 97.12307791400792,
+        "public_gdp_pct": 67.68638987155548
+      },
+      {
+        "date": "2012-04-01",
+        "quarter": "2012-Q2",
+        "total_bn": 15855.037,
+        "intragov_bn": 4806.82,
+        "domestic_public_bn": 5737.317000000001,
+        "foreign_bn": 5310.9,
+        "gdp_bn": 16207.115,
+        "debt_gdp_pct": 97.82763311051967,
+        "public_gdp_pct": 68.16893074430583
+      },
+      {
+        "date": "2012-07-01",
+        "quarter": "2012-Q3",
+        "total_bn": 16066.24,
+        "intragov_bn": 4791.85,
+        "domestic_public_bn": 5798.296,
+        "foreign_bn": 5476.1,
+        "gdp_bn": 16319.541,
+        "debt_gdp_pct": 98.44786688547185,
+        "public_gdp_pct": 69.0852518462376
+      },
+      {
+        "date": "2012-10-01",
+        "quarter": "2012-Q4",
+        "total_bn": 16432.73,
+        "intragov_bn": 4846.174,
+        "domestic_public_bn": 6012.759999999999,
+        "foreign_bn": 5573.8,
+        "gdp_bn": 16420.419,
+        "debt_gdp_pct": 100.07497372630989,
+        "public_gdp_pct": 70.56190222673366
+      },
+      {
+        "date": "2013-01-01",
+        "quarter": "2013-Q1",
+        "total_bn": 16771.381,
+        "intragov_bn": 4848.93,
+        "domestic_public_bn": 6197.454,
+        "foreign_bn": 5725.0,
+        "gdp_bn": 16648.189,
+        "debt_gdp_pct": 100.73997237777637,
+        "public_gdp_pct": 71.61411970995765
+      },
+      {
+        "date": "2013-04-01",
+        "quarter": "2013-Q2",
+        "total_bn": 16738.32,
+        "intragov_bn": 4831.752,
+        "domestic_public_bn": 6311.573,
+        "foreign_bn": 5595.0,
+        "gdp_bn": 16728.687,
+        "debt_gdp_pct": 100.05758371831573,
+        "public_gdp_pct": 71.17458172300073
+      },
+      {
+        "date": "2013-07-01",
+        "quarter": "2013-Q3",
+        "total_bn": 16738.18,
+        "intragov_bn": 4757.211,
+        "domestic_public_bn": 6328.177999999999,
+        "foreign_bn": 5652.8,
+        "gdp_bn": 16953.838,
+        "debt_gdp_pct": 98.72796944267134,
+        "public_gdp_pct": 70.66823453190952
+      },
+      {
+        "date": "2013-10-01",
+        "quarter": "2013-Q4",
+        "total_bn": 17156.119,
+        "intragov_bn": null,
+        "domestic_public_bn": null,
+        "foreign_bn": null,
+        "gdp_bn": 17192.019,
+        "debt_gdp_pct": 99.79118217586893,
+        "public_gdp_pct": 71.86586985507635
+      },
+      {
+        "date": "2014-01-01",
+        "quarter": "2014-Q1",
+        "total_bn": 17601.227,
+        "intragov_bn": null,
+        "domestic_public_bn": null,
+        "foreign_bn": null,
+        "gdp_bn": 17197.738,
+        "debt_gdp_pct": 102.34617482834079,
+        "public_gdp_pct": 73.51665085257142
+      },
+      {
+        "date": "2014-04-01",
+        "quarter": "2014-Q2",
+        "total_bn": 17632.606,
+        "intragov_bn": 5060.585,
+        "domestic_public_bn": 6553.321000000001,
+        "foreign_bn": 6018.7,
+        "gdp_bn": 17518.508,
+        "debt_gdp_pct": 100.65129975680576,
+        "public_gdp_pct": 71.76422215864503
+      },
+      {
+        "date": "2014-07-01",
+        "quarter": "2014-Q3",
+        "total_bn": 17824.071,
+        "intragov_bn": 5039.262,
+        "domestic_public_bn": 6715.6089999999995,
+        "foreign_bn": 6069.2,
+        "gdp_bn": 17804.228,
+        "debt_gdp_pct": 100.11145105533362,
+        "public_gdp_pct": 71.80771331393869
+      },
+      {
+        "date": "2014-10-01",
+        "quarter": "2014-Q4",
+        "total_bn": 18141.444,
+        "intragov_bn": 5117.626,
+        "domestic_public_bn": 6866.1179999999995,
+        "foreign_bn": 6157.7,
+        "gdp_bn": 17912.079,
+        "debt_gdp_pct": 101.28050462484002,
+        "public_gdp_pct": 72.7096949494249
+      },
+      {
+        "date": "2015-01-01",
+        "quarter": "2015-Q1",
+        "total_bn": 18152.056,
+        "intragov_bn": 5061.873,
+        "domestic_public_bn": 6917.5830000000005,
+        "foreign_bn": 6172.6,
+        "gdp_bn": 18063.529,
+        "debt_gdp_pct": 100.4900869591983,
+        "public_gdp_pct": 72.46747299489486
+      },
+      {
+        "date": "2015-04-01",
+        "quarter": "2015-Q2",
+        "total_bn": 18151.998,
+        "intragov_bn": 5076.962,
+        "domestic_public_bn": 6914.036,
+        "foreign_bn": 6161.0,
+        "gdp_bn": 18279.784,
+        "debt_gdp_pct": 99.3009435997712,
+        "public_gdp_pct": 71.52730032258587
+      },
+      {
+        "date": "2015-07-01",
+        "quarter": "2015-Q3",
+        "total_bn": 18150.618,
+        "intragov_bn": 5026.862,
+        "domestic_public_bn": 7019.755999999999,
+        "foreign_bn": 6104.0,
+        "gdp_bn": 18401.626,
+        "debt_gdp_pct": 98.63594662775995,
+        "public_gdp_pct": 71.31845848839662
+      },
+      {
+        "date": "2015-10-01",
+        "quarter": "2015-Q4",
+        "total_bn": 18922.179,
+        "intragov_bn": 5222.311,
+        "domestic_public_bn": 7555.668000000001,
+        "foreign_bn": 6144.2,
+        "gdp_bn": 18435.137,
+        "debt_gdp_pct": 102.64192232474325,
+        "public_gdp_pct": 74.31389308362613
+      },
       {
         "date": "2016-01-01",
         "quarter": "2016-Q1",
@@ -501,11 +1647,11 @@
         "quarter": "2025-Q3",
         "total_bn": 37637.55259555763,
         "intragov_bn": 7339.27125686674,
-        "domestic_public_bn": 21063.881338690895,
+        "domestic_public_bn": 21063.881338690888,
         "foreign_bn": 9234.4,
         "gdp_bn": 31098.027,
         "debt_gdp_pct": 121.0287475651032,
-        "public_gdp_pct": 97.4283073929124
+        "public_gdp_pct": 97.42830739291239
       },
       {
         "date": "2025-10-01",
@@ -527,7 +1673,7 @@
         "foreign_bn": null,
         "gdp_bn": 31865.721,
         "debt_gdp_pct": 122.59387132649533,
-        "public_gdp_pct": 98.71049506631203
+        "public_gdp_pct": 98.71049506631205
       },
       {
         "date": "2026-04-01",
@@ -547,8 +1693,12 @@
       "total_last": "2026-01-01",
       "ratio_last": "2026-01-01",
       "foreign_lag_quarters": 1,
-      "identity_max_abs_rel": 2.103696723283431e-16,
-      "identity_bad_quarters": [],
+      "identity_max_abs_rel": 0.011416160030132688,
+      "identity_bad_quarters": [
+        "2000-07-01",
+        "2013-10-01",
+        "2014-01-01"
+      ],
       "negative_domestic_quarters": []
     }
   }

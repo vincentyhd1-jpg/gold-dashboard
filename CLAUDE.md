@@ -121,6 +121,12 @@ payload 锁死磁盘级幂等（第二次 writer 零调用 + bytes/SHA-256 不�
 不变、d 类明确 failure envelope 且旧业务数据不泄漏，以及多序列失败不短路后续
 成功落盘。所有 fixture 禁止真实联网及写入真实 `data/`。
 
+**FRED 债务历史起点（C13）**：GFDEBTN / FYGFDPUN / FDHBATN / FDHBFIN / GDP
+五条季频序列从 `1990-01-01` 请求；其余八条 rates/CPI 继续默认从
+`2016-01-01` 请求。请求 URL 按 series 选择起点，测试必须捕获真实 Request query，
+不得只 grep 常量。债务结构按各源真实 coverage 与既有 strict null 语义生成，
+不 forward-fill、不以 0 替代缺失、也不反算历史。
+
 ## 常见陷阱
 
 ### cwd 陷阱
@@ -695,6 +701,10 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
   前端不做 `/1000`、不重算本国公众持有、不填补 foreign；`stack_last` 后三项
   保持 null，但金额/比例线按各自真实 coverage 继续延伸。`public_gdp_pct` 仍保留
   在派生文件中，但 C12 主图不展示。
+- C13 后债务图直接展示 `macro_debt.json` 的 1990-Q1 至今全量季度；X 轴仍由
+  Chart.js `maxTicksLimit=12` 自动减刻度，不裁历史。宏观页 grid 卡片须保留
+  `min-width:0`，否则桌面宽度初始化后缩到移动端会被 canvas 的 min-content 撑出
+  横向页面溢出。
 - macro rates/CPI 与 debt 使用独立加载错误边界；任一组失败不得拖掉另一组。
 - Y 轴 min/max 全部取自派生 JSON 的 `scale`，回放期间 Chart.js 不自动缩放，
   帧间柱高可直接比较

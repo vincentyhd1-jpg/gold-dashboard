@@ -48,9 +48,9 @@ DEBT_MILLIONS_FIELDS = frozenset({"debt_total", "debt_public", "debt_intragov"})
 # 堆叠三分量。只有这三个字段会被置 null —— total_bn / debt_gdp_pct 永不受影响。
 STACK_FIELDS = ("intragov_bn", "domestic_public_bn", "foreign_bn")
 
-# 恒等式阈值。实测：2016+ 窗内 GFDEBTN 与 FYGFDPUN+FDHBATN 偏差恒为 0，
-# 全历史四舍五入噪声最大 1e-2 量级（2013 Q4），实质破裂是 1e-3 量级。
-# 窗口若前移到 2000 年以前需放宽到 1e-5。
+# 恒等式阈值。1990+ 真实数据中绝大多数季度精确相等；2000 Q3、2013 Q4、
+# 2014 Q1 的相对偏差分别约 9e-6 / 1.1e-2 / 1.4e-3，按既有 strict 语义只把
+# 当季结构三分量置 null。不能为保住这三根柱放宽阈值，否则会掩盖真实源间不一致。
 IDENTITY_TOL = 1e-6
 
 # 量级带。越界只进 warning，不失败 —— 债务/GDP 比值没有确定性上下界，
@@ -566,6 +566,55 @@ def run_tests() -> None:
         first_debt = debt_path.read_text(encoding="utf-8")
         write_outputs(outputs, root)
         check("幂等第二次跳过写盘", rates_path.read_text(encoding="utf-8") == first_rates and cpi_path.read_text(encoding="utf-8") == first_cpi and debt_path.read_text(encoding="utf-8") == first_debt)
+
+    # 长历史 fixture：锁死派生链不依赖 2016 起点，也不按固定长度裁剪。
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        seed_rates_cpi(root)
+        quarter_dates = [
+            f"{year}-{month:02d}-01"
+            for year in range(1990, 2027)
+            for month in (1, 4, 7, 10)
+            if f"{year}-{month:02d}-01" <= "2026-01-01"
+        ]
+        total_points = []
+        public_points = []
+        intragov_points = []
+        foreign_points = []
+        gdp_points = []
+        for idx, quarter in enumerate(quarter_dates):
+            total = 3_000_000 + idx * 100_000
+            public = total * 3 // 4
+            total_points.append({"date": quarter, "value": total})
+            public_points.append({"date": quarter, "value": public})
+            intragov_points.append({"date": quarter, "value": total - public})
+            foreign_points.append({"date": quarter, "value": 400 + idx * 10})
+            gdp_points.append({"date": quarter, "value": 6_000 + idx * 250})
+        seed_debt(
+            root,
+            debt_total=total_points,
+            debt_held_public=public_points,
+            debt_intragov=intragov_points,
+            debt_foreign=foreign_points,
+            gdp_nominal=gdp_points,
+        )
+        outputs, failures_list = derive(root)
+        debt = outputs["macro_debt.json"]
+        rows = debt["data"]["debt"] if debt else []
+        check(
+            "1990-Q1 至 2026-Q1 的 145 季长历史完整派生",
+            not failures_list and len(rows) == 145
+            and rows[0]["date"] == "1990-01-01"
+            and rows[-1]["date"] == "2026-01-01",
+        )
+        check(
+            "长历史首季金额、结构与比率均保留真实值",
+            bool(rows)
+            and all(rows[0][field] is not None for field in (
+                "total_bn", "gdp_bn", "debt_gdp_pct",
+                "intragov_bn", "domestic_public_bn", "foreign_bn",
+            )),
+        )
 
     # strict envelope：只破坏 rates 的一个上游，另外两条链仍应独立产出。
     with tempfile.TemporaryDirectory() as tmp:

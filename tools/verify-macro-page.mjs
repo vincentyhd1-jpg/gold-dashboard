@@ -61,6 +61,14 @@ const check = (name, ok, detail = '') => {
 const rates = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'derived', 'macro_rates.json'), 'utf-8'));
 const cpiFile = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'derived', 'macro_cpi.json'), 'utf-8'));
 const debtFile = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'derived', 'macro_debt.json'), 'utf-8'));
+const rawDebtFiles = Object.fromEntries([
+  ['total', 'data/debt_total.json'],
+  ['public', 'data/debt_held_public.json'],
+  ['intragov', 'data/debt_intragov.json'],
+  ['foreign', 'data/debt_foreign.json'],
+  ['gdp', 'data/gdp_nominal.json'],
+].map(([name, rel]) => [name,
+  JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf-8')).data]));
 const cpiRows = cpiFile.data.cpi;
 const debtRows = debtFile.data.debt;
 const debtMeta = debtFile.data.meta;
@@ -157,6 +165,8 @@ const state = await page.evaluate(() => {
         tickSample: s.axis === 'y' && typeof s.options.ticks?.callback === 'function'
           ? String(s.options.ticks.callback.call(s, 12345.6, 0, []))
           : '',
+        tickCount: s.ticks?.length ?? 0,
+        maxTicksLimit: s.options.ticks?.maxTicksLimit ?? null,
       })),
       tooltipSamples,
       legendLabels: chart.legend?.legendItems?.map(item => item.text) || [],
@@ -272,6 +282,44 @@ check('债务面板明确说明左右轴单位',
 check('债务总览季度标签逐点来自派生文件',
   JSON.stringify(state.debtOverview.labels) === JSON.stringify(debtRows.map(r => r.quarter)),
   JSON.stringify({ rendered: state.debtOverview.labels.length, source: debtRows.length }));
+
+const firstValidTotal = debtRows.find(r => r.total_bn !== null
+  && r.gdp_bn !== null && r.debt_gdp_pct !== null);
+check('债务总额/GDP/比率真实历史从 1990-Q1 开始',
+  firstValidTotal?.date === '1990-01-01' && firstValidTotal?.quarter === '1990-Q1',
+  JSON.stringify(firstValidTotal));
+check('债务图 labels 包含 1990 且没有人为裁到 2016',
+  state.debtOverview.labels[0] === '1990-Q1'
+    && state.debtOverview.labels.includes('1990-Q4')
+    && debtRows.filter(r => r.date < '2016-01-01').length === 104
+    && state.debtOverview.labels.length === debtRows.length,
+  JSON.stringify({ first: state.debtOverview.labels[0], labels: state.debtOverview.labels.length,
+    before2016: debtRows.filter(r => r.date < '2016-01-01').length }));
+
+const rawDateSets = Object.fromEntries(Object.entries(rawDebtFiles)
+  .map(([name, rows]) => [name, new Set(rows.map(r => r.date))]));
+const firstRawStructureDate = [...rawDateSets.total]
+  .filter(d => rawDateSets.public.has(d)
+    && rawDateSets.intragov.has(d) && rawDateSets.foreign.has(d))
+  .sort()[0];
+const firstStructure = debtRows.find(r =>
+  ['intragov_bn', 'domestic_public_bn', 'foreign_bn'].every(f => r[f] !== null));
+check('结构历史起点由四条真实上游共同 coverage 决定',
+  firstRawStructureDate === '1990-01-01' && firstStructure?.date === firstRawStructureDate,
+  JSON.stringify({ firstRawStructureDate, firstDerivedStructure: firstStructure?.date }));
+const incompleteStructureRows = debtRows.filter(r =>
+  ['intragov_bn', 'domestic_public_bn', 'foreign_bn'].some(f => r[f] === null));
+check('历史结构缺口三项同时为 null，且不被补 0',
+  incompleteStructureRows.length > 0
+    && incompleteStructureRows.every(r =>
+      ['intragov_bn', 'domestic_public_bn', 'foreign_bn'].every(f => r[f] === null)),
+  JSON.stringify(incompleteStructureRows.map(r => ({ date: r.date,
+    values: [r.intragov_bn, r.domestic_public_bn, r.foreign_bn] }))));
+const debtX = state.debtOverview.scaleAxes.find(s => s.axis === 'x');
+check('36 年季度标签由 Chart.js 自动减至最多 12 个 tick',
+  debtX?.maxTicksLimit === 12 && debtX.tickCount <= 12
+    && debtX.tickCount < state.debtOverview.labels.length,
+  JSON.stringify(debtX));
 
 const identityIdx = debtRows.findIndex(r => r.total_bn !== null
   && ['intragov_bn', 'domestic_public_bn', 'foreign_bn'].every(f => r[f] !== null));
@@ -432,6 +480,27 @@ check('rates/CPI 加载错误明确进入原宏观错误边界',
     && /err/.test(ratesCpiFailure.result.statusClass)
     && ratesCpiFailure.errors.some(e => e.includes('[fetch] 宏观数据加载失败')),
   JSON.stringify(ratesCpiFailure.errors));
+
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(300);
+const mobile = await page.evaluate(() => {
+  const chart = Chart.getChart(document.getElementById('debtOverviewChart'));
+  const rect = document.getElementById('debtOverviewChart').getBoundingClientRect();
+  return {
+    innerWidth: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    canvasLeft: rect.left,
+    canvasRight: rect.right,
+    chartAlive: !!chart,
+    legendWithinChart: !!chart?.legend
+      && chart.legend.width <= chart.width && chart.legend.height < chart.height,
+  };
+});
+check('移动端债务图无页面横向溢出且 legend 保持在图内',
+  mobile.chartAlive && mobile.scrollWidth <= mobile.innerWidth + 1
+    && mobile.canvasLeft >= 0 && mobile.canvasRight <= mobile.innerWidth + 1
+    && mobile.legendWithinChart,
+  JSON.stringify(mobile));
 
 await browser.close();
 server.close();
