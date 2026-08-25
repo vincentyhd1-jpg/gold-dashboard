@@ -140,7 +140,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | 护栏 | exit | 结果 |
 |---|---|---|
 | `derive_term_structure.py --test` | 0 | 21 passed, 0 failed |
-| `fetch_cot.py --test` | 0 | 57 passed, 0 failed |
+| `fetch_cot.py --test` | 0 | 66 passed, 0 failed |
 | `fetch_gold.py --test` | 0 | 42 passed, 0 failed |
 | `fetch_oi.py --test` | 0 | 63 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 27 passed, 0 failed |
@@ -149,8 +149,8 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
-| `tools/verify-injection-wrappers.mjs` | 0 | 28 passed, 0 failed |
-| `tools/verify-ui-fixes.mjs` | 0 | 22 passed, 0 failed；page errors: none |
+| `tools/verify-injection-wrappers.mjs` | 0 | 31 passed, 0 failed |
+| `tools/verify-ui-fixes.mjs` | 0 | 38 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
 | `tools/verify-gapframe.mjs` | 0 | page errors: none |
@@ -160,7 +160,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
 | `tools/verify-macro-page.mjs` | 0 | 54 passed, 0 failed |
 
-前端 verify 中 ui-fixes(22)/contract-contango(29)/isolation(37)/
+前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
 macro-page(54) 有计数；
 playback/gapframe 无 passed/failed 累加器，
@@ -170,7 +170,7 @@ playback/gapframe 无 passed/failed 累加器，
 `44aecf2` 反转了那条编码旧口径的断言（「JUN26 已到期已剔除」→「已到期合约仍保留
 X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案一致，断言未删。
 
-### 注入类护栏（六条，含 wrapper meta guard）
+### 注入类护栏（七条，含 wrapper meta guard）
 
 每条自身 exit 0 表示「注入→红、还原→绿」的完整序列成立。逐阶段实测：
 
@@ -180,8 +180,9 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-spread-injection.mjs` | 0 | wrapper 11/0；基线 29/0 → spread 注入 28/1 → 恢复 29/0 + hash 一致 |
 | `tools/verify-totaloi-injection.mjs` | 0 | wrapper 11/0；基线 29/0 → 旧 total_oi 口径 28/1 → 恢复 29/0 + hash 一致 |
 | `tools/verify-isolation-injection.mjs` | 0 | wrapper 18/0；基线 37/0 → 两种隔离破坏分别红 → 恢复 37/0 + hash 一致 |
+| `tools/verify-cot-index-null-injection.mjs` | 0 | wrapper 18/0；基线 38/0 → current null→50 为 31/7、chart null→50 为 36/2 → 恢复 38/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
-| `tools/verify-injection-wrappers.mjs` | 0 | 28/0；静态锁四 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
+| `tools/verify-injection-wrappers.mjs` | 0 | 31/0；静态锁五 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
 
 C10 后四个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
@@ -382,8 +383,9 @@ index.html:484   label 文案「页面更新：」
   护栏不再接受 bare。文件首次不存在仍按原有业务语义处理。
 - **schema v1 未启动**：`SCHEMA_VERSION=0`、`KNOWN_SCHEMA_VERSIONS={0}` 保持不变，
   等未来新源接入并冻结格式后再单独决策。
-- **`index.html:470`** COT Index 显示值 `mx===mn → 50`，与采集层 `cot_index()` 返
-  `None` 语义不一致，无任何 verify 校验该显示值。
+- **COT Index null 语义已于 C11 收口**：weekly Index 由 `fetch_cot.py` 预计算，
+  前端不再回算；单侧/双侧 null 的 DOM、Chart 与综合信号由真实 fixture 和 injection
+  wrapper 锁死。
 
 ### 偶发失败
 
@@ -536,7 +538,7 @@ PASS/SKIP。
 恢复后重新跑 guard，并在 case/finally 两层校验 SHA-256。spawn error、signal、timeout
 或恢复错误都记为 wrapper failure，wrapper 明确设置自身 exit code。
 
-`verify-injection-wrappers.mjs` 当前 **28 passed, 0 failed**。动态临时 fixture 覆盖
+`verify-injection-wrappers.mjs` 当前 **31 passed, 0 failed**。动态临时 fixture 覆盖
 成功状态机、红色基线不执行 injection、spawn error、signal、注入仍绿、no-op patch、
 restore mismatch 与 patch throw 后恢复。反恒真结果：吞掉“注入仍绿”累计、放行
 no-op、禁用 restore hash 三次均使 meta guard exit 1；所有临时破坏均已恢复。
@@ -544,3 +546,20 @@ no-op、禁用 restore hash 三次均使 meta guard exit 1；所有临时破坏�
 真实 wrapper 最终结果：total_oi 11/0、spread 11/0、KPI 32/0、isolation 18/0；
 目标 guard 恢复后仍为 contract-contango 29/0、isolation 37/0。C10 未修改
 `index.html`、派生 JSON、业务断言、浏览器 helper、workflow 或生产逻辑。
+
+## 13. C11 COT Index null / 不可知语义
+
+`fetch_cot.py` 在本次 52 周窗口上为每条 weekly 记录增加 additive
+`mf_index/comm_index`，`latest` 直接复用 weekly 最后一条；原 date/net/OI、coverage、
+envelope schema v0 均不变。空窗口或 max==min 继续返回 null，未改数学定义，也未实施
+真正的历史 trailing-52 指标。
+
+`index.html` 删除 current fallback 与历史 max/min 重算。任一侧 null 时该侧显示 `--`、
+bar 为 muted 0%，有效侧仍显示真实值；综合信号固定为“数据不足 · 暂不判断”，不输出
+方向风险、不高亮规则。管理基金自身有效时仍可高亮真实区间；无效时全部区间取消 active。
+图表直接消费 weekly Index，null 保持 gap，tooltip 对 null 显示不可知。
+
+`verify-ui-fixes.mjs` 当前 **38 passed, 0 failed**，三个 schema v0 route fixture 覆盖
+mf 单侧 null、comm 单侧 null 与双侧 null。新 wrapper 当前 **18/0**：current null→50
+使目标 guard **31/7**，chart null→50 使其 **36/2**，恢复后 38/0 且 hash 一致。
+Python 反恒真将退化分支改回 50 时 `fetch_cot.py --test` 为 **61/5**；恢复后 66/0。

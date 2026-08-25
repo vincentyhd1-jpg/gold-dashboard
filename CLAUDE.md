@@ -73,13 +73,20 @@ tools/*.mjs       Playwright 验证脚本
 `tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
 不 fallback 与 EPERM 继续抛出。
 
-**前端破坏注入（C10）**：四个 `verify-*-injection.mjs` 统一经
+**前端破坏注入（C10/C11）**：五个 `verify-*-injection.mjs` 统一经
 `tools/_injection.mjs` 执行 `baseline green → injection red → restore green`。
 每个 case 必须证明 patch 与业务锚点真实改变、目标 guard 非零且命中稳定 FAIL
 marker；备份只进系统临时目录，每 case 与最外层 `finally` 都按原始 bytes/SHA-256
 恢复。任一条件不满足，wrapper 自身 exit 1。`tools/verify-injection-wrappers.mjs`
 用临时 fixture 锁死基线已红、注入假绿、no-op、restore mismatch、patch throw 与
 子进程异常都不能转成成功。
+
+**COT Index 不可知语义（C11）**：`fetch_cot.py` 用当前 52 周窗口统一计算
+`weekly[*].mf_index/comm_index`，`latest` 直接复用最后一条 weekly Index；指标定义
+不变，也不扩展为真正的历史 trailing-52。`index.html` 只展示这些后端字段，禁止
+max/min 重算、`null → 50`、0/前值填补。任一侧 null 时有效侧仍单独显示，但综合
+信号统一为“数据不足 · 暂不判断”，无方向风险、无规则高亮；管理基金图保留 null
+缺口。`null` 是不可知，不是中性。schema_version 仍为 0。
 
 ### 落盘统一信封（schema_version = 0）
 
@@ -597,6 +604,10 @@ data:null 覆盖好数据；攒几周后再决定哪些 warning 升级成闸门�
 粉饰成「中性 50%」，页面上完全看不出异常。现改为返回 `None`（落盘 null，语义
 是"不可知"，与 0"确实为零"严格区分）。
 
+C11 把同一计算扩展到每条 weekly，并删除前端两条 COT Index 回算。单侧或双侧
+退化都必须把 null 原样传到数值、百分位条、综合信号与图表，不能再把缺失解释成
+“另一侧未确认”或 50% 中性。
+
 `fetch_stocks` 的 d) 是抓这类问题最强的一条 —— 明细与顶层 total 独立解析，
 单仓库静默归零必然让两者不符。
 
@@ -675,6 +686,9 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 
 ## 前端
 
+- `index.html` 的 COT Index 只读 `cot.json` 的 `latest` 与 `weekly[*]` 预计算字段。
+  任一侧 null 时有效侧可以单独展示，但综合信号必须暂不判断、不高亮规则；管理基金
+  Index 区间只在自身值有效时高亮，图表 null 保持缺口。
 - `macro.html` 的联邦债务结构只读 `macro_debt.json` 中的 `intragov_bn` /
   `domestic_public_bn` / `foreign_bn`，三项共用一个 stack；前端不做 `/1000`、
   不重算本国公众持有、不填补 foreign。`stack_last` 后三项保持 null，但
@@ -711,7 +725,7 @@ python3 fetch_stocks.py --test             # 采集校验（含缺字段 SKIP）
 python3 fetch_fred.py --test               # 采集校验（13 个 FRED 序列，四态 + 磁盘安全）
 python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘
 python3 tools/verify-io-utils.py           # 落盘骨架（含隔离区撞名断言）
-node tools/verify-ui-fixes.mjs             # 柱对齐 / 按钮态 / 轴刻度 / 合约列表
+node tools/verify-ui-fixes.mjs             # UI 几何 / COT Index 单侧与双侧 null
 node tools/verify-contract-contango.mjs    # 合约过滤 / 最小柱高 / 价差锚点
 node tools/verify-playback.mjs             # 回放交互
 node tools/verify-gapframe.mjs             # 断层帧
@@ -723,6 +737,7 @@ node tools/verify-kpi-injection.mjs        # 注入错误 KPI 值，验证护栏
 node tools/verify-spread-injection.mjs     # 注入错误 spread，验证护栏会变红
 node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证护栏会变红
 node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
+node tools/verify-cot-index-null-injection.mjs  # 注入 COT null→50，验证 UI 会变红
 node tools/verify-injection-wrappers.mjs   # wrapper 状态机/恢复/退出码基础设施
 node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 债务缺口与隔离
 python3 tools/verify-noise-injection.py    # WSL 内运行；三种 noise 注入必须红，恢复后绿

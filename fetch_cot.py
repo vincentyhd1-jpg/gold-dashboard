@@ -335,8 +335,17 @@ def build_payload(weekly: list[dict]) -> dict:
     mf_vals   = [r["mf_net"]   for r in weekly]
     comm_vals = [r["comm_net"] for r in weekly]
 
-    latest = weekly[-1]
-    prev   = weekly[-2] if len(weekly) >= 2 else {}
+    indexed_weekly = [
+        {
+            **row,
+            "mf_index": cot_index(mf_vals, row["mf_net"]),
+            "comm_index": cot_index(comm_vals, row["comm_net"]),
+        }
+        for row in weekly
+    ]
+
+    latest = indexed_weekly[-1]
+    prev   = indexed_weekly[-2] if len(indexed_weekly) >= 2 else {}
 
     return {
         "latest": {
@@ -346,10 +355,10 @@ def build_payload(weekly: list[dict]) -> dict:
             "open_interest": latest["open_interest"],
             "mf_net_chg":    latest["mf_net"]   - prev.get("mf_net",   0),
             "comm_net_chg":  latest["comm_net"] - prev.get("comm_net", 0),
-            "mf_index":      cot_index(mf_vals,   latest["mf_net"]),
-            "comm_index":    cot_index(comm_vals, latest["comm_net"]),
+            "mf_index":      latest["mf_index"],
+            "comm_index":    latest["comm_index"],
         },
-        "weekly": weekly,
+        "weekly": indexed_weekly,
     }
 
 
@@ -562,7 +571,49 @@ def run_tests():
     check("mf_net_chg = 末期 − 前期",
           p["latest"]["mf_net_chg"] == good[-1]["mf_net"] - good[-2]["mf_net"],
           p["latest"]["mf_net_chg"])
-    check("weekly 原样透传（不排序不改写）", p["weekly"] == good)
+    check("weekly 原字段和值不变（只增加 Index）",
+          all({k: row[k] for k in ("date", "mf_net", "comm_net", "open_interest")}
+              == original
+              for row, original in zip(p["weekly"], good)))
+    check("weekly 每条都有 mf_index / comm_index",
+          all("mf_index" in row and "comm_index" in row for row in p["weekly"]))
+    check("正常 weekly Index 全部位于 0~100",
+          all(0 <= row["mf_index"] <= 100
+              and 0 <= row["comm_index"] <= 100
+              for row in p["weekly"]))
+    check("latest Index 直接等于 weekly[-1] Index",
+          p["latest"]["mf_index"] == p["weekly"][-1]["mf_index"]
+          and p["latest"]["comm_index"] == p["weekly"][-1]["comm_index"])
+    check("build_payload 不修改输入 weekly",
+          all("mf_index" not in row and "comm_index" not in row for row in good))
+
+    mf_flat = [dict(row, mf_net=12345) for row in good]
+    p_mf_flat = build_payload(mf_flat)
+    check("管理基金单侧退化 → weekly/latest mf_index 全为 None",
+          all(row["mf_index"] is None for row in p_mf_flat["weekly"])
+          and p_mf_flat["latest"]["mf_index"] is None)
+    check("管理基金退化不影响商业 Index",
+          all(row["comm_index"] is not None for row in p_mf_flat["weekly"])
+          and p_mf_flat["latest"]["comm_index"]
+              == p_mf_flat["weekly"][-1]["comm_index"])
+
+    comm_flat = [dict(row, comm_net=-12345) for row in good]
+    p_comm_flat = build_payload(comm_flat)
+    check("商业套保单侧退化 → weekly/latest comm_index 全为 None",
+          all(row["comm_index"] is None for row in p_comm_flat["weekly"])
+          and p_comm_flat["latest"]["comm_index"] is None)
+    check("商业套保退化不影响管理基金 Index",
+          all(row["mf_index"] is not None for row in p_comm_flat["weekly"])
+          and p_comm_flat["latest"]["mf_index"]
+              == p_comm_flat["weekly"][-1]["mf_index"])
+
+    both_flat = [dict(row, mf_net=12345, comm_net=-12345) for row in good]
+    p_both_flat = build_payload(both_flat)
+    check("双侧退化 → weekly 两列与 latest 两列全部 None（绝不回填 50）",
+          all(row["mf_index"] is None and row["comm_index"] is None
+              for row in p_both_flat["weekly"])
+          and p_both_flat["latest"]["mf_index"] is None
+          and p_both_flat["latest"]["comm_index"] is None)
     check("单期输入 → chg 以 0 为基准（prev 缺失）",
           build_payload([good[0]])["latest"]["mf_net_chg"] == good[0]["mf_net"])
 

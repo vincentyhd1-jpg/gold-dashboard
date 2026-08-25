@@ -46,6 +46,7 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:28px}
 .signal-badge.clear-full  {background:rgba(82,200,100,.15);color:#52e87a;border:1.5px solid rgba(82,200,100,.35)}
 .signal-badge.bias-crowd,.signal-badge.bias-clear{background:rgba(245,200,66,.12);color:#f5c842;border:1.5px solid rgba(245,200,66,.3)}
 .signal-badge.neutral-dual{background:rgba(110,118,129,.12);color:#8b949e;border:1.5px solid rgba(110,118,129,.3)}
+.signal-badge.unknown{background:rgba(110,118,129,.08);color:#8b949e;border:1.5px solid rgba(110,118,129,.25)}
 
 /* COT Index 百分位 */
 .pct-row{display:flex;align-items:center;gap:12px;margin-top:6px}
@@ -415,13 +416,6 @@ function fmtNum(n){
   return (n>=0?'+':'')+Math.round(n).toLocaleString('zh-CN');
 }
 
-function calcPct(arr, val) {
-  if (!arr.length) return 50;
-  const mn = Math.min(...arr), mx = Math.max(...arr);
-  if (mx === mn) return 50;
-  return Math.round((val - mn) / (mx - mn) * 100);
-}
-
 function signalFromPct(pct) {
   if (pct >= 80) return { cls:'extreme-bull', text:'极度多头拥挤', icon:'▲▲' };
   if (pct >= 60) return { cls:'bull',          text:'偏多',         icon:'▲'  };
@@ -431,6 +425,8 @@ function signalFromPct(pct) {
 }
 
 function dualSignal(mfPct, cmPct) {
+  if (mfPct == null || cmPct == null)
+    return { rule:'unknown', cls:'unknown', icon:'◇', text:'数据不足 · 暂不判断', risk:'缺少完整 COT Index，不生成方向判断', reason:'' };
   if (mfPct >= 80 && cmPct <= 20)
     return { rule:'crowd-full', cls:'crowd-full',  icon:'★', text:'拥挤·多头满', risk:'警惕回调 / 勿追多',     reason:'管理基金极度拥挤，商业套保极度对冲，多头已满仓。' };
   if (mfPct <= 20 && cmPct >= 80)
@@ -458,6 +454,22 @@ function pctBarColor(pct) {
   return '#ff6b6b';
 }
 
+function formatPct(value) {
+  return value == null ? '不可知' : value + '%';
+}
+
+function renderPctBar(barId, valueId, pct, colorPct = pct) {
+  const bar = document.getElementById(barId);
+  const value = document.getElementById(valueId);
+  const known = pct != null;
+  bar.style.width = known ? pct + '%' : '0%';
+  bar.style.background = known ? pctBarColor(colorPct) : '#484f58';
+  bar.dataset.state = known ? 'known' : 'unknown';
+  value.textContent = known ? pct + '%' : '--';
+  value.style.color = known ? pctBarColor(colorPct) : '#8b949e';
+  value.dataset.state = known ? 'known' : 'unknown';
+}
+
 let mfChart = null, cmChart = null, dualChart = null, indexChart = null, stocksChart = null;
 
 function renderAll(cot, goldData, stocksData) {
@@ -472,10 +484,9 @@ function renderAll(cot, goldData, stocksData) {
   (Array.isArray(goldData) ? goldData : []).forEach(r => { goldMap[r.date] = r.price; });
   const goldD = weekly.map(r => goldMap[r.date] ?? null);
 
-  // 计算每周 COT Index（前滚动52周窗口百分位）
-  const mfVals = mfD;
-  const mn = Math.min(...mfVals), mx = Math.max(...mfVals);
-  const cotIdxD = mfVals.map(v => (mx === mn) ? 50 : Math.round((v - mn) / (mx - mn) * 100));
+  // COT Index 算术由 fetch_cot.py 负责；前端只展示后端字段。
+  // null 表示不可知，必须作为图表缺口保留，不能回填 50 / 0 / 前值。
+  const cotIdxD = weekly.map(r => r.mf_index == null ? null : r.mf_index);
 
   // 时间来自 COT 信封的 generated_at。
   // 字段缺失时显示「未知」，**不得回退 new Date()**：那会把「不知道数据多新」
@@ -506,19 +517,12 @@ function renderAll(cot, goldData, stocksData) {
   mfChgEl.className     = 'dg-chg ' + (mfUp ? 'up' : 'dn');
   commChgEl.className   = 'dg-chg ' + (commUp ? 'up' : 'dn');
 
-  // COT Index 百分位：优先使用 JSON 预计算值，模拟数据时 fallback 到前端计算
-  const mfPct = (latest.mf_index != null) ? latest.mf_index : calcPct(mfD, latest.mf_net);
-  const cmPct = (latest.comm_index != null) ? latest.comm_index : calcPct(cmD, latest.comm_net);
+  const mfPct = latest.mf_index;
+  const cmPct = latest.comm_index;
 
-  document.getElementById('mfPctBar').style.width      = mfPct + '%';
-  document.getElementById('mfPctBar').style.background  = pctBarColor(mfPct);
-  document.getElementById('mfPctVal').textContent       = mfPct + '%';
-  document.getElementById('mfPctVal').style.color       = pctBarColor(mfPct);
-
-  document.getElementById('cmPctBar').style.width      = cmPct + '%';
-  document.getElementById('cmPctBar').style.background  = pctBarColor(100 - cmPct);
-  document.getElementById('cmPctVal').textContent       = cmPct + '%';
-  document.getElementById('cmPctVal').style.color       = pctBarColor(100 - cmPct);
+  renderPctBar('mfPctBar', 'mfPctVal', mfPct);
+  renderPctBar('cmPctBar', 'cmPctVal', cmPct,
+               cmPct == null ? null : 100 - cmPct);
 
   // 双指标综合信号
   const dualSig = dualSignal(mfPct, cmPct);
@@ -528,8 +532,14 @@ function renderAll(cot, goldData, stocksData) {
   document.getElementById('signalRisk').textContent = dualSig.risk;
 
   // 信号依据文字
+  const missingBoth = mfPct == null && cmPct == null;
   document.getElementById('signalReason').textContent =
-    '管理基金 Index ' + mfPct + '%，商业 Index ' + cmPct + '%。' + dualSig.reason;
+    '管理基金 Index ' + formatPct(mfPct) + '，商业 Index ' + formatPct(cmPct) + '。' +
+    (dualSig.rule === 'unknown'
+      ? (missingBoth
+          ? '数据不足，暂不生成综合方向判断。'
+          : '数据不足，仅展示有效单项，不生成综合方向判断。')
+      : dualSig.reason);
 
   // 判断依据表格高亮：★ 强信号行用橙色，bias 行用淡色
   document.getElementById('rule-crowd-full').classList.toggle('hit-row', dualSig.rule === 'crowd-full');
@@ -540,7 +550,12 @@ function renderAll(cot, goldData, stocksData) {
   // COT Index 折线图区间标签高亮（沿用旧逻辑，用 mfPct 区间）
   const zones = document.getElementById('indexZones').querySelectorAll('.iz');
   const zoneMap = ['extreme-bear','bear','neut','bull','extreme-bull'];
-  const mfZone = mfPct >= 80 ? 'extreme-bull' : mfPct >= 60 ? 'bull' : mfPct >= 40 ? 'neut' : mfPct >= 20 ? 'bear' : 'extreme-bear';
+  const mfZone = mfPct == null ? null
+    : mfPct >= 80 ? 'extreme-bull'
+    : mfPct >= 60 ? 'bull'
+    : mfPct >= 40 ? 'neut'
+    : mfPct >= 20 ? 'bear'
+    : 'extreme-bear';
   zones.forEach((z,i) => { z.classList.toggle('active', zoneMap[i] === mfZone); });
 
   // COT Index 折线图
@@ -607,6 +622,7 @@ function renderAll(cot, goldData, stocksData) {
             title: items => items[0]?.label ? '报告日期：' + items[0].label : '',
             label: ctx => {
               const v = ctx.parsed.y;
+              if (v == null || !Number.isFinite(v)) return '  COT Index：不可知';
               let zone = '中性';
               if (v < 20) zone = '极度空头';
               else if (v < 40) zone = '偏空';
