@@ -118,10 +118,10 @@ import {script} as mod
 mod.QUARANTINE_DIR = {quar_tmp!r}
 {patch_code}
 try:
-    mod.main()
+    result = mod.main()
 except SystemExit as e:
     sys.exit(e.code if e.code is not None else 0)
-sys.exit(0)
+sys.exit(result if isinstance(result, int) else 0)
 """
     r = subprocess.run([sys.executable, "-c", runner],
                        capture_output=True, text=True, cwd=ROOT)
@@ -178,6 +178,39 @@ GOOD_ROWS = json.dumps([
      "open_interest_all": str(w["open_interest"])}
     for w in real_cot["weekly"]
 ])
+
+# 网络类失败必须统一 exit 2，且不能把旧文件当作坏业务数据覆盖/隔离。
+for _label, _raise_line in (
+    ("timeout → exit 2", "raise mod.CotFetchFailure('TimeoutError: timed out')"),
+    ("连接异常 → exit 2", "raise mod.CotFetchFailure('URLError: connection refused')"),
+    ("HTTP 500 → exit 2", "raise mod.CotFetchFailure('HTTP 500', status=500)"),
+    ("HTTP 429 → exit 2", "raise mod.CotFetchFailure('HTTP 429', status=429)"),
+):
+    run_injected(
+        "fetch_cot",
+        "def injected_fetch(limit=52):\n"
+        f"    {_raise_line}\n"
+        "mod.fetch_api = injected_fetch",
+        2, "cot.json", "cot-", _label,
+    )
+
+# 成功 JSON 的确定性业务损坏仍是 exit 1，且旧 cot.json 不覆盖。
+_good_rows = json.loads(GOOD_ROWS)
+_bad_oi = json.loads(GOOD_ROWS)
+_bad_oi[-1]["open_interest_all"] = "0"
+_short = _good_rows[-30:]
+_gapped = _good_rows[:20] + _good_rows[23:]
+for _label, _rows in (
+    ("最新 open_interest <= 0 → exit 1", _bad_oi),
+    ("有效周数异常下降 → exit 1", _short),
+    ("日期分布异常 → exit 1", _gapped),
+):
+    run_injected(
+        "fetch_cot",
+        f"mod.fetch_api = lambda limit=52: json.loads({json.dumps(_rows)!r})",
+        1, "cot.json", "cot-", _label,
+    )
+
 run_injected(
     "fetch_cot",
     f"mod.fetch_api = lambda limit=52: json.loads({GOOD_ROWS!r})\n"
@@ -188,6 +221,84 @@ run_injected(
 tmp = os.path.join(DATA, "cot.json.injectiontest")
 if os.path.exists(tmp):
     os.remove(tmp)
+
+
+# ── COT workflow：真实 exit code 输出与 0/1/2 闸门 ──────────────────────
+print("\n===== COT workflow exit-code guard =====")
+
+WORKFLOW = os.path.join(ROOT, ".github", "workflows", "update-cot.yml")
+with open(WORKFLOW, encoding="utf-8") as f:
+    workflow_lines = f.read().splitlines()
+
+
+def workflow_step(name):
+    marker = f"      - name: {name}"
+    start = next((i for i, line in enumerate(workflow_lines)
+                  if line == marker), None)
+    if start is None:
+        return ""
+    end = next((i for i in range(start + 1, len(workflow_lines))
+                if workflow_lines[i].startswith("      - name: ")),
+               len(workflow_lines))
+    return "\n".join(workflow_lines[start:end])
+
+
+cot_step = workflow_step("Run fetch_cot.py")
+report_step = workflow_step("Report failures")
+cot_run_lines = [line.strip() for line in cot_step.splitlines()]
+required_run = [
+    "set +e",
+    "python fetch_cot.py",
+    'echo "code=$?" >> "$GITHUB_OUTPUT"',
+    "exit 0",
+]
+positions = [cot_run_lines.index(line) if line in cot_run_lines else -1
+             for line in required_run]
+check("workflow COT step 存在且 id=cot",
+      bool(cot_step) and "        id: cot" in cot_step)
+check("workflow COT step 按顺序捕获真实进程码",
+      all(pos >= 0 for pos in positions) and positions == sorted(positions),
+      f"positions={positions}")
+check("workflow COT 闸门不再读取 steps.cot.outcome",
+      "steps.cot.outcome" not in report_step)
+
+case_marker = 'case "${{ steps.cot.outputs.code }}" in'
+case_lines = []
+in_case = False
+for line in report_step.splitlines():
+    stripped = line.strip()
+    if stripped == case_marker:
+        in_case = True
+        continue
+    if in_case and stripped == "esac":
+        break
+    if in_case:
+        case_lines.append(stripped)
+
+branches = {}
+for line in case_lines:
+    if ")" not in line:
+        continue
+    label, body = line.split(")", 1)
+    branches[label] = body
+
+check("workflow COT case 明确覆盖 0/1/2/*",
+      {"0|\"\"", "1", "2", "*"}.issubset(branches), branches)
+check("workflow COT exit 1 调用 fail 并要求人工介入",
+      "fail " in branches.get("1", "")
+      and "人工介入" in branches.get("1", ""), branches.get("1"))
+check("workflow COT exit 2 只 warning、不调用 fail",
+      "::warning" in branches.get("2", "")
+      and "fail " not in branches.get("2", ""), branches.get("2"))
+check("workflow COT exit 2 明确保留旧文件并自动重试",
+      "cot.json 保持上一份" in branches.get("2", "")
+      and "下一次自动任务重试" in branches.get("2", ""), branches.get("2"))
+check("workflow COT exit 0/空输出不报错",
+      "fail " not in branches.get('0|""', "")
+      and "::warning" not in branches.get('0|""', ""),
+      branches.get('0|""'))
+check("workflow COT 未预期 exit code 调用 fail",
+      "fail " in branches.get("*", ""), branches.get("*"))
 
 
 # ── 2. fetch_gold：全 null ───────────────────────────────────────────────

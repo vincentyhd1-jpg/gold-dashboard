@@ -17,6 +17,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone, date as date_cls
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
 
@@ -41,7 +42,49 @@ MAX_LATEST_AGE_DAYS = 21
 MAX_WEEK_GAP_DAYS = 14
 
 
-def fetch_api(limit: int = 52) -> list[dict]:
+class CotFetchFailure(RuntimeError):
+    """上游暂时不可用；调用方应保留旧文件并返回 exit 2。"""
+
+    def __init__(self, message: str, *, url: str = API_URL,
+                 status: int | None = None, raw: bytes | None = None):
+        super().__init__(message)
+        self.url = url
+        self.status = status
+        self.raw = raw
+
+
+class CotFormatFailure(RuntimeError):
+    """已取得响应但格式确定性异常；调用方应留证并返回 exit 1。"""
+
+    def __init__(self, message: str, *, url: str = API_URL,
+                 status: int | None = None, raw: bytes | None = None):
+        super().__init__(message)
+        self.url = url
+        self.status = status
+        self.raw = raw
+
+
+def _looks_temporary_response(raw: bytes | None) -> bool:
+    """识别明显的临时错误页/WAF 响应；不把普通 schema 变化降级成 exit 2。"""
+    text = (raw or b"")[:8192].decode("utf-8", errors="ignore").lower()
+    markers = (
+        "temporarily unavailable", "service unavailable", "bad gateway",
+        "gateway timeout", "too many requests", "rate limit",
+        "cloudflare", "attention required", "access denied", "captcha",
+        "web application firewall",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _http_is_temporary(status: int | None, raw: bytes | None) -> bool:
+    return (
+        status in {403, 408, 425, 429}
+        or (status is not None and 500 <= status <= 599)
+        or _looks_temporary_response(raw)
+    )
+
+
+def fetch_api(limit: int = 52, *, opener=None) -> list[dict]:
     params = urlencode({
         "cftc_contract_market_code": GOLD_CODE,
         "$order": "report_date_as_yyyy_mm_dd DESC",
@@ -51,8 +94,62 @@ def fetch_api(limit: int = 52) -> list[dict]:
         "User-Agent": "gold-dashboard/1.0",
         "Accept":     "application/json",
     })
-    with urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    opener = opener or urlopen
+    try:
+        with opener(req, timeout=30) as resp:
+            status = getattr(resp, "status", None)
+            if status is None:
+                status = resp.getcode()
+            raw = resp.read()
+    except HTTPError as exc:
+        try:
+            raw = exc.read()
+        except Exception:
+            raw = b""
+        failure_cls = (CotFetchFailure if _http_is_temporary(
+            exc.code, raw) else CotFormatFailure)
+        raise failure_cls(
+            f"HTTP {exc.code}: {exc.reason}", url=exc.geturl() or req.full_url,
+            status=exc.code, raw=raw,
+        ) from exc
+    except (URLError, TimeoutError, ConnectionError, OSError) as exc:
+        raise CotFetchFailure(
+            f"{type(exc).__name__}: {exc}", url=req.full_url,
+        ) from exc
+
+    if status != 200:
+        failure_cls = (CotFetchFailure if _http_is_temporary(
+            status, raw) else CotFormatFailure)
+        raise failure_cls(
+            f"HTTP {status}", url=req.full_url, status=status, raw=raw,
+        )
+
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        if _looks_temporary_response(raw):
+            raise CotFetchFailure(
+                "HTTP 200 但返回临时错误页/WAF 响应",
+                url=req.full_url, status=status, raw=raw,
+            ) from exc
+        raise CotFormatFailure(
+            "HTTP 200 响应不是有效 JSON", url=req.full_url,
+            status=status, raw=raw,
+        ) from exc
+
+    if not isinstance(payload, list) or not all(
+            isinstance(row, dict) for row in payload):
+        raw_text = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        if _looks_temporary_response(raw_text):
+            raise CotFetchFailure(
+                "API 返回临时服务错误对象", url=req.full_url,
+                status=status, raw=raw,
+            )
+        raise CotFormatFailure(
+            "API JSON 顶层必须是对象数组", url=req.full_url,
+            status=status, raw=raw,
+        )
+    return payload
 
 
 def parse_row(row: dict) -> dict | None:
@@ -167,7 +264,8 @@ def validate_cot(weekly: list[dict],
     return failures
 
 
-def quarantine_cot(weekly: list[dict], raw, failures: list[str]) -> str:
+def quarantine_cot(weekly: list[dict], raw, failures: list[str],
+                   quarantine_dir: str = QUARANTINE_DIR) -> str:
     """
     坏数据与原始 API 响应存入隔离区，data/cot.json 保持上一份不被覆盖。
 
@@ -184,7 +282,7 @@ def quarantine_cot(weekly: list[dict], raw, failures: list[str]) -> str:
     stamp = (weekly[-1]["date"] if weekly
              else datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     return quarantine_write(
-        QUARANTINE_DIR, "cot", stamp,
+        quarantine_dir, "cot", stamp,
         reason=failures,
         payload={"parsed_weekly": weekly},
         raw=json.dumps(raw, ensure_ascii=False, indent=2).encode("utf-8"),
@@ -193,6 +291,38 @@ def quarantine_cot(weekly: list[dict], raw, failures: list[str]) -> str:
         # 的撞名断言拦住，这里显式错开）。
         raw_ext="raw.json",
     )
+
+
+def quarantine_format_failure(exc: CotFormatFailure,
+                              quarantine_dir: str = QUARANTINE_DIR) -> str:
+    """保存已收到但无法按 COT API 契约解释的响应，供人工排查。"""
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
+    return quarantine_write(
+        quarantine_dir, "cot-format", stamp,
+        reason=[str(exc)],
+        payload={
+            "category": "format",
+            "source": exc.url,
+            "http_status": exc.status,
+        },
+        raw=exc.raw,
+        raw_ext="raw.txt" if exc.raw is not None else None,
+    )
+
+
+def report_format_failure(exc: CotFormatFailure,
+                          quarantine_dir: str = QUARANTINE_DIR) -> int:
+    """记录确定性响应/解析失败，保留旧文件并返回 exit 1。"""
+    status = "unknown" if exc.status is None else str(exc.status)
+    path = quarantine_format_failure(exc, quarantine_dir)
+    print("  COT 响应格式失败，cot.json 保持上一份：")
+    print(f"    category=format source={exc.url} status={status}")
+    print(f"    error={exc}")
+    print(f"  隔离区：{path}")
+    print("::error title=COT 响应格式失败::"
+          "已取得响应但无法按预期 API 契约解析；cot.json 未更新。"
+          f"source={exc.url} status={status} error={exc}")
+    return 1
 
 
 def build_payload(weekly: list[dict]) -> dict:
@@ -223,31 +353,52 @@ def build_payload(weekly: list[dict]) -> dict:
     }
 
 
-def main():
-    if "--test" in sys.argv:
-        run_tests()
-        return
-
+def run_once(*, fetcher=None, out_path: str | None = None,
+             quarantine_dir: str | None = None,
+             today: date_cls | None = None) -> int:
+    """执行一次采集并返回稳定的 0/1/2；不让已分类错误冒泡成 traceback。"""
+    fetcher = fetcher or fetch_api
+    out_path = out_path or OUT_PATH
+    quarantine_dir = quarantine_dir or QUARANTINE_DIR
     # 清理上次崩溃留下的临时文件（只清 cot.json 自己的，见 basename 隔离）
-    swept = sweep_stale_tmp(OUT_PATH)
+    swept = sweep_stale_tmp(out_path)
     if swept:
         print(f"  清理上次残留的临时文件 {len(swept)} 个")
 
     print("正在请求 CFTC Socrata API...")
-    raw = fetch_api(limit=52)
+    try:
+        raw = fetcher(limit=52)
+    except CotFetchFailure as exc:
+        status = "unknown" if exc.status is None else str(exc.status)
+        print("  COT 上游暂时不可达，cot.json 保持上一份：")
+        print(f"    category=network source={exc.url} status={status}")
+        print(f"    error={exc}")
+        print("::warning title=COT 上游暂时不可达::"
+              "本次未更新 cot.json，等待下一次自动任务重试；"
+              f"source={exc.url} status={status} error={exc}")
+        return 2
+    except CotFormatFailure as exc:
+        return report_format_failure(exc, quarantine_dir)
     print(f"  获取到 {len(raw)} 条原始记录")
 
-    weekly = sorted(
-        filter(None, (parse_row(r) for r in raw)),
-        key=lambda r: r["date"],
-    )
+    try:
+        weekly = sorted(
+            filter(None, (parse_row(r) for r in raw)),
+            key=lambda r: r["date"],
+        )
+    except (TypeError, ValueError, OverflowError) as exc:
+        failure = CotFormatFailure(
+            f"API 行字段无法解析: {type(exc).__name__}: {exc}",
+            raw=json.dumps(raw, ensure_ascii=False).encode("utf-8"),
+        )
+        return report_format_failure(failure, quarantine_dir)
 
     # ── 校验：坏数据不得写入 cot.json ──────────────────────────────────
     # 必须在 cot_index() 之前 —— 它会把退化输入粉饰掉
     print("校验中...")
-    failures = validate_cot(weekly)
+    failures = validate_cot(weekly, today)
     if failures:
-        path = quarantine_cot(weekly, raw, failures)
+        path = quarantine_cot(weekly, raw, failures, quarantine_dir)
         print("  校验失败，已隔离，data/cot.json 保持上一份可用数据：")
         for f in failures:
             print(f"    - {f}")
@@ -255,7 +406,7 @@ def main():
         print(f"::error title=COT 采集校验失败::"
               f"未通过校验，已隔离；cot.json 未更新。"
               f"原因：{'；'.join(failures)}")
-        sys.exit(1)
+        return 1
     print(f"  5 项校验通过（全期归零 / 单期归零 / OI 非正 / 期数 / 日期分布）")
 
     data = build_payload(weekly)
@@ -273,13 +424,14 @@ def main():
     #
     # 信封元数据全部排除：generated_at 自比自永远不等；coverage/derived_from
     # 由 data 派生，比它等于重复比 data；warnings/info 是本次运行的旁注。
-    raw = read_json_or(OUT_PATH, None) if os.path.exists(OUT_PATH) else None
-    old = unwrap(raw, strict=True) if raw is not None else None
+    old_envelope = (read_json_or(out_path, None)
+                    if os.path.exists(out_path) else None)
+    old = unwrap(old_envelope, strict=True) if old_envelope is not None else None
     if old == data:
         # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
         print(f"  {latest['date']} 业务数据与磁盘上逐字段相同，跳过写入"
               f"（generated_at 不刷新）")
-        return
+        return 0
 
     payload = envelope(
         source="cftc_cot",
@@ -288,9 +440,9 @@ def main():
         dates=[r["date"] for r in weekly],
     )
     # 原子写：崩在中途只留临时文件，cot.json 保持完整旧版
-    atomic_write_json(OUT_PATH, payload, compact=False)
+    atomic_write_json(out_path, payload, compact=False)
 
-    print(f"已保存 {len(weekly)} 条数据到 {OUT_PATH}（信封格式）")
+    print(f"已保存 {len(weekly)} 条数据到 {out_path}（信封格式）")
     print(
         f"最新一期：{latest['date']}"
         f"  管理基金净多={latest['mf_net']:+,}"
@@ -298,12 +450,24 @@ def main():
         f"  COT Index={'--' if mf_index is None else str(mf_index) + '%'}"
         f"  商业 Index={'--' if comm_index is None else str(comm_index) + '%'}"
     )
+    return 0
+
+
+def main() -> int:
+    if "--test" in sys.argv:
+        run_tests()
+        return 0
+    return run_once()
 
 
 # ── 校验逻辑单元测试 ──────────────────────────────────────────────────────────
 
 def run_tests():
     """python fetch_cot.py --test（不联网）"""
+    import hashlib
+    import io
+    import tempfile
+
     passed = failed = 0
 
     def check(name, cond, detail=""):
@@ -413,10 +577,161 @@ def run_tests():
           build_payload(good)
           != build_payload(good[:-1] + [dict(good[-1], mf_net=777777)]))
 
+    print("\n[fetch_api 错误分类]")
+
+    class FakeResponse:
+        def __init__(self, body: bytes, status=200):
+            self.body = body
+            self.status = status
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return self.body
+
+        def getcode(self):
+            return self.status
+
+    def raised_by(opener):
+        try:
+            fetch_api(opener=opener)
+        except (CotFetchFailure, CotFormatFailure) as exc:
+            return exc
+        return None
+
+    normal = fetch_api(opener=lambda _req, timeout=30: FakeResponse(
+        b'[{"report_date_as_yyyy_mm_dd":"2026-07-21"}]'))
+    check("正常 HTTP JSON 数组 → fetch 成功", isinstance(normal, list), normal)
+
+    def timeout_opener(_req, timeout=30):
+        raise TimeoutError("timed out")
+
+    def urlerror_opener(_req, timeout=30):
+        raise URLError("connection refused")
+
+    def http_error_opener(code, body=b'{"error":"temporary"}'):
+        def opener(req, timeout=30):
+            raise HTTPError(req.full_url, code, "upstream error",
+                            {"Content-Type": "application/json"},
+                            io.BytesIO(body))
+        return opener
+
+    timeout_exc = raised_by(timeout_opener)
+    check("timeout → CotFetchFailure",
+          isinstance(timeout_exc, CotFetchFailure), type(timeout_exc).__name__)
+    connection_exc = raised_by(urlerror_opener)
+    check("URLError/连接异常 → CotFetchFailure",
+          isinstance(connection_exc, CotFetchFailure),
+          type(connection_exc).__name__)
+    for status in (500, 429, 403):
+        exc = raised_by(http_error_opener(status))
+        check(f"HTTP {status} → CotFetchFailure 且保留 status",
+              isinstance(exc, CotFetchFailure) and exc.status == status,
+              repr(exc))
+
+    html_exc = raised_by(lambda _req, timeout=30: FakeResponse(
+        b"<html><title>Service Unavailable</title></html>", 200))
+    check("HTTP 200 临时错误页 → CotFetchFailure",
+          isinstance(html_exc, CotFetchFailure), type(html_exc).__name__)
+    malformed_exc = raised_by(lambda _req, timeout=30: FakeResponse(
+        b"not-json", 200))
+    check("HTTP 200 非 JSON 且非临时错误页 → CotFormatFailure",
+          isinstance(malformed_exc, CotFormatFailure),
+          type(malformed_exc).__name__)
+    schema_exc = raised_by(lambda _req, timeout=30: FakeResponse(
+        b'{"rows": []}'))
+    check("HTTP 200 JSON 顶层 schema 变化 → CotFormatFailure",
+          isinstance(schema_exc, CotFormatFailure), type(schema_exc).__name__)
+
+    print("\n[run_once exit code 与旧文件保护]")
+
+    def file_sha(path):
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+
+    def verify_preserved(name, fetcher, expected_code):
+        with tempfile.TemporaryDirectory() as td:
+            out_path = os.path.join(td, "cot.json")
+            quar_dir = os.path.join(td, "quarantine")
+            with open(out_path, "wb") as f:
+                f.write(b'C7 sentinel old cot.json\n')
+            before = file_sha(out_path)
+            code = run_once(fetcher=fetcher, out_path=out_path,
+                            quarantine_dir=quar_dir, today=TODAY)
+            after = file_sha(out_path)
+            check(f"{name} → exit {expected_code}", code == expected_code,
+                  f"实际 exit={code}")
+            check(f"{name} → 旧 cot.json SHA-256 不变", before == after,
+                  f"before={before} after={after}")
+
+    verify_preserved(
+        "网络 timeout",
+        lambda limit=52: fetch_api(limit, opener=timeout_opener), 2)
+    verify_preserved(
+        "URLError/连接异常",
+        lambda limit=52: fetch_api(limit, opener=urlerror_opener), 2)
+    verify_preserved(
+        "HTTP 500",
+        lambda limit=52: fetch_api(limit, opener=http_error_opener(500)), 2)
+    verify_preserved(
+        "HTTP 429",
+        lambda limit=52: fetch_api(limit, opener=http_error_opener(429)), 2)
+    verify_preserved(
+        "HTTP 403/WAF",
+        lambda limit=52: fetch_api(limit, opener=http_error_opener(403)), 2)
+    verify_preserved(
+        "HTTP 成功但 JSON 顶层格式错误",
+        lambda limit=52: fetch_api(limit, opener=lambda _req, timeout=30:
+                                   FakeResponse(b'{"rows": []}')), 1)
+
+    def api_rows(weeks):
+        rows = []
+        for w in weeks:
+            mf_long = 100000 + max(w["mf_net"], 0)
+            mf_short = mf_long - w["mf_net"]
+            prod_long = 100000
+            prod_short = prod_long - w["comm_net"]
+            rows.append({
+                "report_date_as_yyyy_mm_dd": w["date"],
+                "m_money_positions_long_all": str(mf_long),
+                "m_money_positions_short_all": str(mf_short),
+                "prod_merc_positions_long": str(prod_long),
+                "prod_merc_positions_short": str(prod_short),
+                "swap_positions_long_all": "0",
+                "swap__positions_short_all": "0",
+                "open_interest_all": str(w["open_interest"]),
+            })
+        return rows
+
+    verify_preserved(
+        "成功 JSON 但关键字段全丢失",
+        lambda limit=52: [
+            {"report_date_as_yyyy_mm_dd": w["date"]} for w in good
+        ], 1)
+    malformed_numeric = api_rows(good)
+    malformed_numeric[-1]["open_interest_all"] = "not-a-number"
+    verify_preserved(
+        "成功 JSON 但数值字段无法解析",
+        lambda limit=52: malformed_numeric, 1)
+    bad_oi_weeks = good[:-1] + [dict(good[-1], open_interest=0)]
+    verify_preserved(
+        "最新 open_interest <= 0",
+        lambda limit=52: api_rows(bad_oi_weeks), 1)
+    verify_preserved(
+        "有效周数异常下降",
+        lambda limit=52: api_rows(good[-30:]), 1)
+    verify_preserved(
+        "日期分布异常",
+        lambda limit=52: api_rows(gapped), 1)
+
     print(f"\n{passed} passed, {failed} failed")
     if failed:
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
