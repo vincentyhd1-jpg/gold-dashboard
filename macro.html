@@ -110,7 +110,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
 
     <div class="card full" id="debtPanel">
       <div class="card-title">美国联邦债务</div>
-      <div class="card-sub">日频总额 / 公众持有 / 政府内部持有及低频结构、外国持有、GDP 使用左轴（USD bn）；正式债务 / GDP 继续使用季度口径与右轴（%）。所有缺口均不填充。</div>
+      <div class="card-sub">联邦债务总额按日更新；债务构成、外国持有、GDP 与债务/GDP 按其官方发布频率更新。低频数据不做日频填充。</div>
       <div class="debt-toolbar">
         <button type="button" id="debtResetZoom" disabled>重置缩放</button>
         <span class="debt-zoom-hint" id="debtZoomHint">鼠标左键拖框可缩放时间轴</span>
@@ -234,7 +234,7 @@ function renderCPI(rows) {
   ]);
 }
 
-function debtOverviewOptions() {
+function debtOverviewOptions(tooltipLookup) {
   const options = chartOptions();
   const yStyle = options.scales.y;
   delete options.scales.y;
@@ -280,13 +280,15 @@ function debtOverviewOptions() {
     boxHeight: 8,
     sort: (a, b) => a.datasetIndex - b.datasetIndex,
   };
+  // Mixed-frequency tooltip is keyed only by the resolved X date, not by the
+  // active dataset.  As-of lookups never write values back into chart data.
+  options.interaction = { mode: 'nearest', axis: 'x', intersect: false };
+  options.plugins.tooltip.mode = 'nearest';
+  options.plugins.tooltip.intersect = false;
   options.plugins.tooltip.callbacks = {
-    label: ctx => ctx.parsed.y === null
-      ? '  ' + ctx.dataset.label + ': --'
-      : '  ' + ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString('en-US', {
-          minimumFractionDigits: ctx.dataset.yAxisID === 'yPct' ? 1 : 0,
-          maximumFractionDigits: ctx.dataset.yAxisID === 'yPct' ? 1 : 1,
-        }) + (ctx.dataset.yAxisID === 'yPct' ? '%' : ' USD bn'),
+    title: items => items[0]?.label || '',
+    beforeBody: items => tooltipLookup.linesFor(items[0]?.label || ''),
+    label: () => null,
   };
   const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   options.plugins.zoom = {
@@ -331,6 +333,64 @@ function _firstRealDate(rows, field) {
   return null;
 }
 
+function _latestAtOrBefore(rows, date, predicate) {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].date <= date && predicate(rows[i])) return rows[i];
+  }
+  return null;
+}
+
+function _formatDebtAmount(value) {
+  return value === null || value === undefined
+    ? '--'
+    : Number(value).toLocaleString('en-US', { minimumFractionDigits: 1,
+        maximumFractionDigits: 1 }) + ' USD bn';
+}
+
+function _formatDebtRatio(value) {
+  return value === null || value === undefined
+    ? '--'
+    : Number(value).toLocaleString('en-US', { minimumFractionDigits: 1,
+        maximumFractionDigits: 1 }) + '%';
+}
+
+function buildDebtTooltipLookup(quarterlyRows, dailyRows) {
+  const dailyByDate = new Map(dailyRows.map(row => [row.date, row]));
+  const firstDailyTotal = _firstRealDate(dailyRows, 'total_bn');
+  const completeStructure = row => ['intragov_bn', 'domestic_public_bn', 'foreign_bn']
+    .every(field => row[field] !== null && row[field] !== undefined);
+  return {
+    linesFor(date) {
+      const exactDaily = dailyByDate.get(date);
+      const totalRow = firstDailyTotal && date >= firstDailyTotal
+        ? (exactDaily?.total_bn !== null && exactDaily?.total_bn !== undefined
+            ? exactDaily : null)
+        : _latestAtOrBefore(quarterlyRows, date,
+            row => row.total_bn !== null && row.total_bn !== undefined);
+      const structureRow = _latestAtOrBefore(quarterlyRows, date, completeStructure);
+      const gdpRow = _latestAtOrBefore(quarterlyRows, date,
+        row => row.gdp_bn !== null && row.gdp_bn !== undefined);
+      const ratioRow = _latestAtOrBefore(quarterlyRows, date,
+        row => row.debt_gdp_pct !== null && row.debt_gdp_pct !== undefined);
+      const totalAsOf = totalRow
+        ? (firstDailyTotal && totalRow.date >= firstDailyTotal
+            ? totalRow.date : _quarterLabel(totalRow.date)) : '--';
+      const structureAsOf = structureRow ? _quarterLabel(structureRow.date) : '--';
+      const gdpAsOf = gdpRow ? _quarterLabel(gdpRow.date) : '--';
+      const ratioAsOf = ratioRow ? _quarterLabel(ratioRow.date) : '--';
+      return [
+        `联邦债务总额（截至 ${totalAsOf}）：${_formatDebtAmount(totalRow?.total_bn)}`,
+        `债务构成（截至 ${structureAsOf}）`,
+        `政府内部持有：${_formatDebtAmount(structureRow?.intragov_bn)}`,
+        `国内公众持有：${_formatDebtAmount(structureRow?.domestic_public_bn)}`,
+        `外国投资者持有：${_formatDebtAmount(structureRow?.foreign_bn)}`,
+        `美国名义 GDP（截至 ${gdpAsOf}）：${_formatDebtAmount(gdpRow?.gdp_bn)}`,
+        `联邦债务/GDP（截至 ${ratioAsOf}）：${_formatDebtRatio(ratioRow?.debt_gdp_pct)}`,
+      ];
+    },
+  };
+}
+
 function buildDebtSeries(quarterlyRows, dailyRows) {
   const quarterlyByDate = new Map(quarterlyRows.map(row => [row.date, row]));
   const dailyByDate = new Map(dailyRows.map(row => [row.date, row]));
@@ -353,10 +413,6 @@ function buildDebtSeries(quarterlyRows, dailyRows) {
     const row = quarterlyByDate.get(date);
     return row && row[field] !== undefined ? row[field] : null;
   });
-  const quarterly = field => labels.map(date => {
-    const row = quarterlyByDate.get(date);
-    return row && row[field] !== undefined ? row[field] : null;
-  });
   // Low-frequency lines use only their real observations.  Keeping thousands
   // of daily-union null entries between quarterly values with spanGaps:false
   // would make every value an isolated, invisible point.  Object points let
@@ -364,7 +420,12 @@ function buildDebtSeries(quarterlyRows, dailyRows) {
   const quarterlyPoints = field => quarterlyRows
     .filter(row => row[field] !== null && row[field] !== undefined)
     .map(row => ({ x: row.date, y: row[field] }));
-  return { labels, hybrid, quarterly, quarterlyPoints, firstDaily };
+  const completeStructureRows = quarterlyRows.filter(row =>
+    ['intragov_bn', 'domestic_public_bn', 'foreign_bn']
+      .every(field => row[field] !== null && row[field] !== undefined));
+  const structurePoints = field => completeStructureRows
+    .map(row => ({ x: row.date, y: row[field] }));
+  return { labels, hybrid, quarterlyPoints, structurePoints, firstDaily };
 }
 
 function syncDebtResetButton(chart = debtOverviewChart) {
@@ -381,7 +442,7 @@ function resetDebtZoom() {
 }
 
 function renderDebt(quarterlyRows, dailyRows) {
-  const { labels, hybrid, quarterly, quarterlyPoints } = buildDebtSeries(
+  const { labels, hybrid, quarterlyPoints, structurePoints } = buildDebtSeries(
     quarterlyRows, dailyRows);
   const amountAxis = 'yAmount';
   const ratioAxis = 'yPct';
@@ -393,46 +454,33 @@ function renderDebt(quarterlyRows, dailyRows) {
       labels,
       datasets: [
         {
-          label: '结构快照 · 政府内部', data: quarterly('intragov_bn'),
+          label: '政府内部持有', data: structurePoints('intragov_bn'),
           type: 'bar', backgroundColor: 'rgba(88,166,255,.48)',
-          stack: structureStack, yAxisID: amountAxis, sourceField: 'structure_intragov_bn',
+          stack: structureStack, yAxisID: amountAxis, sourceField: 'intragov_bn',
           sourceFrequency: 'quarterly',
           order: 3, pointStyle: 'rect', borderWidth: 0,
+          barThickness: 6, maxBarThickness: 8,
         },
         {
-          label: '结构快照 · 本国公众', data: quarterly('domestic_public_bn'),
+          label: '国内公众持有', data: structurePoints('domestic_public_bn'),
           type: 'bar', backgroundColor: 'rgba(163,113,247,.48)',
-          stack: structureStack, yAxisID: amountAxis, sourceField: 'structure_domestic_public_bn',
+          stack: structureStack, yAxisID: amountAxis, sourceField: 'domestic_public_bn',
           sourceFrequency: 'quarterly',
           order: 3, pointStyle: 'rect', borderWidth: 0,
+          barThickness: 6, maxBarThickness: 8,
         },
         {
-          label: '结构快照 · 外国持有', data: quarterly('foreign_bn'),
+          label: '外国投资者持有', data: structurePoints('foreign_bn'),
           type: 'bar', backgroundColor: 'rgba(245,200,66,.48)',
-          stack: structureStack, yAxisID: amountAxis, sourceField: 'structure_foreign_bn',
+          stack: structureStack, yAxisID: amountAxis, sourceField: 'foreign_bn',
           sourceFrequency: 'quarterly',
           order: 3, pointStyle: 'rect', borderWidth: 0,
+          barThickness: 6, maxBarThickness: 8,
         },
         lineDataset('联邦债务总额', hybrid('total_bn'), COLORS.red, {
-          type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'daily_total_bn',
+          type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'total_bn',
           sourceFrequency: 'hybrid_quarterly_then_daily',
           stack: 'totalDebtLine', borderWidth: 2.5, tension: 0, pointStyle: 'line',
-        }),
-        lineDataset('公众持有债务', hybrid('public_bn'), COLORS.blue, {
-          type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'daily_public_bn',
-          sourceFrequency: 'hybrid_quarterly_then_daily',
-          stack: 'publicDebtLine', borderWidth: 1.5, tension: 0, pointStyle: 'line',
-        }),
-        lineDataset('政府内部持有', hybrid('intragov_bn'), '#a371f7', {
-          type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'daily_intragov_bn',
-          sourceFrequency: 'hybrid_quarterly_then_daily',
-          stack: 'intragovDebtLine', borderWidth: 1.5, tension: 0, pointStyle: 'line',
-        }),
-        lineDataset('外国持有（真实季度观测）', quarterlyPoints('foreign_bn'), COLORS.gold, {
-          type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'foreign_bn',
-          sourceFrequency: 'quarterly', stack: 'foreignObservationLine',
-          borderWidth: 1, pointRadius: 2, pointHoverRadius: 4, tension: 0,
-          pointStyle: 'circle',
         }),
         lineDataset('美国名义 GDP', quarterlyPoints('gdp_bn'), COLORS.green, {
           type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'gdp_bn',
@@ -448,7 +496,7 @@ function renderDebt(quarterlyRows, dailyRows) {
         }),
       ],
     },
-    options: debtOverviewOptions(),
+    options: debtOverviewOptions(buildDebtTooltipLookup(quarterlyRows, dailyRows)),
   });
   // zoom mode=x 之外，还要固定两条 Y 轴的全历史范围；否则 Chart.js 会在 X
   // 区间变化后自动重算 Y，看起来像同时缩放了纵轴。

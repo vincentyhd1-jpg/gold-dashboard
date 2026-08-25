@@ -135,21 +135,11 @@ const state = await page.evaluate(() => {
     const chart = Chart.getChart(document.getElementById(id));
     if (!chart) return null;
     const points = chart.getDatasetMeta(0).data.filter(p => !p.skip);
-    const tooltipLabel = chart.options.plugins.tooltip.callbacks?.label;
-    const tooltipSamples = id === 'debtOverviewChart' && typeof tooltipLabel === 'function'
-      ? {
-          amount: tooltipLabel({ parsed: { y: 12345.6 },
-            dataset: { label: '联邦债务总额', yAxisID: 'yAmount' } }),
-          pct: tooltipLabel({ parsed: { y: 122.56 },
-            dataset: { label: '联邦债务 / GDP', yAxisID: 'yPct' } }),
-          missing: tooltipLabel({ parsed: { y: null },
-            dataset: { label: '外国持有', yAxisID: 'yAmount' } }),
-        }
-      : null;
     return {
       labels: chart.data.labels,
       datasets: chart.data.datasets.map((d, index) => {
         const meta = chart.getDatasetMeta(index);
+        const datasetType = d.type || chart.config.type;
         const visiblePoints = meta.data.filter(point => !point.skip
           && Number.isFinite(point.x) && Number.isFinite(point.y));
         const visibleSegments = (meta.dataset?.segments || [])
@@ -168,8 +158,18 @@ const state = await page.evaluate(() => {
           yAxisID: d.yAxisID ?? null,
           sourceField: d.sourceField ?? null,
           sourceFrequency: d.sourceFrequency ?? null,
-          type: d.type || chart.config.type,
+          type: datasetType,
           data: Array.from(d.data),
+          barThickness: d.barThickness ?? null,
+          maxBarThickness: d.maxBarThickness ?? null,
+          elementGeometry: datasetType === 'bar' ? meta.data.map((element, pointIndex) => ({
+            date: d.data[pointIndex]?.x ?? null,
+            x: element.x,
+            y: element.y,
+            base: element.base,
+            width: element.width,
+            height: Math.abs(element.base - element.y),
+          })) : [],
           visiblePointCount: visiblePoints.length,
           visibleSegmentCount: visibleSegments.length,
           segmentVisiblePointCount: segmentPointIndexes.size,
@@ -190,7 +190,6 @@ const state = await page.evaluate(() => {
         min: s.min,
         max: s.max,
       })),
-      tooltipSamples,
       legendLabels: chart.legend?.legendItems?.map(item => item.text) || [],
       firstYs: points.slice(0, 5).map(p => p.y),
       chartAreaBottom: chart.chartArea.bottom,
@@ -258,25 +257,28 @@ check('Fed 图 3 条 dataset', state.fed.datasets.length === 3,
 check('CPI 图 2 条 dataset', state.cpi.datasets.length === 2,
   JSON.stringify(state.cpi.datasets.map(d => d.label)));
 
-// —— C14 mixed-frequency debt contract / stack / dual axis ——
+// —— C15 six-dataset mixed-frequency debt contract / stack / dual axis ——
 const debtByField = Object.fromEntries(state.debtOverview.datasets.map(d => [d.sourceField, d]));
 const expectedDebtFields = [
-  'structure_intragov_bn', 'structure_domestic_public_bn', 'structure_foreign_bn',
-  'daily_total_bn', 'daily_public_bn', 'daily_intragov_bn',
-  'foreign_bn', 'gdp_bn', 'debt_gdp_pct',
+  'intragov_bn', 'domestic_public_bn', 'foreign_bn',
+  'total_bn', 'gdp_bn', 'debt_gdp_pct',
 ];
 const expectedDebtLabels = [
-  '结构快照 · 政府内部', '结构快照 · 本国公众', '结构快照 · 外国持有',
-  '联邦债务总额', '公众持有债务', '政府内部持有',
-  '外国持有（真实季度观测）', '美国名义 GDP', '联邦债务 / GDP（季度）',
+  '政府内部持有', '国内公众持有', '外国投资者持有',
+  '联邦债务总额', '美国名义 GDP', '联邦债务 / GDP（季度）',
 ];
-check('债务总览恰有九个 mixed-frequency dataset',
+check('债务总览恰有六个用户可见 dataset',
   JSON.stringify(state.debtOverview.datasets.map(d => d.sourceField)) === JSON.stringify(expectedDebtFields)
     && JSON.stringify(state.debtOverview.datasets.map(d => d.label)) === JSON.stringify(expectedDebtLabels),
   JSON.stringify(state.debtOverview.datasets.map(d => ({ label: d.label, field: d.sourceField }))));
-check('债务图例顺序与 mixed-frequency 语义一致',
+check('债务图例恰为六项用户文案且无结构快照术语',
   JSON.stringify(state.debtOverview.legendLabels) === JSON.stringify(expectedDebtLabels),
   JSON.stringify(state.debtOverview.legendLabels));
+check('不再显示公众/政府内部日频折线或 foreign 独立折线',
+  !state.debtOverview.datasets.some(dataset =>
+    ['daily_public_bn', 'daily_intragov_bn'].includes(dataset.sourceField)
+      || (dataset.sourceField === 'foreign_bn' && dataset.type === 'line')),
+  JSON.stringify(state.debtOverview.datasets.map(d => ({ field: d.sourceField, type: d.type }))));
 check('Treasury 日频信封为 strict schema v0 daily', dailyDebtFile.schema_version === 0
   && dailyDebtFile.freq === 'daily' && dailyDebtFile.date_field === 'date'
   && dailyDebtFile.coverage.count === dailyDebtRows.length,
@@ -298,40 +300,48 @@ check('1990 长历史保留且日频从官方起点接入',
     && debtRows.filter(r => r.date < dailyDebtFile.coverage.first).length > 0,
   JSON.stringify({ firstLabel: state.debtOverview.labels[0], dailyFirst: dailyDebtFile.coverage.first }));
 
-const firstDailyByField = Object.fromEntries(['total_bn', 'public_bn', 'intragov_bn'].map(field => [
-  field, dailyDebtRows.find(r => r[field] !== null)?.date || null,
-]));
+const firstDailyTotal = dailyDebtRows.find(r => r.total_bn !== null)?.date || null;
 const expectedHybrid = field => expectedDates.map(date => {
-  if (firstDailyByField[field] && date >= firstDailyByField[field]) {
+  if (firstDailyTotal && date >= firstDailyTotal) {
     return dailyByDate.get(date)?.[field] ?? null;
   }
   return quarterlyByDate.get(date)?.[field] ?? null;
 });
-const expectedQuarterly = field => expectedDates.map(date => quarterlyByDate.get(date)?.[field] ?? null);
 const expectedQuarterlyPoints = field => debtRows
   .filter(row => row[field] !== null && row[field] !== undefined)
   .map(row => ({ x: row.date, y: row[field] }));
+check('联邦债务总额保持季度→Treasury 日频 hybrid 且不补点',
+  JSON.stringify(debtByField.total_bn?.data) === JSON.stringify(expectedHybrid('total_bn'))
+    && debtByField.total_bn?.sourceFrequency === 'hybrid_quarterly_then_daily',
+  JSON.stringify({ firstDaily: firstDailyTotal, rendered: debtByField.total_bn?.data.length,
+    expected: expectedDates.length }));
 
-for (const field of ['total_bn', 'public_bn', 'intragov_bn']) {
-  const rendered = debtByField['daily_' + field];
-  check(`日频金额 ${field} 按字段真实起点衔接且逐点不补值`,
-    JSON.stringify(rendered?.data) === JSON.stringify(expectedHybrid(field))
-      && rendered?.sourceFrequency === 'hybrid_quarterly_then_daily',
-    JSON.stringify({ firstDaily: firstDailyByField[field], rendered: rendered?.data.length,
-      expected: expectedDates.length }));
+const completeStructureRows = debtRows.filter(row =>
+  ['intragov_bn', 'domestic_public_bn', 'foreign_bn']
+    .every(field => row[field] !== null && row[field] !== undefined));
+const expectedStructurePoints = field => completeStructureRows
+  .map(row => ({ x: row.date, y: row[field] }));
+const structureFields = ['intragov_bn', 'domestic_public_bn', 'foreign_bn'];
+for (const field of structureFields) {
+  const rendered = debtByField[field];
+  const expected = expectedStructurePoints(field);
+  check(`结构柱 ${field} 只含完整季度真实 observation`,
+    JSON.stringify(rendered?.data) === JSON.stringify(expected)
+      && rendered?.sourceFrequency === 'quarterly'
+      && rendered?.type === 'bar' && rendered?.yAxisID === 'yAmount',
+    JSON.stringify({ rendered: rendered?.data.length, expected: expected.length,
+      first: rendered?.data[0], last: rendered?.data.at(-1) }));
 }
-for (const [sourceField, sourceRowField] of [
-  ['structure_intragov_bn', 'intragov_bn'],
-  ['structure_domestic_public_bn', 'domestic_public_bn'],
-  ['structure_foreign_bn', 'foreign_bn'],
-]) {
-  check(`低频 dataset ${sourceField} 只映射真实季度观测`,
-    JSON.stringify(debtByField[sourceField]?.data) === JSON.stringify(expectedQuarterly(sourceRowField))
-      && debtByField[sourceField]?.sourceFrequency === 'quarterly',
-    JSON.stringify({ rendered: debtByField[sourceField]?.data.length, expected: expectedDates.length }));
-}
+const structureStacks = structureFields.map(field => debtByField[field]?.stack);
+check('三项结构柱同 stack / yAmount 且同季度 x 集合',
+  structureStacks.every(Boolean) && new Set(structureStacks).size === 1
+    && structureFields.every(field => debtByField[field]?.yAxisID === 'yAmount')
+    && new Set(structureFields.map(field => JSON.stringify(
+      debtByField[field]?.data.map(point => point.x)))).size === 1,
+  JSON.stringify(structureFields.map(field => ({ field, stack: debtByField[field]?.stack,
+    axis: debtByField[field]?.yAxisID, count: debtByField[field]?.data.length }))));
 
-for (const field of ['foreign_bn', 'gdp_bn', 'debt_gdp_pct']) {
+for (const field of ['gdp_bn', 'debt_gdp_pct']) {
   const rendered = debtByField[field];
   const expected = expectedQuarterlyPoints(field);
   check(`低频折线 ${field} 只含真实 observation object，数量与源一致`,
@@ -354,28 +364,8 @@ check('GDP 与 debt/GDP 全历史视图存在真实可见 points / segments',
     segments: debtByField[field]?.visibleSegmentCount,
     segmentPoints: debtByField[field]?.segmentVisiblePointCount,
     radius: debtByField[field]?.renderedPointRadius }))));
-check('foreign 全历史视图存在真实可见低频 observations / segments',
-  debtByField.foreign_bn?.visiblePointCount === expectedQuarterlyPoints('foreign_bn').length
-    && debtByField.foreign_bn.visiblePointCount > 1
-    && debtByField.foreign_bn.visibleSegmentCount > 0
-    && debtByField.foreign_bn.segmentVisiblePointCount === debtByField.foreign_bn.visiblePointCount
-    && debtByField.foreign_bn.renderedPointRadius > 0,
-  JSON.stringify({ points: debtByField.foreign_bn?.visiblePointCount,
-    segments: debtByField.foreign_bn?.visibleSegmentCount,
-    segmentPoints: debtByField.foreign_bn?.segmentVisiblePointCount,
-    radius: debtByField.foreign_bn?.renderedPointRadius }));
 
-const structureFields = [
-  'structure_intragov_bn', 'structure_domestic_public_bn', 'structure_foreign_bn',
-];
-const structureStacks = structureFields.map(field => debtByField[field]?.stack);
-check('三个结构快照 dataset 属于同一非空 stack 且绑定金额轴',
-  structureStacks.every(Boolean) && new Set(structureStacks).size === 1
-    && structureFields.every(field => debtByField[field]?.type === 'bar'
-      && debtByField[field]?.yAxisID === 'yAmount'),
-  JSON.stringify(structureFields.map(field => ({ field, stack: debtByField[field]?.stack,
-    axis: debtByField[field]?.yAxisID }))));
-for (const field of ['daily_total_bn', 'daily_public_bn', 'daily_intragov_bn', 'foreign_bn', 'gdp_bn']) {
+for (const field of ['total_bn', 'gdp_bn']) {
   check(`金额折线 ${field} 绑定左轴`,
     debtByField[field]?.type === 'line' && debtByField[field]?.yAxisID === 'yAmount',
     JSON.stringify({ type: debtByField[field]?.type, axis: debtByField[field]?.yAxisID }));
@@ -394,19 +384,19 @@ const overlapDate = dailyDebtRows.find(r => quarterlyByDate.has(r.date)
   && quarterlyByDate.get(r.date).total_bn !== r.total_bn)?.date;
 const overlapIdx = state.debtOverview.labels.indexOf(overlapDate);
 check('日频覆盖期同日 total 优先 Treasury，不被 FRED 季度值覆盖', !!overlapDate
-  && debtByField.daily_total_bn.data[overlapIdx] === dailyByDate.get(overlapDate).total_bn
-  && debtByField.daily_total_bn.data[overlapIdx] !== quarterlyByDate.get(overlapDate).total_bn,
+  && debtByField.total_bn.data[overlapIdx] === dailyByDate.get(overlapDate).total_bn
+  && debtByField.total_bn.data[overlapIdx] !== quarterlyByDate.get(overlapDate).total_bn,
   JSON.stringify({ overlapDate,
-    rendered: debtByField.daily_total_bn.data[overlapIdx],
+    rendered: debtByField.total_bn.data[overlapIdx],
     treasury: dailyByDate.get(overlapDate)?.total_bn,
     fred: quarterlyByDate.get(overlapDate)?.total_bn }));
-const noDailyQuarter = debtRows.find(r => r.date >= firstDailyByField.total_bn
+const noDailyQuarter = debtRows.find(r => r.date >= firstDailyTotal
   && !dailyByDate.has(r.date));
 const noDailyQuarterIdx = state.debtOverview.labels.indexOf(noDailyQuarter?.date);
 check('Treasury 起点后缺少真实日记录时不回退季度 total', !!noDailyQuarter
-  && debtByField.daily_total_bn.data[noDailyQuarterIdx] === null,
+  && debtByField.total_bn.data[noDailyQuarterIdx] === null,
   JSON.stringify({ date: noDailyQuarter?.date,
-    rendered: debtByField.daily_total_bn.data[noDailyQuarterIdx] }));
+    rendered: debtByField.total_bn.data[noDailyQuarterIdx] }));
 
 const anomalyDate = dailyDebtFile.warnings
   .map(text => /^\d{4}-\d{2}-\d{2}/.exec(text)?.[0])
@@ -414,12 +404,10 @@ const anomalyDate = dailyDebtFile.warnings
 const sourceAnomaly = dailyByDate.get(anomalyDate);
 const sourceAnomalyIdx = state.debtOverview.labels.indexOf(sourceAnomaly?.date);
 check('Treasury warning 指向的单日分项异常保持双 null，但 total 继续显示', !!sourceAnomaly
-  && debtByField.daily_total_bn.data[sourceAnomalyIdx] === sourceAnomaly.total_bn
-  && debtByField.daily_public_bn.data[sourceAnomalyIdx] === null
-  && debtByField.daily_intragov_bn.data[sourceAnomalyIdx] === null,
+  && debtByField.total_bn.data[sourceAnomalyIdx] === sourceAnomaly.total_bn
+  && sourceAnomaly.public_bn === null && sourceAnomaly.intragov_bn === null,
   JSON.stringify({ date: sourceAnomaly?.date, total: sourceAnomaly?.total_bn,
-    public: debtByField.daily_public_bn.data[sourceAnomalyIdx],
-    intragov: debtByField.daily_intragov_bn.data[sourceAnomalyIdx] }));
+    public: sourceAnomaly?.public_bn, intragov: sourceAnomaly?.intragov_bn }));
 
 const incompleteStructureRows = debtRows.filter(r =>
   ['intragov_bn', 'domestic_public_bn', 'foreign_bn'].some(f => r[f] === null));
@@ -429,26 +417,47 @@ check('foreign/恒等式缺口的结构三项同时 null，不补 0/前值', inc
   JSON.stringify(incompleteStructureRows.map(r => r.date)));
 const lagRow = debtRows.find(r => r.date > debtMeta.stack_last
   && r.total_bn !== null && r.gdp_bn !== null && r.debt_gdp_pct !== null);
-const lagIdx = state.debtOverview.labels.indexOf(lagRow?.date);
 const gdpPointByDate = new Map(debtByField.gdp_bn.data.map(point => [point.x, point.y]));
 const ratioPointByDate = new Map(debtByField.debt_gdp_pct.data.map(point => [point.x, point.y]));
+const structurePointMaps = Object.fromEntries(structureFields.map(field => [field,
+  new Map(debtByField[field].data.map(point => [point.x, point.y]))]));
 check('foreign 右端缺口季度 stack 为空但 GDP/debt-GDP 继续', !!lagRow
-  && structureFields.every(field => debtByField[field].data[lagIdx] === null)
+  && structureFields.every(field => !structurePointMaps[field].has(lagRow.date))
   && gdpPointByDate.get(lagRow.date) === lagRow.gdp_bn
   && ratioPointByDate.get(lagRow.date) === lagRow.debt_gdp_pct,
   JSON.stringify({ date: lagRow?.date,
-    stack: structureFields.map(field => debtByField[field].data[lagIdx]),
+    stack: structureFields.map(field => structurePointMaps[field].get(lagRow?.date) ?? null),
     gdp: gdpPointByDate.get(lagRow?.date), ratio: ratioPointByDate.get(lagRow?.date) }));
 
-const identityRow = debtRows.find(r => r.total_bn !== null
-  && ['intragov_bn', 'domestic_public_bn', 'foreign_bn'].every(f => r[f] !== null));
-const identityIdx = state.debtOverview.labels.indexOf(identityRow?.date);
-const renderedStructureTotal = identityRow ? structureFields.reduce(
-  (sum, field) => sum + debtByField[field].data[identityIdx], 0) : null;
-check('真实季度结构快照三项之和与季度 total 对账', !!identityRow
+const identityRow = completeStructureRows.find(r => r.total_bn !== null);
+const renderedStructureTotal = identityRow ? structureFields.reduce((sum, field) =>
+  sum + structurePointMaps[field].get(identityRow.date), 0) : null;
+const stackGeometry = identityRow ? structureFields.map(field =>
+  debtByField[field].elementGeometry.find(element => element.date === identityRow.date)) : [];
+const stackIntervals = stackGeometry.map(element => ({
+  low: Math.min(element.y, element.base), high: Math.max(element.y, element.base),
+})).sort((a, b) => a.low - b.low);
+const continuousPixelStack = stackIntervals.length === 3
+  && stackIntervals.slice(1).every((interval, index) =>
+    Math.abs(interval.low - stackIntervals[index].high) <= 1.5);
+check('真实季度三项同 x 垂直堆叠且合计约等于季度 total', !!identityRow
   && Math.abs(renderedStructureTotal - identityRow.total_bn)
-    <= Math.max(1, Math.abs(identityRow.total_bn)) * 1e-12,
-  JSON.stringify({ date: identityRow?.date, renderedStructureTotal, total: identityRow?.total_bn }));
+    <= Math.max(1, Math.abs(identityRow.total_bn)) * 1e-12
+  && stackGeometry.every(Boolean)
+  && new Set(stackGeometry.map(element => Math.round(element.x * 100) / 100)).size === 1
+  && continuousPixelStack,
+  JSON.stringify({ date: identityRow?.date, renderedStructureTotal, total: identityRow?.total_bn,
+    geometry: stackGeometry }));
+const allBarWidths = structureFields.flatMap(field =>
+  debtByField[field].elementGeometry.map(element => element.width));
+check('全历史结构柱有明确可见宽度且未扩成连续色块', allBarWidths.length > 0
+  && Math.min(...allBarWidths) >= 4 && Math.max(...allBarWidths) <= 8
+  && structureFields.every(field => debtByField[field].barThickness === 6
+    && debtByField[field].maxBarThickness === 8),
+  JSON.stringify({ min: Math.min(...allBarWidths), max: Math.max(...allBarWidths),
+    configured: structureFields.map(field => ({ field,
+      barThickness: debtByField[field].barThickness,
+      maxBarThickness: debtByField[field].maxBarThickness })) }));
 
 const debtY = state.debtOverview.scaleAxes.filter(s => s.axis === 'y');
 const amountY = debtY.find(s => s.id === 'yAmount');
@@ -461,15 +470,10 @@ check('yAmount 是左侧堆叠金额轴且单位为 USD bn',
 check('yPct 是右侧非堆叠比例轴且单位为 %',
   pctY?.position === 'right' && !pctY?.stacked && pctY?.title === '%'
     && pctY?.tickSample === '12,345.6%', JSON.stringify(pctY));
-check('债务 tooltip 区分 USD bn / % 且 null 不显示为 0',
-  /12,345\.6 USD bn$/.test(state.debtOverview.tooltipSamples?.amount || '')
-    && /122\.6%$/.test(state.debtOverview.tooltipSamples?.pct || '')
-    && /--$/.test(state.debtOverview.tooltipSamples?.missing || '')
-    && !/0(?:\.0+)? USD bn$/.test(state.debtOverview.tooltipSamples?.missing || ''),
-  JSON.stringify(state.debtOverview.tooltipSamples));
-check('债务面板明确说明左右轴与 mixed-frequency 不填充',
-  /左轴（USD bn）.*右轴（%）/.test(state.debtPanelText)
-    && /低频数据未做日频填充/.test(state.debtPanelText), state.debtPanelText.trim());
+check('债务面板使用用户文案且不出现结构快照',
+  /联邦债务总额按日更新/.test(state.debtPanelText)
+    && /低频数据不做日频填充/.test(state.debtPanelText)
+    && !/结构快照/.test(state.debtPanelText), state.debtPanelText.trim());
 const debtX = state.debtOverview.scaleAxes.find(s => s.axis === 'x');
 check('全历史 8452 个日期由 Chart.js 自动减至最多 12 个 tick',
   debtX?.maxTicksLimit === 12 && debtX.tickCount <= 12
@@ -488,12 +492,116 @@ check('Treasury coverage.last 在合理日频 freshness 阈值内',
   JSON.stringify({ last: dailyDebtFile.coverage.last, freshnessDays }));
 const latestIdx = state.debtOverview.labels.indexOf(dailyDebtFile.coverage.last);
 const latestDaily = dailyDebtRows.at(-1);
-check('官方最新日频 record 被三条金额线使用', latestDaily.date === dailyDebtFile.coverage.last
-  && debtByField.daily_total_bn.data[latestIdx] === latestDaily.total_bn
-  && debtByField.daily_public_bn.data[latestIdx] === latestDaily.public_bn
-  && debtByField.daily_intragov_bn.data[latestIdx] === latestDaily.intragov_bn,
+check('官方最新日频 record 被 total hybrid 使用', latestDaily.date === dailyDebtFile.coverage.last
+  && debtByField.total_bn.data[latestIdx] === latestDaily.total_bn,
   JSON.stringify({ latest: latestDaily.date, idx: latestIdx,
-    total: debtByField.daily_total_bn.data[latestIdx] }));
+    total: debtByField.total_bn.data[latestIdx] }));
+
+// —— 真实 mixed-frequency tooltip hover ——
+const quarterLabel = date => `${date.slice(0, 4)}-Q${Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1}`;
+const latestRowAt = (date, predicate) => {
+  for (let i = debtRows.length - 1; i >= 0; i--) {
+    if (debtRows[i].date <= date && predicate(debtRows[i])) return debtRows[i];
+  }
+  return null;
+};
+const amountText = value => Number(value).toLocaleString('en-US', {
+  minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' USD bn';
+
+async function hoverDebtObservation(sourceField, date) {
+  await page.locator('#debtOverviewChart').scrollIntoViewIfNeeded();
+  await page.evaluate(date => {
+    const chart = Chart.getChart(document.getElementById('debtOverviewChart'));
+    const pointIndex = chart.data.labels.indexOf(date);
+    chart.zoomScale('x', {
+      min: Math.max(0, pointIndex - 130),
+      max: Math.min(chart.data.labels.length - 1, pointIndex + 130),
+    }, 'none');
+  }, date);
+  await page.waitForTimeout(50);
+  const target = await page.evaluate(({ sourceField, date }) => {
+    const chart = Chart.getChart(document.getElementById('debtOverviewChart'));
+    const datasetIndex = chart.data.datasets.findIndex(d => d.sourceField === sourceField);
+    const dataset = chart.data.datasets[datasetIndex];
+    const pointIndex = typeof dataset.data[0] === 'object'
+      ? dataset.data.findIndex(point => point.x === date)
+      : chart.data.labels.indexOf(date);
+    const element = chart.getDatasetMeta(datasetIndex).data[pointIndex];
+    const rect = chart.canvas.getBoundingClientRect();
+    return element ? { x: rect.left + element.x, y: rect.top + element.y,
+      datasetIndex, pointIndex } : null;
+  }, { sourceField, date });
+  if (target) await page.mouse.move(target.x, target.y);
+  try {
+    await page.waitForFunction(expectedDate => {
+      const tooltip = Chart.getChart(document.getElementById('debtOverviewChart'))?.tooltip;
+      return tooltip?.opacity > 0 && tooltip.title?.[0] === expectedDate;
+    }, date, { timeout: 5000 });
+  } catch (_) {}
+  return page.evaluate(() => {
+    const tooltip = Chart.getChart(document.getElementById('debtOverviewChart'))?.tooltip;
+    const bodyLines = (tooltip?.body || []).flatMap(item => item.lines || []);
+    const lines = [
+      ...(tooltip?.title || []),
+      ...(tooltip?.beforeBody || []),
+      ...bodyLines,
+      ...(tooltip?.afterBody || []),
+      ...(tooltip?.footer || []),
+    ];
+    return {
+      opacity: tooltip?.opacity ?? 0,
+      title: tooltip?.title?.[0] || '',
+      text: lines.join('\n'),
+      activeFields: (tooltip?.dataPoints || []).map(item => item.dataset.sourceField),
+    };
+  });
+}
+
+async function resetDebtZoom() {
+  await page.evaluate(() => {
+    const chart = Chart.getChart(document.getElementById('debtOverviewChart'));
+    chart.resetZoom('none');
+    syncDebtResetButton(chart);
+  });
+}
+
+const tooltipFields = [
+  '联邦债务总额', '政府内部持有', '国内公众持有',
+  '外国投资者持有', '美国名义 GDP', '联邦债务/GDP',
+];
+const latestStructure = latestRowAt(latestDaily.date, row =>
+  structureFields.every(field => row[field] !== null && row[field] !== undefined));
+const latestGdp = latestRowAt(latestDaily.date, row => row.gdp_bn !== null);
+const latestRatio = latestRowAt(latestDaily.date, row => row.debt_gdp_pct !== null);
+const latestTooltip = await hoverDebtObservation('total_bn', latestDaily.date);
+check('最新 Treasury 日期真实 hover 显示统一六项 tooltip', latestTooltip.opacity > 0
+  && latestTooltip.title === latestDaily.date
+  && tooltipFields.every(field => latestTooltip.text.includes(field))
+  && latestTooltip.text.includes(amountText(latestDaily.total_bn)),
+  JSON.stringify(latestTooltip));
+await resetDebtZoom();
+check('最新日期 tooltip 标明结构/GDP/debt-GDP 各自季度 as-of',
+  latestTooltip.text.includes(`债务构成（截至 ${quarterLabel(latestStructure.date)}）`)
+    && latestTooltip.text.includes(`美国名义 GDP（截至 ${quarterLabel(latestGdp.date)}）`)
+    && latestTooltip.text.includes(`联邦债务/GDP（截至 ${quarterLabel(latestRatio.date)}）`)
+    && !/NaN|undefined/.test(latestTooltip.text),
+  JSON.stringify(latestTooltip));
+
+const historicalStructure = completeStructureRows.find(row => /^20(?:19|20)-/.test(row.date));
+const historicalGdp = latestRowAt(historicalStructure.date, row => row.gdp_bn !== null);
+const historicalRatio = latestRowAt(historicalStructure.date, row => row.debt_gdp_pct !== null);
+const historicalTooltip = await hoverDebtObservation('intragov_bn', historicalStructure.date);
+check('历史结构柱真实 hover 同样显示统一六项 tooltip', historicalTooltip.opacity > 0
+  && historicalTooltip.title === historicalStructure.date
+  && tooltipFields.every(field => historicalTooltip.text.includes(field)),
+  JSON.stringify(historicalTooltip));
+await resetDebtZoom();
+check('历史 tooltip 使用不晚于 hover 日期的真实季度 as-of',
+  historicalTooltip.text.includes(`债务构成（截至 ${quarterLabel(historicalStructure.date)}）`)
+    && historicalTooltip.text.includes(`美国名义 GDP（截至 ${quarterLabel(historicalGdp.date)}）`)
+    && historicalTooltip.text.includes(`联邦债务/GDP（截至 ${quarterLabel(historicalRatio.date)}）`)
+    && !/NaN|undefined/.test(historicalTooltip.text),
+  JSON.stringify(historicalTooltip));
 
 check('zoom plugin 已注册且 reset 按钮初始 disabled', state.zoomRegistered
   && state.resetExists && state.resetDisabled, JSON.stringify({ registered: state.zoomRegistered,
