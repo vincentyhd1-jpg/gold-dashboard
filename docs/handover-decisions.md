@@ -146,6 +146,20 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - C14 的 fine-pointer X 轴拖框、按钮/双击 reset、固定 Y 轴与移动端无溢出继续保留；
   真实 Playwright hover 与 drag 是主要验收证据。
 
+### Cloudflare 静态资产发布边界（C16）
+
+- 本项目是纯静态站点，不增加虚构的 Worker entry point；`wrangler.jsonc` 只配置
+  `assets.directory = ./dist`，不设置 `main` 或 bindings。
+- 禁止直接把仓库根目录作为 assets。`dist/` 必须由跨平台 Node 脚本从显式文件白名单
+  重建：三个用户 HTML、当前 assets/css/js 文件和 22 个公开 JSON；不得按扩展名自动
+  纳入未来新增文件。
+- Python、Markdown、PDF、AGENTS/CLAUDE/README、tools、docs、workflow、Git 元数据、
+  quarantine 与临时文件均属于非公开开发面；构建 guard 同时锁 manifest、源/产物
+  SHA-256 和 forbidden paths，不能只靠排除列表。
+- production/preview 都消费同一 dist；区别只在 deploy command：production 使用
+  `wrangler deploy`，preview 使用 `wrangler versions upload`。本地验收只能 dry-run，
+  不从开发机直接部署或改变 route/domain/traffic。
+
 ### 帧级 vs 展示视图二分（重要）
 **帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）是两类东西。**
 取证字段不得经任何**随时间移动的边界**过滤：

@@ -66,6 +66,14 @@ data_envelope.py  统一落盘信封 + write_json 单点落盘
 tools/*.mjs       Playwright 验证脚本
 ```
 
+**Cloudflare 静态发布（C16）**：仓库不是 Worker JS 项目，`wrangler.jsonc` 不设
+`main`，只将 `assets.directory` 指向 `./dist`。`node tools/build-static-site.mjs`
+每次删除旧 dist 后按 34 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
+22 个公开 JSON；quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
+公开。Cloudflare Workers Builds 的 root 为 `/`，build command 为上述 Node 脚本，
+production deploy 为 `npx wrangler deploy`，preview deploy 为
+`npx wrangler versions upload`。`dist/` 与 `.wrangler/` 均为忽略的构建产物。
+
 **Playwright 启动方式（C9）**：`tools/` 下 11 个 browser-owning 脚本统一调用
 `tools/_browser.mjs` 的 `launchChromium()`。helper 使用当前项目 Playwright 的
 `chromium.executablePath()` 取得同版本完整 Chromium，再显式启动；不扫描缓存、
@@ -779,6 +787,12 @@ node tools/verify-cot-index-null-injection.mjs  # 注入 COT null→50，验证 
 node tools/verify-injection-wrappers.mjs   # wrapper 状态机/恢复/退出码基础设施
 node tools/verify-debt-overview-injection.mjs  # C15 tooltip/stack/文案/冗余线 + C14 关键注入
 node tools/verify-macro-page.mjs           # macro mixed-frequency + 真实 hover/drag/reset/移动端
+node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
+node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
+node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红
+node tools/verify-macro-page.mjs --site-root dist  # 对部署产物跑完整 macro guard
+npx wrangler versions upload --dry-run     # preview 配置检查，不上传
+npx wrangler deploy --dry-run              # production 配置检查，不部署
 python3 tools/verify-noise-injection.py    # WSL 内运行；三种 noise 注入必须红，恢复后绿
 node tools/verify-live.mjs                 # 线上端到端
 ```

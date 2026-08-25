@@ -16,7 +16,20 @@ import { fileURLToPath } from 'url';
 import { launchChromium } from './_browser.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, '..');
+const REPO_ROOT = path.resolve(__dirname, '..');
+const siteRootIndex = process.argv.indexOf('--site-root');
+if (siteRootIndex !== -1 && !process.argv[siteRootIndex + 1]) {
+  throw new Error('--site-root 需要目录参数');
+}
+const ROOT = siteRootIndex === -1
+  ? REPO_ROOT
+  : path.resolve(REPO_ROOT, process.argv[siteRootIndex + 1]);
+if (ROOT !== REPO_ROOT && !ROOT.startsWith(`${REPO_ROOT}${path.sep}`)) {
+  throw new Error(`--site-root 必须位于仓库内：${ROOT}`);
+}
+if (!fs.existsSync(ROOT) || !fs.statSync(ROOT).isDirectory()) {
+  throw new Error(`--site-root 不存在或不是目录：${ROOT}`);
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
