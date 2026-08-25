@@ -56,6 +56,7 @@ fetch_stocks.py   CME 库存             → data/stocks.json
 fetch_oi.py       CME Section 62 PDF   → data/oi.json        （含 4 项写入前校验）
 derive_term_structure.py                → data/derived/term-structure-series.json
 fetch_fred.py      FRED 13 个序列        → rates / CPI / debt / GDP 原始信封
+fetch_treasury_debt.py  Treasury Debt to the Penny → data/treasury_debt_daily.json
 derive_macro.py                         → macro_rates / macro_cpi / macro_debt
 index.html        期限结构回放 + 各图表
 macro.html        利率 / CPI / 美国联邦债务面板
@@ -126,6 +127,22 @@ payload 锁死磁盘级幂等（第二次 writer 零调用 + bytes/SHA-256 不�
 `2016-01-01` 请求。请求 URL 按 series 选择起点，测试必须捕获真实 Request query，
 不得只 grep 常量。债务结构按各源真实 coverage 与既有 strict null 语义生成，
 不 forward-fill、不以 0 替代缺失、也不反算历史。
+
+**Treasury 日频债务与拖框缩放（C14）**：`fetch_treasury_debt.py` 从 Fiscal Data
+`v2/accounting/od/debt_to_penny` 采集真实业务日记录，美元在采集层统一除以 `1e9`
+落 `USD bn`。当前官方覆盖为 total `1993-04-01..2026-08-21`（8377 条）；
+public/intragov 早期字段本身稀疏，原样保留 null。官方 `2025-08-04` 分项恒等式相差
+100 亿美元，该日 public/intragov 明确置 null 并进入 warnings，total 仍保留；不以
+任何值修补。网络失败 exit 2 保留旧文件，格式/数据失败 exit 1 隔离且不覆盖，
+相同业务数据不刷新 generated_at。workflow 每日 UTC 22:00 检查一次。
+
+`macro.html` 的金额线按字段各自真实 Treasury 起点衔接：此前保留 FRED 季度历史，
+起点后只在 Treasury 有真实记录的日期取值；GDP、foreign、正式 debt/GDP 继续季度
+点，不复制成日频。三条低频折线只传真实 `{x: date, y: value}` observation 给
+Chart.js 并连接这些观测；不得恢复为 daily union 等长 null 数组，否则季度线会退化
+为不可见孤点。债务图用 chartjs-plugin-zoom 2.2.0（兼容现有 Chart.js 4.4.0）
+在 fine pointer 环境启用左键 X 轴拖框，移动端禁用；按钮与双击均可 reset。两条 Y
+轴锁定全历史范围，不随 X 缩放重算。
 
 ## 常见陷阱
 
@@ -695,12 +712,11 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
 - `index.html` 的 COT Index 只读 `cot.json` 的 `latest` 与 `weekly[*]` 预计算字段。
   任一侧 null 时有效侧可以单独展示，但综合信号必须暂不判断、不高亮规则；管理基金
   Index 区间只在自身值有效时高亮，图表 null 保持缺口。
-- `macro.html` 的联邦债务总览是一张双 Y 轴综合图：`intragov_bn` /
-  `domestic_public_bn` / `foreign_bn` 三项共用左轴 `yAmount` 的同一 stack，
-  `total_bn` / `gdp_bn` 是同轴金额线，`debt_gdp_pct` 是右轴 `yPct` 比例线。
-  前端不做 `/1000`、不重算本国公众持有、不填补 foreign；`stack_last` 后三项
-  保持 null，但金额/比例线按各自真实 coverage 继续延伸。`public_gdp_pct` 仍保留
-  在派生文件中，但 C12 主图不展示。
+- `macro.html` 的联邦债务总览是一张双 Y 轴 mixed-frequency 综合图：季度
+  `intragov_bn` / `domestic_public_bn` / `foreign_bn` 保留共同 stack 快照；
+  total/public/intragov 金额线按字段各自的 FRED→Treasury 真实日期衔接；foreign、
+  GDP 与 debt/GDP 仍只映射季度观测。前端不做 `/1000`、不重算本国公众持有、
+  不 forward-fill；`public_gdp_pct` 仍保留在派生文件但不展示。
 - C13 后债务图直接展示 `macro_debt.json` 的 1990-Q1 至今全量季度；X 轴仍由
   Chart.js `maxTicksLimit=12` 自动减刻度，不裁历史。宏观页 grid 卡片须保留
   `min-width:0`，否则桌面宽度初始化后缩到移动端会被 canvas 的 min-content 撑出
@@ -735,6 +751,7 @@ python3 fetch_cot.py --test                # 采集校验（含 build_payload �
 python3 fetch_gold.py --test               # 采集校验（含退化边界）
 python3 fetch_stocks.py --test             # 采集校验（含缺字段 SKIP）
 python3 fetch_fred.py --test               # 采集校验（13 个 FRED 序列，四态 + 磁盘安全）
+python3 fetch_treasury_debt.py --test      # Treasury 日频债务（三态 + 幂等/隔离/workflow）
 python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘
 python3 tools/verify-io-utils.py           # 落盘骨架（含隔离区撞名断言）
 node tools/verify-ui-fixes.mjs             # UI 几何 / COT Index 单侧与双侧 null
@@ -751,8 +768,8 @@ node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证�
 node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
 node tools/verify-cot-index-null-injection.mjs  # 注入 COT null→50，验证 UI 会变红
 node tools/verify-injection-wrappers.mjs   # wrapper 状态机/恢复/退出码基础设施
-node tools/verify-debt-overview-injection.mjs  # C12 双轴/公众重复/GDP 删除三项注入
-node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 债务单图双轴与隔离
+node tools/verify-debt-overview-injection.mjs  # C12/C14 双轴/stack/drag/reset/fill 六项注入
+node tools/verify-macro-page.mjs           # macro mixed-frequency 契约 + 真实 drag/reset/移动端
 python3 tools/verify-noise-injection.py    # WSL 内运行；三种 noise 注入必须红，恢复后绿
 node tools/verify-live.mjs                 # 线上端到端
 ```

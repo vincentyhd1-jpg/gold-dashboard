@@ -270,6 +270,9 @@ def _build_debt(maps: dict[str, dict[str, float | None]], refs: list[str],
             "date": d,
             "quarter": _quarter_label(d),
             "total_bn": total,
+            # C14 的日频金额线在 Treasury 覆盖前仍需一条真实季度公众持有历史；
+            # 该字段直接来自 FYGFDPUN，不在前端用 domestic+foreign 反算。
+            "public_bn": public,
             "intragov_bn": intragov,
             # 本国公众 = 公众持有 − 外国持有。外国缺失时被减数不全，整项 undefined。
             "domestic_public_bn": None if public is None or foreign is None else public - foreign,
@@ -344,6 +347,8 @@ def _build_debt(maps: dict[str, dict[str, float | None]], refs: list[str],
 
     total_last = next((r["date"] for r in reversed(rows) if r["total_bn"] is not None), None)
     ratio_last = next((r["date"] for r in reversed(rows) if r["debt_gdp_pct"] is not None), None)
+    foreign_last = next((r["date"] for r in reversed(rows) if r["foreign_bn"] is not None), None)
+    gdp_last = next((r["date"] for r in reversed(rows) if r["gdp_bn"] is not None), None)
 
     out_of_band = [f"{r['quarter']}={r['debt_gdp_pct']:.2f}" for r in rows
                    if r["debt_gdp_pct"] is not None
@@ -358,6 +363,8 @@ def _build_debt(maps: dict[str, dict[str, float | None]], refs: list[str],
         "stack_last": stack_last,
         "total_last": total_last,
         "ratio_last": ratio_last,
+        "foreign_last": foreign_last,
+        "gdp_last": gdp_last,
         "foreign_lag_quarters": (None if stack_last is None or total_last is None
                                  else _quarter_index(total_last) - _quarter_index(stack_last)),
         "identity_max_abs_rel": identity_max,
@@ -535,11 +542,13 @@ def run_tests() -> None:
         check("同季 GDP 与债务对齐", rows["2025-07-01"]["gdp_bn"] == 31098.027 and rows["2026-01-01"]["gdp_bn"] == 31865.721)
         check("stack 右端短一季只清三分量", rows["2026-01-01"]["total_bn"] is not None and rows["2026-01-01"]["debt_gdp_pct"] is not None and rows["2026-01-01"]["intragov_bn"] is None and rows["2026-01-01"]["domestic_public_bn"] is None and rows["2026-01-01"]["foreign_bn"] is None)
         check("stack 最后完整季与 meta 对账", debt["data"]["meta"]["stack_last"] == "2025-10-01" and debt["data"]["meta"]["total_last"] == "2026-01-01" and debt["data"]["meta"]["ratio_last"] == "2026-01-01" and debt["data"]["meta"]["foreign_lag_quarters"] == 1)
-        check("meta 字段完整", set(debt["data"]["meta"]) == {"units", "stack_last", "total_last", "ratio_last", "foreign_lag_quarters", "identity_max_abs_rel", "identity_bad_quarters", "negative_domestic_quarters"})
+        check("meta 字段完整", set(debt["data"]["meta"]) == {"units", "stack_last", "total_last", "ratio_last", "foreign_last", "gdp_last", "foreign_lag_quarters", "identity_max_abs_rel", "identity_bad_quarters", "negative_domestic_quarters"})
         check("debt 行数为 4 条季度外连接", len(debt["data"]["debt"]) == 4)
         check("季度标签正确", debt["data"]["debt"][0]["quarter"] == "2025-Q3" and debt["data"]["debt"][3]["quarter"] == "2026-Q2")
         check("首季本国公众计算正确", abs(rows["2025-07-01"]["domestic_public_bn"] - 21063.881338690895) < 1e-12)
         check("2025-10 公众/GDP 比值正确", abs(rows["2025-10-01"]["public_gdp_pct"] - 98.24389386931063) < 1e-12)
+        check("public_bn 直接来自 FYGFDPUN /1000", rows["2025-10-01"]["public_bn"] == 30870.71309449654)
+        check("foreign/GDP 独立截至日期进入 meta", debt["data"]["meta"]["foreign_last"] == "2025-10-01" and debt["data"]["meta"]["gdp_last"] == "2026-04-01")
         check("GDP 右端多一季只留 GDP", rows["2026-04-01"]["total_bn"] is None and rows["2026-04-01"]["debt_gdp_pct"] is None and rows["2026-04-01"]["gdp_bn"] == 32475.21)
         check("clean meta 里无坏季度", debt["data"]["meta"]["identity_bad_quarters"] == [] and debt["data"]["meta"]["negative_domestic_quarters"] == [])
         check("clean identity max below tol", debt["data"]["meta"]["identity_max_abs_rel"] < IDENTITY_TOL)
