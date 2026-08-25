@@ -87,16 +87,12 @@ tools/*.mjs       Playwright 验证脚本
 ```
 
 元数据在外、业务数据在 `data` 里 —— 加新源时信封字段不会和业务字段撞名。
-`derived_from` 记上游身份，能看出派生数据基于哪一版原始数据算的；上游若还是
-裸格式则标 `envelope:false`，便于审计哪些源没迁。
+`derived_from` 记上游身份，能看出派生数据基于哪一版原始数据算的。
 
-**迁移状态**：`term-structure-series.json` 已用信封。`cot.json`、`stocks.json`
-的**写入端已切**，但磁盘上的文件要等下一次 Actions 跑才会变形（本地不可见，
-参照 `4f4834e` 之后 `stocks.json` 长期仍是 `Array[38]`）。`gold_price/oi.json`
-写入端未切。
-
-三个读 `cot.json` 的地方都已容双形状（`fetch_gold.py`、
-`tools/verify-fetch-gates.py`、`index.html`），所以写入端切换不会开破窗。
+**迁移状态（C6）**：当前受跟踪生产 JSON 已全部统一为 schema v0 envelope，
+生产 Python/前端读取路径只接受合法信封；bare list/dict 回归由行为测试锁死。
+`upstream_ref()` 对不存在的上游仍返回 `None` 以保留首次运行语义，但已存在的
+bare 或损坏信封会明确失败，不再生成 `envelope:false` 元数据。
 
 **TODO（fetch_fred --test 剩余覆盖缺口）**：补充幂等写盘断言、缺日期不补点、c 类 quarantine 与主文件不变的独立断言，以及 d 类 coverage 不一致的独立断言。
 
@@ -110,14 +106,9 @@ tools/*.mjs       Playwright 验证脚本
 
 测试条数变化必须同 commit 更新 `docs/handover-technical.md` 基线表。
 
-**TODO（四源全迁完后）**：统一 `unwrap(strict=True)` + 删前端双形状兼容
-（`payload?.data ?? payload`、cot 的 `p?.data ? {...} : p`）+ 删 `generated_at
-?? updated_at` 的 `updated_at` 分支。**过渡期兼容不许永久化** —— 双形状分支
-留着就永远有一半代码路径不被真实数据走到，坏了也不会有人发现。
-
-前端在 `initOIPlayback()` 入口用 `payload?.data ?? payload` 兼容双形状，
-其余代码零改动。等所有派生文件迁完可简化为 `payload.data` —— 该行注释里写了
-可删除条件。读派生文件的测试脚本（`tools/verify-gapframe.mjs`）也要同样解包。
+**schema 版本决策**：strict-reader 收口不等于格式冻结。`SCHEMA_VERSION` 继续为
+`0`，`KNOWN_SCHEMA_VERSIONS` 继续只接受 `{0}`；等 FRED / SPDR / 上海黄金 /
+COMEX options 等新源接入并冻结格式后，再单独评估 schema v1。
 
 ### 指标算术在派生层，前端只读字段
 
@@ -536,8 +527,8 @@ WINDOW fixture 必须是**合成数据**：当前 24 帧的修订合约恰好全
 
 ### 时间戳缺失显示「未知」，不许回退 `new Date()`
 
-页面「页面更新」读 `cot.generated_at ?? cot.updated_at`，两者皆缺时显示
-**「未知」**。曾经的 `: new Date()` 兜底是把「不知道数据多新」粉饰成「刚刚
+页面「页面更新」只读 COT 信封的 `generated_at`，缺失时显示**「未知」**。
+曾经的 `: new Date()` 兜底是把「不知道数据多新」粉饰成「刚刚
 更新」—— 数据停更多久页面都显示当前时刻，陈旧完全看不出来。显示不出时间是
 小事，谎报新鲜度是大事。
 

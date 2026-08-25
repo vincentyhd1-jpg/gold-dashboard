@@ -41,7 +41,7 @@ from trading_calendar import (
     prev_trading_day, latest_trading_day_on_or_before,
     trading_days_between,
 )
-from data_envelope import envelope, unwrap, is_envelope
+from data_envelope import envelope, unwrap
 from io_utils import atomic_write_json, read_json_or, sweep_stale_tmp
 
 PDF_URL  = "https://www.cmegroup.com/daily_bulletin/current/Section62_Metals_Futures_Products.pdf"
@@ -291,20 +291,21 @@ def parse(content: bytes) -> dict:
     return entry
 
 
-def load_existing() -> tuple[list[dict], bool, any]:
+def load_existing(path: str = OUT_PATH) -> list[dict]:
     """
-    读上一份帧数组。裸格式与信封格式都能读，data:null 与文件不存在同归 []。
-
-    返回 (业务数据, 是否信封格式, raw)。
+    读上一份信封帧数组。data:null 与文件不存在同归 []；存在的 bare 文件或
+    损坏信封明确失败，不能被首次运行语义吞掉。
 
     这是**追加的基底**，不只是幂等比对的对象：读不出来就会把 730 天历史
     悄悄截成今天一条 —— 且写盘照常成功、退出码为 0，没有任何一层会红。
     """
-    raw = read_json_or(OUT_PATH, None)
+    if not os.path.exists(path):
+        return []
+    raw = read_json_or(path, None)
     if raw is None:
-        return [], False, None
+        raise ValueError(f"已有 OI 文件无法解析：{path}")
     data = unwrap(raw, strict=True) or []
-    return data, is_envelope(raw), raw
+    return data
 
 
 # ── 采集层数据校验 ────────────────────────────────────────────────────────────
@@ -630,7 +631,7 @@ def main():
     for r in months:
         print(f"    {r['month']:<6}  settle={r['settle']:>9.2f}  oi={r['oi']:>8,}")
 
-    records, old_is_envelope, raw_old = load_existing()
+    records = load_existing()
 
     # ── 校验：坏数据不得写入 oi.json ──────────────────────────────────────
     print("校验中...")
@@ -687,26 +688,12 @@ def main():
     # 所以本判断当前是一道**冗余闸**，不是唯一的幂等来源 —— 留着是因为它
     # 才是「内容没变就不写盘」这件事的正确口径：日期相同不等于内容相同，
     # 而 date 早退分支恰恰把同日修订也一并跳过了（见下方附注）。
-    old_records, old_was_envelope, _ = load_existing()
+    old_records = load_existing()
     if old_records == records:
-        if old_was_envelope:
-            # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
-            print(f"  {entry['date']} 业务数据与磁盘上逐字段相同，跳过写入"
-                  f"（generated_at 不刷新）")
-            return
-        else:
-            # 格式迁移：旧文件是裸格式，业务数据相同但仍需写一次以升级到信封
-            old_shape = "bare dict" if isinstance(raw_old, dict) else "bare list"
-            migration_info = f"Format migration: upgraded from {old_shape} to envelope (business data unchanged)"
-            print(f"  {entry['date']} 格式迁移：{old_shape} → envelope（业务数据未变）")
-            # build_envelope 已有 info 参数，在调用处追加
-            envelope_with_migration = build_envelope(records, header_snippet=header_snippet)
-            if "info" not in envelope_with_migration:
-                envelope_with_migration["info"] = []
-            envelope_with_migration["info"].append(migration_info)
-            atomic_write_json(OUT_PATH, envelope_with_migration, compact=False)
-            print(f"  已写入 {OUT_PATH}，共 {len(records)} 条记录（信封格式）")
-            return
+        # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
+        print(f"  {entry['date']} 业务数据与磁盘上逐字段相同，跳过写入"
+              f"（generated_at 不刷新）")
+        return
 
     # 原子写：崩在中途只留临时文件，oi.json 保持完整旧版
     atomic_write_json(OUT_PATH,
@@ -1052,30 +1039,27 @@ def run_tests():
 
     # load_existing 是**追加的基底**，读不出来会把 730 天历史截成今天一条，
     # 且写盘照常成功、exit 0 —— 没有任何一层会红。
-    print("\n[load_existing 容双形状（strict 模式下裸格式应被拒绝）]")
-    _real_out = OUT_PATH
+    print("\n[load_existing strict / 首次运行]")
     _tmpd = _tf.mkdtemp()
     try:
-        globals()["OUT_PATH"] = os.path.join(_tmpd, "oi.json")
-        with open(OUT_PATH, "w", encoding="utf-8") as _f:
+        _path = os.path.join(_tmpd, "oi.json")
+        with open(_path, "w", encoding="utf-8") as _f:
             json.dump(_recs, _f)
         try:
-            check("读裸数组（strict 模式应 FAIL）", load_existing()[0] == _recs)
+            load_existing(_path)
+            check("读裸数组（strict 模式应 FAIL）", False, "未抛错")
         except ValueError as e:
-            if "期望信封格式" in str(e):
-                print("  PASS  读裸数组: strict 模式拒绝裸格式（预期行为）")
-            else:
-                raise
-        with open(OUT_PATH, "w", encoding="utf-8") as _f:
+            check("读裸数组（strict 模式应 FAIL）",
+                  "期望信封格式" in str(e), str(e))
+        with open(_path, "w", encoding="utf-8") as _f:
             json.dump(build_envelope(_recs), _f)
-        check("读信封", load_existing()[0] == _recs)
-        with open(OUT_PATH, "w", encoding="utf-8") as _f:
+        check("读信封", load_existing(_path) == _recs)
+        with open(_path, "w", encoding="utf-8") as _f:
             json.dump(build_envelope(None, warnings=["x"]), _f)
-        check("读 data:null → []（与文件不存在同归）", load_existing()[0] == [])
-        os.remove(OUT_PATH)
-        check("文件不存在 → []", load_existing()[0] == [])
+        check("读 data:null → []（与文件不存在同归）", load_existing(_path) == [])
+        os.remove(_path)
+        check("文件不存在 → []", load_existing(_path) == [])
     finally:
-        globals()["OUT_PATH"] = _real_out
         _sh.rmtree(_tmpd, ignore_errors=True)
 
     print(f"\n{passed} passed, {failed} failed")

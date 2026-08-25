@@ -24,7 +24,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 QUAR = os.path.join(DATA, "quarantine")
 
-# 读 data/*.json 一律经 unwrap()，容裸格式与信封两种形状。
+# 读 data/*.json 一律经 strict unwrap()，裸格式是必须拒绝的回归输入。
 # 直读顶层结构（real_st[-1] / cot["weekly"]）会在对应源信封化时崩，而那个
 # 断裂**本地不暴露** —— 磁盘上的文件要等下一次 Actions 跑才变形，本地全绿。
 sys.path.insert(0, ROOT)
@@ -247,7 +247,7 @@ check("三个 gold 用例 warnings 两两不同",
 # ── 3. fetch_stocks：明细归零 / WAF ─────────────────────────────────────
 print("\n===== fetch_stocks =====")
 
-# 经 unwrap 读：stocks.json 信封化前后都取到同一份业务数据（日频数组）。
+# 经 strict unwrap 读 stocks.json 的业务数据（日频数组）。
 # 直读 real_st[-1] 会在信封化后崩成 KeyError。
 with open(os.path.join(DATA, "stocks.json"), encoding="utf-8") as f:
     real_st = unwrap(json.load(f), strict=True)

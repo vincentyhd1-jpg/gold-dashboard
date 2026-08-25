@@ -23,7 +23,7 @@ from urllib.parse import urlencode
 from io_utils import (
     atomic_write_json, read_json_or, sweep_stale_tmp, quarantine_write,
 )
-from data_envelope import envelope, unwrap, is_envelope
+from data_envelope import envelope, unwrap
 
 API_URL   = "https://publicreporting.cftc.gov/resource/72hh-3qpy.json"
 GOLD_CODE = "088691"
@@ -275,30 +275,17 @@ def main():
     # 由 data 派生，比它等于重复比 data；warnings/info 是本次运行的旁注。
     raw = read_json_or(OUT_PATH, None) if os.path.exists(OUT_PATH) else None
     old = unwrap(raw, strict=True) if raw is not None else None
-    old_is_envelope = is_envelope(raw) if raw is not None else False
-
     if old == data:
-        if old_is_envelope:
-            # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
-            print(f"  {latest['date']} 业务数据与磁盘上逐字段相同，跳过写入"
-                  f"（generated_at 不刷新）")
-            return
-        else:
-            # 格式迁移：旧文件是裸格式，业务数据相同但仍需写一次以升级到信封
-            old_shape = "bare dict" if isinstance(raw, dict) else "bare list"
-            migration_info = f"Format migration: upgraded from {old_shape} to envelope (business data unchanged)"
-            print(f"  {latest['date']} 格式迁移：{old_shape} → envelope（业务数据未变）")
-
-    info = []
-    if not old_is_envelope and old == data:
-        info.append(migration_info)
+        # generated_at 表示「数据这次真变了」，不是「脚本跑了」，所以不刷新。
+        print(f"  {latest['date']} 业务数据与磁盘上逐字段相同，跳过写入"
+              f"（generated_at 不刷新）")
+        return
 
     payload = envelope(
         source="cftc_cot",
         freq="weekly",
         data=data,
         dates=[r["date"] for r in weekly],
-        info=info if info else None,
     )
     # 原子写：崩在中途只留临时文件，cot.json 保持完整旧版
     atomic_write_json(OUT_PATH, payload, compact=False)

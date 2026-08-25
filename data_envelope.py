@@ -48,9 +48,9 @@ def upstream_ref(path: str, source: str) -> dict | None:
     """
     读一个上游文件，摘出它的身份信息供 derived_from 使用。
 
-    上游若已是信封格式，取其 source/generated_at/coverage；若还是裸数组
-    （四个采集脚本本轮未迁移），退化为按 date 字段自行汇总，并标记
-    envelope=False 以便日后审计哪些源还没迁。
+    文件不存在或暂时无法读取时返回 None，保留首次运行语义。文件一旦能读取，
+    就必须是合法信封；裸格式或损坏信封直接拒绝，避免 derived_from 静默记录
+    一个已经退出生产契约的上游形状。
     """
     if not os.path.exists(path):
         return None
@@ -60,23 +60,12 @@ def upstream_ref(path: str, source: str) -> dict | None:
     except (OSError, json.JSONDecodeError):
         return None
 
-    if isinstance(raw, dict) and "schema_version" in raw:
-        return {
-            "source":       raw.get("source", source),
-            "generated_at": raw.get("generated_at"),
-            "coverage":     raw.get("coverage"),
-            "envelope":     True,
-        }
-
-    # 裸格式：尽力汇总
-    rows = raw if isinstance(raw, list) else raw.get("weekly") or []
-    dates = sorted(r["date"] for r in rows
-                   if isinstance(r, dict) and r.get("date"))
+    assert_envelope(raw)
     return {
-        "source":       source,
-        "generated_at": None,          # 裸格式没有这个字段
-        "coverage":     coverage_of(dates),
-        "envelope":     False,
+        "source":       raw.get("source", source),
+        "generated_at": raw.get("generated_at"),
+        "coverage":     raw.get("coverage"),
+        "envelope":     True,
     }
 
 
@@ -171,8 +160,8 @@ def unwrap(payload, *, strict: bool = False):
     """
     取出业务数据。信封格式返回 payload["data"]，裸格式原样返回。
 
-    strict=True 时裸格式抛错（迁移完成后可用它锁死回退路径）。
-    strict=False 是过渡期默认：四源尚未全部迁移。
+    strict=True 时裸格式抛错。生产读取路径必须显式传 strict=True；默认值暂不
+    改动，避免让这个通用 helper 的 API 变化与生产迁移收口耦合。
 
     信封格式一律先过 assert_envelope —— 宁可拒绝也不静默按旧格式解析。
     """

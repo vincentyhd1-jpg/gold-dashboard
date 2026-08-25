@@ -477,12 +477,11 @@ function renderAll(cot, goldData, stocksData) {
   const mn = Math.min(...mfVals), mx = Math.max(...mfVals);
   const cotIdxD = mfVals.map(v => (mx === mn) ? 50 : Math.round((v - mn) / (mx - mn) * 100));
 
-  // 时间：信封的 generated_at 优先，裸格式回退 updated_at（cot 信封化前的形状）。
-  //
-  // 两者皆缺时显示「未知」，**不得回退 new Date()**：那会把「不知道数据多新」
+  // 时间来自 COT 信封的 generated_at。
+  // 字段缺失时显示「未知」，**不得回退 new Date()**：那会把「不知道数据多新」
   // 粉饰成「刚刚更新」—— 数据停更多久页面都显示当前时刻，陈旧完全看不出来。
   // 显示不出时间是小事，谎报新鲜度是大事。
-  const stamp = cot.generated_at ?? cot.updated_at;
+  const stamp = cot.generated_at;
   const ts = stamp
     ? new Date(stamp).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})
     : '未知';
@@ -1254,7 +1253,7 @@ window.addEventListener('unhandledrejection', e => {
 Promise.all([
   // cot 的时间戳在信封元数据里、业务数据在 data 里，两者都要 —— 所以不是单纯
   // 解包，而是把 generated_at 提到业务对象上，renderAll 仍按 cot.weekly /
-  // cot.latest / cot.generated_at 读，一份代码同时吃裸格式与信封。
+  // cot.latest / cot.generated_at 读；公共 helper 已严格校验信封入口。
   loadJson('data/cot.json?_=' + Date.now(), { name: 'cot.json', map: p => ({ ...p.data, generated_at: p.generated_at }) }),
   // gold_price.json 已信封化：取 data。页面时间戳只认 cot.json，goldData 只被
   // renderAll 当数组遍历（:466 Array.isArray）。

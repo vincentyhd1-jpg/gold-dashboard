@@ -474,7 +474,8 @@ with tempfile.TemporaryDirectory() as d:
 # ══ D 表：信封读取端（unwrap / assert_envelope）═════════════════════════════
 print("\n[D 表：信封读取端]")
 from data_envelope import (
-    envelope, unwrap, assert_envelope, is_envelope, SCHEMA_VERSION, VALID_FREQ,
+    envelope, unwrap, assert_envelope, is_envelope, upstream_ref,
+    SCHEMA_VERSION, VALID_FREQ,
 )
 
 good = envelope("test_src", "daily", {"rows": [1, 2]},
@@ -557,6 +558,74 @@ except ValueError:
     check("strict=True 裸格式 → 拒绝", True)
 
 check("SCHEMA_VERSION 仍为 0（格式未冻结）", SCHEMA_VERSION == 0)
+
+print("\n[upstream_ref strict]")
+with tempfile.TemporaryDirectory() as td:
+    path = os.path.join(td, "upstream.json")
+    check("上游文件首次不存在 → None",
+          upstream_ref(path, "fallback_source") is None)
+
+    upstream = envelope("real_source", "weekly", [{"date": "2026-01-01"}],
+                        dates=["2026-01-01"])
+    atomic_write_json(path, upstream, compact=False)
+    ref = upstream_ref(path, "fallback_source")
+    check("合法上游信封摘取 source/generated_at/coverage/envelope",
+          ref == {"source": upstream["source"],
+                  "generated_at": upstream["generated_at"],
+                  "coverage": upstream["coverage"],
+                  "envelope": True}, ref)
+
+    for label, bare in (("裸数组", [{"date": "2026-01-01"}]),
+                        ("裸字典", {"weekly": [{"date": "2026-01-01"}]})):
+        atomic_write_json(path, bare, compact=False)
+        try:
+            upstream_ref(path, "fallback_source")
+            check(f"upstream_ref 拒绝{label}", False, "未抛错")
+        except ValueError as e:
+            check(f"upstream_ref 拒绝{label}", True, str(e))
+
+    future = dict(upstream)
+    future["schema_version"] = 999
+    atomic_write_json(path, future, compact=False)
+    try:
+        upstream_ref(path, "fallback_source")
+        check("upstream_ref 拒绝未知 schema_version", False, "未抛错")
+    except ValueError as e:
+        check("upstream_ref 拒绝未知 schema_version",
+              "未知的 schema_version" in str(e), str(e))
+
+    missing_key = dict(upstream)
+    del missing_key["coverage"]
+    atomic_write_json(path, missing_key, compact=False)
+    try:
+        upstream_ref(path, "fallback_source")
+        check("upstream_ref 拒绝缺 required key", False, "未抛错")
+    except ValueError as e:
+        check("upstream_ref 拒绝缺 required key",
+              "信封缺字段" in str(e), str(e))
+
+print("\n[当前生产数据 strict]")
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+data_dir = os.path.join(repo_root, "data")
+production_json = [
+    os.path.join(data_dir, name)
+    for name in os.listdir(data_dir)
+    if name.endswith(".json") and os.path.isfile(os.path.join(data_dir, name))
+] + [
+    os.path.join(data_dir, "derived", name)
+    for name in os.listdir(os.path.join(data_dir, "derived"))
+    if name.endswith(".json")
+]
+strict_errors = []
+for path in production_json:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            payload = json.load(fh)
+        unwrap(payload, strict=True)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        strict_errors.append(f"{os.path.relpath(path, repo_root)}: {exc}")
+check("当前受跟踪生产 JSON 全部通过 schema v0 strict reader",
+      bool(production_json) and not strict_errors, strict_errors)
 
 
 # ══ 硬约束自检 ═════════════════════════════════════════════════════════════

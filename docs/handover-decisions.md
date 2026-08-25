@@ -37,9 +37,10 @@ COMEX 黄金（GC）多源数据分析看板，域名 www.zhangtongxue.com，用
   跨源计算必须落在计算层。
 - 派生/落盘 JSON 用信封：`{schema_version, source, freq, generated_at, date_field,
   coverage, derived_from, warnings, info, data}`，业务数据全在 data。
-  schema_version 从 0 开始，接完四源再升 1。
-- 前端过渡期双形状兼容 `payload?.data ?? payload`；
-  **TODO：四源全迁完后统一 unwrap(strict=True) + 删双形状兼容，不许永久化。**
+  schema_version 从 0 开始；strict-reader 收口后仍保持 0，等未来新源接入并冻结
+  格式时再单独决定是否升 1。
+- 当前受跟踪生产 JSON 已统一为 schema v0 envelope，生产读取端只接受合法信封；
+  bare 输入是负向回归场景，不再是兼容路径。
 - `oi_chg` 一律从 OI 存量差分自算，源站字段仅作交叉验证。
 
 ### io_utils 骨架 vs 语义边界
@@ -269,33 +270,12 @@ B/C 多算进来的部分，取证证实：差异最大三帧（07-01 Δ=-0.0959
 
 ## 5. 待办清单
 
-### 下一件：P1 第 3 步 gold（**commit2 必须在 commit3 之前，硬约束**）
-`oi_chg` 口径线已完结，P1 主线通了，这是自然的下一件。详见下条。
-
-### 紧接着（`oi_chg` 定了之后）
-- 按选定方向改口径，`derive --test` 应转全绿
-- `roll_noise` 窗口污染量化（若随方向 A 一并解，则不用单独做）
-
-### P1 第 3 步 gold（**commit2 必须在 commit3 之前，硬约束**）
-- **commit2**：`index.html:1255` 加 `.then(p => p?.data ?? p)`
-  （五个读取点中唯一无双形状兼容的，信封化时会断且本地不暴露）
-  + 给 `verify-ui-fixes.mjs` 补断言「cotDual 金价 dataset 至少有 N 个非 null 点」
-  （用注入验非恒真：goldData 强制成 `{}` → 新断言必须红）
-- **commit3**：io_utils + `envelope()` + `derived_from=[upstream_ref(COT_PATH, "cftc_cot")]`
-  + 幂等跳过 + `quarantine_gold` 补存原始响应（现在只存解析结果，事后分不清
-  「Stooq 返回就是坏的」还是「align_price 对齐错了」）
-  + `info` 记 `price_source=stooq.com`（价格源不进 derived_from，它不是本仓库落盘文件）
-
-### P1 第 4 步 oi 信封化
-`fetch_oi.py:203`、`derive_term_structure.py`、`tools/inspect_oi.py:2`、
-`index.html:1262`、`term-3d.html:274` 需同步改（derive 行号已多次移位，以技术侧文档为准）；
-**term-3d 无 verify 覆盖，必须手动开页确认**。注意本机 Plotly CDN 离线，
-上次是用 stub 顶替只验了数据通路（xLen/xFirst/xLast），**真实渲染从未验过**。
-
-### 四源全迁完之后
-- 统一 `unwrap(strict=True)` + 删前端双形状兼容
-- **注意**：`index.html:1254` 的 `p?.data ? {...p.data, generated_at: p.generated_at} : p`
-  把 `generated_at` 提到了业务对象上，删兼容代码时**这个提取动作要保留**
+### schema v0 envelope 迁移（C6）
+- 受跟踪生产 JSON 已全部 envelope 化，生产 Python/前端读取路径完成 strict 收口。
+- 首次不存在与已存在但 bare/损坏严格区分；前者保留原业务语义，后者明确失败。
+- `schema_version` 继续为 0；本轮不代表 schema 已冻结，也不启动 v1。
+- `term-3d.html` 已下线且无生产入口，刻意不纳入本轮；若未来重新启用，必须先迁移
+  读取协议并补 verify。
 
 ### 护栏与取证的欠账（新增，勿忽略）
 - **`tools/verify-noise-injection.py` 静默失效已由 C5 修复**：从 Windows PowerShell
