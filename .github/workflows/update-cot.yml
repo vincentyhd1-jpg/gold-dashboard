@@ -2,8 +2,8 @@ name: Update COT Data
 
 on:
   schedule:
-    # 周一至周五 UTC 22:00（纽交所收盘后约 2h，CME 库存报告当日更新）
-    - cron: '0 22 * * 1-5'
+    # 每日 UTC 22:00：常规采集 + Treasury Debt to the Penny 日更新检查。
+    - cron: '0 22 * * *'
     # 周六 UTC 18:00 更新 COT（CFTC 周五发布）
     - cron: '0 18 * * 6'
   workflow_dispatch:  # 允许手动触发
@@ -39,6 +39,7 @@ jobs:
           python derive_term_structure.py --test
           python fetch_fred.py --test
           python derive_macro.py --test
+          python fetch_treasury_debt.py --test
         continue-on-error: true
 
       # 每个采集步骤互不连累：任一失败都不能让其余步骤被跳过，
@@ -90,6 +91,21 @@ jobs:
         run: |
           set +e
           python fetch_oi.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+        continue-on-error: true
+
+      # Treasury Fiscal Data / Debt to the Penny：真实日频 total/public/intragov，
+      # 不需要 API key。周六 UTC 18:00 是 COT 的额外时段；Treasury 在同日 UTC
+      # 22:00 的每日常规任务运行，避免重复检查。
+      # exit 0 = 新数据写入或当天尚无新 record（幂等）；1 = 格式/数据异常，响应
+      # 已隔离且旧文件不覆盖；2 = 网络临时不可达，保留旧文件等待次日重试。
+      - name: Run fetch_treasury_debt.py
+        id: treasury_debt
+        if: github.event.schedule != '0 18 * * 6'
+        run: |
+          set +e
+          python fetch_treasury_debt.py
           echo "code=$?" >> "$GITHUB_OUTPUT"
           exit 0
         continue-on-error: true
@@ -159,7 +175,7 @@ jobs:
                    data/cpi_cpiaucsl.json data/cpi_cpilfesl.json \
                    data/debt_total.json data/debt_held_public.json \
                    data/debt_intragov.json data/debt_foreign.json \
-                   data/gdp_nominal.json \
+                   data/gdp_nominal.json data/treasury_debt_daily.json \
                    data/derived/macro_rates.json data/derived/macro_cpi.json \
                    data/derived/macro_debt.json; do
             git add "$f" 2>/dev/null || true
@@ -193,7 +209,7 @@ jobs:
           }
 
           [ "${{ steps.tests.outcome }}"  = "failure" ] && \
-            fail "校验器自检" "七个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
+            fail "校验器自检" "八个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro / fetch_treasury_debt）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
           # COT 按真实 exit code 三态处理，不能只看 step outcome：
           # continue-on-error 会把 1/2 都折叠成 failure，丢失故障类别。
           case "${{ steps.cot.outputs.code }}" in
@@ -236,6 +252,15 @@ jobs:
             2) echo "::warning title=采集层：期限结构::CME 未返回可用 PDF（下载失败或响应非 PDF），oi.json 保持上一份（非异常）" ;;
             0|"") : ;;
             *) fail "采集层：期限结构" "fetch_oi.py 以未预期的 exit code ${{ steps.oi.outputs.code }} 退出" ;;
+          esac
+          # Treasury Debt to the Penny 三态：没有新 record 属幂等 exit 0；网络失败
+          # exit 2 只告警；确定性格式/数据异常 exit 1 报红且保留旧主文件。
+          # 周六 18:00 COT 专场会跳过本步骤，output 为空，必须与 0 同样接受。
+          case "${{ steps.treasury_debt.outputs.code }}" in
+            1) fail "采集层：Treasury debt" "fetch_treasury_debt.py 检测到格式或数据异常（exit 1）—— 证据已隔离到 data/quarantine/，treasury_debt_daily.json 保持上一份。详见该步骤日志" ;;
+            2) echo "::warning title=采集层：Treasury debt::Fiscal Data 上游暂时不可达；treasury_debt_daily.json 保持上一份，等待下一次每日任务重试" ;;
+            0|"") : ;;
+            *) fail "采集层：Treasury debt" "fetch_treasury_debt.py 以未预期的 exit code ${{ steps.treasury_debt.outputs.code }} 退出（只应产生 0 / 1 / 2）" ;;
           esac
           # FRED 按 exit code 四态处理，只看进程码即可 —— 汇总已按严重度取
           # （fetch_fred.py 的 EXIT_SEVERITY，1 > 3 > 2 > 0），同批的 2 不会再盖住 1，

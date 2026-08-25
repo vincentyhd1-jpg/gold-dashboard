@@ -115,6 +115,20 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
   字段，折线 `spanGaps=false` 且不做平滑插值或前值填充。
 - rates/CPI 与 debt 是两个独立前端加载边界，任一组失败不得拖掉另一组。
 
+### 日频债务与低频真实性（C14）
+
+- update cadence 与 source frequency 分开：workflow 每天检查，不代表所有指标日频。
+- total/public/intragov 优先使用 Treasury Debt to the Penny 的真实观测；美元只在
+  采集层除以 `1e9`。1990 至各字段 Treasury 首个真实观测前保留 FRED 季度历史，
+  起点后源缺值就留 null，不拿季度值或前值补日频空洞。
+- foreign 当前继续 FDHBFIN/FRED 季度频率；GDP 与正式 debt/GDP 继续季度。
+  禁止 forward-fill、插值、0 fallback，也禁止用“每日债务 / 最近季度 GDP”冒充
+  正式每日 debt/GDP。
+- Treasury 源字段自身异常按分量隔离：可信 total 可继续保留，不一致的 public /
+  intragov 同日一起置 null 并写 warning，不能为满足恒等式反算任一分量。
+- 债务图可在 fine pointer 环境左键拖框缩放 X 轴；Y 轴保持全历史范围。移动端不启用
+  drag zoom，reset 按钮始终存在。真实鼠标操作而非源码 grep 是验收依据。
+
 ### 帧级 vs 展示视图二分（重要）
 **帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）是两类东西。**
 取证字段不得经任何**随时间移动的边界**过滤：

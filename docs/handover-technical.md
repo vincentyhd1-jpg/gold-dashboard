@@ -145,7 +145,8 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_oi.py --test` | 0 | 63 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 27 passed, 0 failed |
 | `fetch_fred.py --test` | 0 | 67 passed, 0 failed |
-| `derive_macro.py --test` | 0 | 51 passed, 0 failed |
+| `fetch_treasury_debt.py --test` | 0 | 32 passed, 0 failed |
+| `derive_macro.py --test` | 0 | 53 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
@@ -158,7 +159,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
 | `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
-| `tools/verify-macro-page.mjs` | 0 | 68 passed, 0 failed |
+| `tools/verify-macro-page.mjs` | 0 | 85 passed, 0 failed；page errors: none |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
@@ -181,7 +182,7 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-totaloi-injection.mjs` | 0 | wrapper 11/0；基线 29/0 → 旧 total_oi 口径 28/1 → 恢复 29/0 + hash 一致 |
 | `tools/verify-isolation-injection.mjs` | 0 | wrapper 18/0；基线 37/0 → 两种隔离破坏分别红 → 恢复 37/0 + hash 一致 |
 | `tools/verify-cot-index-null-injection.mjs` | 0 | wrapper 18/0；基线 38/0 → current null→50 为 31/7、chart null→50 为 36/2 → 恢复 38/0 + hash 一致 |
-| `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 25/0；基线 68/0 → 比例轴错绑、公众重复堆叠、GDP 删除三项均真实变红 → 恢复 68/0 + hash 一致 |
+| `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 46/0；基线 85/0 → 双轴/公众 stack/GDP 及 drag disabled/reset 删除/低频 fill 六项均真实变红 → 恢复 85/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
 | `tools/verify-injection-wrappers.mjs` | 0 | 34/0；静态锁六 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
 
@@ -597,3 +598,27 @@ raw envelope 分别为 145 / 145 / 145 / 144 / 146 点，派生 `macro_debt.json
 
 反恒真结果：GFDEBTN 起点退回 2016 时 67/1，GDP 起点退回 2016 时 67/1；
 前端临时裁掉 2016 前 rows 时宏观护栏 57/11。三项破坏均恢复后重新全绿。
+
+## 15. C14 Treasury 日频债务与 drag-to-zoom
+
+`fetch_treasury_debt.py` 读取财政部 Fiscal Data `debt_to_penny`，schema v0 daily
+信封落 `data/treasury_debt_daily.json`，源美元在采集层除以 `1e9`。2026-08-25
+实查官方 coverage 为 `1993-04-01..2026-08-21`、8377 条。total 全期有值；
+public/intragov 的早期官方字段为字符串 `"null"`，原样落 JSON null，不补 0 或前值。
+官方 2025-08-04 分项合计与 total 相差 100 亿美元，该日仅 public/intragov 置 null
+并写 warning，total 保留。网络失败 exit 2；格式/业务失败 exit 1 并隔离；相同业务
+数据 exit 0 且 bytes/SHA-256 不变。
+
+债务图使用 1990 起季度日期与 Treasury 日日期的去重并集。金额字段各按自身首个
+Treasury 真实观测衔接，此前保留 C13 FRED 季度值；起点后 Treasury 某日缺值就留
+gap，不回退季度。foreign、GDP 与正式 debt/GDP 继续季度，结构 stack 也只保留真实
+季度 snapshot。页面分别显示 debt `YYYY-MM-DD`、foreign `YYYY-MM`、GDP `YYYY-Qn`。
+
+Chart.js 仍为 4.4.0，只增加兼容的 chartjs-plugin-zoom 2.2.0 + Hammer.js 2.0.8。
+fine pointer 下左键右向左/左向右拖框只缩 X，threshold=12；两条 Y 轴冻结全历史范围。
+reset 按钮与双击可恢复，touch 环境 drag 关闭且页面可滚动。真实 Playwright 基线为
+85/0；六项 wrapper 为 46/0，其中 drag disabled、reset handler 删除、季度字段
+forward-fill 均使对应 guard 非零且命中稳定 FAIL marker，恢复后 85/0、SHA-256 一致。
+
+workflow 每日 UTC 22:00 运行 Treasury；周六 UTC 18:00 COT 专场跳过该步，避免同日
+重复。commit 清单含 `data/treasury_debt_daily.json`，末尾 gate 按 0/1/2 三态处理。
