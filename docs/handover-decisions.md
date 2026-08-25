@@ -171,6 +171,18 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - **取证脚本的临时文件不受 `sweep_stale_tmp` 覆盖**（它只清 OUT_PATH 同名 tmp），
   同一轮内自行清理。
 
+### Playwright 浏览器解析策略（C9）
+
+- 所有 `tools/` browser-owning guard 只经 `tools/_browser.mjs` 启动 Chromium。
+- executable 必须来自当前项目 Playwright 的 `chromium.executablePath()`，不得扫描
+  浏览器缓存、选择“最大 revision”、硬编码用户目录或固定 revision。
+- 当前环境只安装完整 Chromium、未安装独立 headless shell；helper 因此显式启动
+  Playwright 对应的完整 Chromium，不使用默认 headless-shell 路径。
+- executable 不存在、不可访问或启动失败必须抛 `BrowserEnvironmentError` 并非零退出；
+  不 fallback 到其它浏览器、不自动安装、不把 EPERM 记成 PASS/SKIP。
+- `verify-browser-launch.mjs` 必须真实创建 page 并执行 JS，同时静态守住普通脚本不得
+  直接 launch。改变此策略前先修改这条 guard 并做反恒真，而不是在单个脚本加例外。
+
 ### 破窗规则
 改格式时，**读取端先容双形状 → 写入端再切**。因为数据文件要等下次 Actions 才变形，
 本地 verify 全绿、破窗在下次 CI 才炸、归因窗口已关。

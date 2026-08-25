@@ -1,9 +1,8 @@
 // 前端对断层帧的处理：oi_chg 全 null + 移仓相关字段全 null。
 // derive 已实测会产出这种帧（挖掉交易日时），但 UI 从未收到过。
-import { chromium } from 'playwright';
+import { launchChromium } from './_browser.mjs';
 
-const execPath = 'C:\\Users\\vince\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe';
-const browser = await chromium.launch({ headless: true, executablePath: execPath });
+const browser = await launchChromium();
 const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
 
 const errs = [];

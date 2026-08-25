@@ -4,18 +4,16 @@
 // 与其他前端 verify 的两处差异，都是刻意的：
 //   1. 自带静态服务：其余脚本依赖外部已起的 localhost:3001。本脚本用 node 内置
 //      http 起在随机空端口上，跑之前不需要先开 server，也不依赖 python。
-//   2. Chromium 路径走 tools/_browser.mjs 的 findChromiumExecutable()，
-//      不再抄第二份硬编码路径。
+//   2. Chromium 统一经 tools/_browser.mjs 启动，不绑定本机缓存路径或 revision。
 //
 // 首屏那条断言是把一次性人工实测固化下来的：Chart.js 首帧曾出现全部点贴在
 // chartArea.bottom 上（需要 setTimeout(update('none'),0) 兜），现在实测不贴底，
 // 于是用断言钉住 —— 若哪天回归贴底，这条会红，而不是靠人再测一次。
-import { chromium } from 'playwright';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { findChromiumExecutable } from './_browser.mjs';
+import { launchChromium } from './_browser.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -70,9 +68,7 @@ const ratesLatest = rates.coverage.last;
 const lastNonNullIdx = cpiRows.reduce((acc, row, i) => (row.cpiaucsl_yoy === null ? acc : i), -1);
 const lastNonNull = cpiRows[lastNonNullIdx];
 
-const execPath = findChromiumExecutable();
-if (!execPath) throw new Error('找不到 Playwright Chromium chrome.exe');
-const browser = await chromium.launch({ headless: true, executablePath: execPath });
+const browser = await launchChromium();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
 const errors = [];

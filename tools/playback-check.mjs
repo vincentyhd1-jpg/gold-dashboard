@@ -1,14 +1,13 @@
-import { chromium } from 'playwright';
+import { launchChromium } from './_browser.mjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 
-const execPath = 'C:\\Users\\vince\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ssDir = path.join(__dirname, '..', 'screenshots');
 if (!fs.existsSync(ssDir)) fs.mkdirSync(ssDir, { recursive: true });
 
-const browser = await chromium.launch({ headless: true, executablePath: execPath });
+const browser = await launchChromium();
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
 const page = await ctx.newPage();
 

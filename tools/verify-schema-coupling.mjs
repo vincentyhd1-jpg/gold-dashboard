@@ -1,9 +1,8 @@
 // 体检：四个 verify 脚本是否会在 schema 破坏时静默通过？
 // 它们都不直接读派生 JSON（走 Chart.js 实例 + DOM），需要确认这不等于
 // "对 schema 破坏无感" —— 若图表照样建起来只是数据错，那才是危险的静默通过。
-import { chromium } from 'playwright';
-const execPath = String.raw`C:\Users\vince\AppData\Local\ms-playwright\chromium-1234\chrome-win64\chrome.exe`;
-const browser = await chromium.launch({ headless: true, executablePath: execPath });
+import { launchChromium } from './_browser.mjs';
+const browser = await launchChromium();
 
 async function probe(label, patch) {
   const page = await browser.newPage({ viewport: { width: 1400, height: 1200 } });
