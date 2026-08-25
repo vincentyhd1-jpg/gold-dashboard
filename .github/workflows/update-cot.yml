@@ -44,9 +44,16 @@ jobs:
       # 每个采集步骤互不连累：任一失败都不能让其余步骤被跳过，
       # 否则一次 COT 故障会连带丢掉当天的 OI 数据（CME 无历史归档，丢了就没了）。
       # 失败信息由末尾的统一闸门汇总报出。
+      # COT exit code：0 正常 / 1 数据、解析或业务校验失败，需人工介入 /
+      # 2 CFTC 上游暂时不可达，本次保留旧 cot.json，等待下次自动重试。
+      # continue-on-error 无法区分 1/2，必须把真实进程码写入 step output。
       - name: Run fetch_cot.py
         id: cot
-        run: python fetch_cot.py
+        run: |
+          set +e
+          python fetch_cot.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
         continue-on-error: true
 
       # exit code 三态：0 正常 / 1 校验失败需人工介入 / 2 上游未更新（两源
@@ -187,8 +194,14 @@ jobs:
 
           [ "${{ steps.tests.outcome }}"  = "failure" ] && \
             fail "校验器自检" "七个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
-          [ "${{ steps.cot.outcome }}"    = "failure" ] && \
-            fail "采集层：COT" "fetch_cot.py 失败或未通过 5 项校验 —— 坏数据已隔离到 data/quarantine/，cot.json 保持上一份。详见该步骤日志"
+          # COT 按真实 exit code 三态处理，不能只看 step outcome：
+          # continue-on-error 会把 1/2 都折叠成 failure，丢失故障类别。
+          case "${{ steps.cot.outputs.code }}" in
+            1) fail "采集层：COT" "COT 数据/解析/校验失败，需要人工介入；cot.json 保持上一份。有可用响应证据时已保存到 data/quarantine/。详见该步骤日志" ;;
+            2) echo "::warning title=采集层：COT::CFTC/COT 上游暂时不可达；cot.json 保持上一份；等待下一次自动任务重试。这不是业务数据校验失败" ;;
+            0|"") : ;;
+            *) fail "采集层：COT" "fetch_cot.py 以未预期的 exit code ${{ steps.cot.outputs.code }} 退出（fetch_cot 只应产生 0 / 1 / 2）" ;;
+          esac
           # 金价按 exit code 两态处理。**gold 不产生 exit 2**：
           #   1 = 需人工介入（5 项校验失败／两源皆不可达／cot.json 无 weekly）。
           #       这三种都已落 data:null + coverage:null，三段证据在

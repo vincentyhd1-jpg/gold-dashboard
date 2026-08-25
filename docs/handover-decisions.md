@@ -62,6 +62,12 @@ COMEX 黄金（GC）多源数据分析看板，域名 www.zhangtongxue.com，用
 **Python 侧和 workflow yml 必须同时改**，否则 continue-on-error 把 1 和 2 都记成 failure。
 yml 用 `case` + `0|"")` 空串分支（防步骤被跳过时误报）。
 
+COT 的长期边界：DNS/连接/timeout/TLS、HTTP 403/408/425/429/5xx、明确的临时错误页
+或 WAF 响应属于 2；HTTP 成功但非预期 JSON、顶层 schema 变化、字段无法解析，以及
+JSON 可解析后的业务校验失败属于 1。exit 2 不覆盖旧 `cot.json`、不伪造 raw、只告警；
+exit 1 保留可用响应证据并报红。workflow 必须读取 COT step 输出的真实进程码，
+不得退回只看 step outcome。
+
 ### generated_at 语义
 表示「数据这次真变了」，不是「脚本跑了」。数据逐字段相同 → 文件完全不变、git 无 diff。
 幂等判断**只比业务数据（data 内容），不含信封元数据**。

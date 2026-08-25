@@ -625,8 +625,14 @@ WINDOW fixture 必须是**合成数据**：当前 24 帧的修订合约恰好全
 被闸的 a) 判据抓成「全部 0 周对齐失败」，归因指向对齐逻辑而真因是上游没数据。
 实测注入确认过：去掉这道闸后空 weekly 报 `exit 1`、缺键直接 `KeyError`。
 
-**TODO(仍未处理)**：`fetch_cot` 的 `fetch_api()` 网络异常直接崩（非零退出），
-同属「上游不可达」，也该归入 `2`。cot 信封化时未一并做。
+**COT 网络失败已于 C7 分离**：`fetch_api()` 将 DNS / connection / timeout / TLS、
+HTTP 403/408/425/429/5xx 与可识别的临时错误页/WAF 响应归为 `CotFetchFailure`，
+`run_once()` 明确返回 `2`，不覆盖旧 `cot.json`、不伪造 raw、不写 quarantine。
+HTTP 成功但非预期 JSON、顶层 schema 变化、字段无法解析归为 `CotFormatFailure`，
+返回 `1` 并保留响应证据；JSON 可解析但五项业务校验失败仍返回 `1`。
+workflow 的 COT step 显式写出真实进程码，末尾按 `0/1/2/*` 分流；`2` 只 warning，
+`1` 与未预期退出码报红。`tools/verify-fetch-gates.py` 同时守住 step output、case
+分支和 exit 2 不调用 `fail()`。
 
 拦截点必须在采集层：坏数据一旦落盘，既显示在页面上，也成为下一交易日差分的
 输入，把错误传播到后续所有帧。派生层不该因可重算的计算而拒绝出数据。

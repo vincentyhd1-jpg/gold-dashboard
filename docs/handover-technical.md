@@ -140,13 +140,13 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | 护栏 | exit | 结果 |
 |---|---|---|
 | `derive_term_structure.py --test` | 0 | 21 passed, 0 failed |
-| `fetch_cot.py --test` | 0 | 26 passed, 0 failed |
+| `fetch_cot.py --test` | 0 | 57 passed, 0 failed |
 | `fetch_gold.py --test` | 0 | 42 passed, 0 failed |
 | `fetch_oi.py --test` | 0 | 63 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 27 passed, 0 failed |
 | `fetch_fred.py --test` | 0 | 43 passed, 0 failed |
 | `derive_macro.py --test` | 0 | 49 passed, 0 failed |
-| `tools/verify-fetch-gates.py` | 0 | 37 passed, 0 failed |
+| `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 22 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
@@ -466,3 +466,16 @@ dataset 逐点对账、共同 stack、轴与单位、foreign 右端缺口、tota
 债务/GDP 原始信封（`debt_total.json`、`debt_held_public.json`、
 `debt_intragov.json`、`debt_foreign.json`、`gdp_nominal.json`）和
 `data/derived/macro_debt.json`；宏观派生说明与错误信息按 rates/CPI/debt 三链维护。
+
+## 9. C7 COT 网络失败与 workflow 退出码
+
+`fetch_cot.py` 现以 `CotFetchFailure` / `CotFormatFailure` 明确分开临时上游故障与
+确定性响应格式错误。DNS、连接、timeout、TLS、HTTP 403/408/425/429/5xx 和可识别的
+临时错误页/WAF 返回 exit 2；成功响应的非 JSON、顶层 schema 变化、字段解析失败，
+以及既有五项业务校验失败返回 exit 1。两类失败都不覆盖旧 `cot.json`；只有取得了
+可诊断响应的格式/业务失败写 quarantine，完全未取得响应的网络失败不伪造证据。
+
+workflow 的 COT step 将 Python 的真实退出码写入 `steps.cot.outputs.code`，统一闸门
+按 `0/1/2/*` 分流：1 和未预期值报红，2 只 warning 并等待下一次任务重试。
+`fetch_cot.py --test` 的临时目录 sentinel SHA-256 测试与
+`tools/verify-fetch-gates.py` 的子进程/workflow 结构断言共同保护该契约。
