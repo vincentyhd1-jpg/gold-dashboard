@@ -12,6 +12,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from data_envelope import envelope
@@ -21,6 +22,11 @@ API_URL = "https://api.stlouisfed.org/fred/series/observations"
 ROOT = Path(__file__).resolve().parent
 QUAR_DIR = ROOT / "data" / "quarantine"
 OBS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DEFAULT_OBSERVATION_START = "2016-01-01"
+DEBT_OBSERVATION_START = "1990-01-01"
+DEBT_HISTORY_SERIES = frozenset({
+    "GFDEBTN", "FYGFDPUN", "FDHBATN", "FDHBFIN", "GDP",
+})
 
 # (series_id, 目标文件, freq, kind, units)
 #
@@ -93,11 +99,20 @@ def _key() -> str:
     return key
 
 
+def observation_start_for(series_id: str) -> str:
+    return (
+        DEBT_OBSERVATION_START
+        if series_id in DEBT_HISTORY_SERIES
+        else DEFAULT_OBSERVATION_START
+    )
+
+
 def fetch_payload(series_id: str, *, opener=urlopen) -> tuple[dict, bytes]:
     key = _key()
+    observation_start = observation_start_for(series_id)
     query = (
         f"{API_URL}?series_id={series_id}&api_key={key}"
-        "&file_type=json&sort_order=asc&observation_start=2016-01-01"
+        f"&file_type=json&sort_order=asc&observation_start={observation_start}"
     )
     req = Request(query, headers={"Accept": "application/json", "User-Agent": "gold-dashboard/fred"})
     try:
@@ -339,6 +354,30 @@ def run_tests() -> None:
     try:
         payload, raw = fetch_payload("DGS2", opener=opener_ok)
         check("a/b 正常 JSON 请求可解析", payload["observations"] and raw)
+        captured_urls = []
+
+        def capturing_opener(req, timeout=30):
+            captured_urls.append(req.full_url)
+            return opener_ok(req, timeout)
+
+        for series_id in ("GFDEBTN", "FYGFDPUN", "FDHBATN", "FDHBFIN", "GDP"):
+            fetch_payload(series_id, opener=capturing_opener)
+            params = parse_qs(urlparse(captured_urls[-1]).query)
+            check(
+                f"{series_id} 请求从 1990 开始",
+                params.get("series_id") == [series_id]
+                and params.get("observation_start") == ["1990-01-01"],
+                captured_urls[-1],
+            )
+        for series_id in ("DGS2", "CPIAUCSL"):
+            fetch_payload(series_id, opener=capturing_opener)
+            params = parse_qs(urlparse(captured_urls[-1]).query)
+            check(
+                f"{series_id} 请求仍从 2016 开始",
+                params.get("series_id") == [series_id]
+                and params.get("observation_start") == ["2016-01-01"],
+                captured_urls[-1],
+            )
         check(
             ". 跳过且持平保留",
             parse_observations(payload, "DGS2") == [

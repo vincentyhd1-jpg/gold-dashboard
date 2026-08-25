@@ -144,8 +144,8 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_gold.py --test` | 0 | 42 passed, 0 failed |
 | `fetch_oi.py --test` | 0 | 63 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 27 passed, 0 failed |
-| `fetch_fred.py --test` | 0 | 60 passed, 0 failed |
-| `derive_macro.py --test` | 0 | 49 passed, 0 failed |
+| `fetch_fred.py --test` | 0 | 67 passed, 0 failed |
+| `derive_macro.py --test` | 0 | 51 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
@@ -158,11 +158,11 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-schema-coupling.mjs` | 0 | 3 passed, 0 failed |
 | `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
-| `tools/verify-macro-page.mjs` | 0 | 62 passed, 0 failed |
+| `tools/verify-macro-page.mjs` | 0 | 68 passed, 0 failed |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
-macro-page(62) 有计数；
+macro-page(68) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -181,7 +181,7 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-totaloi-injection.mjs` | 0 | wrapper 11/0；基线 29/0 → 旧 total_oi 口径 28/1 → 恢复 29/0 + hash 一致 |
 | `tools/verify-isolation-injection.mjs` | 0 | wrapper 18/0；基线 37/0 → 两种隔离破坏分别红 → 恢复 37/0 + hash 一致 |
 | `tools/verify-cot-index-null-injection.mjs` | 0 | wrapper 18/0；基线 38/0 → current null→50 为 31/7、chart null→50 为 36/2 → 恢复 38/0 + hash 一致 |
-| `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 25/0；基线 62/0 → 比例轴错绑、公众重复堆叠、GDP 删除三项均真实变红 → 恢复 62/0 + hash 一致 |
+| `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 25/0；基线 68/0 → 比例轴错绑、公众重复堆叠、GDP 删除三项均真实变红 → 恢复 68/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
 | `tools/verify-injection-wrappers.mjs` | 0 | 34/0；静态锁六 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
 
@@ -468,7 +468,7 @@ PowerShell 侧 `$?` 是布尔值，取码须用 `$LASTEXITCODE`。
 `tools/verify-macro-page.mjs` 当前为 **62 passed, 0 failed**，覆盖真实请求、单一
 canvas、六 dataset 逐点对账、共同 stack、左右轴/单位/tooltip、完整季度恒等式映射、
 foreign 右端缺口、金额/比例独立延伸，以及 debt ↔ rates/CPI 双向加载故障隔离。
-`verify-debt-overview-injection.mjs` 当前 **25/0**，三项破坏均红且恢复后重新 62/0。
+`verify-debt-overview-injection.mjs` 当前 **25/0**，三项破坏均红且恢复后重新 68/0。
 
 `.github/workflows/update-cot.yml` 的 FRED 基线为 13 个序列。提交清单包含五个
 债务/GDP 原始信封（`debt_total.json`、`debt_held_public.json`、
@@ -490,7 +490,7 @@ workflow 的 COT step 将 Python 的真实退出码写入 `steps.cot.outputs.cod
 
 ## 10. C8 FRED 数据安全回归
 
-`fetch_fred.py --test` 当前为 **60 passed, 0 failed**。新增测试全部使用
+`fetch_fred.py --test` 在 C8 当时为 **60 passed, 0 failed**。新增测试全部使用
 `TemporaryDirectory` 与固定 fake response，不访问 FRED 网络、不写真实 `data/`：
 
 - 相同业务输入第二次处理时，`atomic_write_json` spy 必须保持零调用，目标文件
@@ -571,3 +571,29 @@ bar 为 muted 0%，有效侧仍显示真实值；综合信号固定为“数据�
 mf 单侧 null、comm 单侧 null 与双侧 null。新 wrapper 当前 **18/0**：current null→50
 使目标 guard **31/7**，chart null→50 使其 **36/2**，恢复后 38/0 且 hash 一致。
 Python 反恒真将退化分支改回 50 时 `fetch_cot.py --test` 为 **61/5**；恢复后 66/0。
+
+## 14. C13 联邦债务历史扩展至 1990
+
+`fetch_fred.py` 以 `observation_start_for(series_id)` 分流请求起点：GFDEBTN、
+FYGFDPUN、FDHBATN、FDHBFIN、GDP 五条为 `1990-01-01`，其余八条仍为
+`2016-01-01`。`--test` 通过 fake opener 捕获 Request URL 并逐条解析 query，
+不是静态 grep 常量。
+
+FRED 官方完整序列覆盖核实：GFDEBTN 1966-Q1（241 点）、FYGFDPUN 1970-Q1
+（225 点）、FDHBATN 1981-Q1（181 点）、FDHBFIN 1970-Q1（224 点）、GDP
+1947-Q1（318 点）；五条在 1990-Q1 均有真实值。本仓只保存 1990 起历史，五个
+raw envelope 分别为 145 / 145 / 145 / 144 / 146 点，派生 `macro_debt.json`
+为 1990-Q1..2026-Q2 共 146 行。
+
+结构从 1990-Q1 即可形成。既有恒等式闸如实将 2000-Q3、2013-Q4、2014-Q1
+三季的结构三分量同时置 null；2026-Q1/Q2 因 foreign 右端 coverage 滞后也保持
+结构 null，但总债务、GDP、debt/GDP 按各自 coverage 延伸。没有补 0、前值填充
+或前端重算。
+
+`macro.html` 原本已全量消费派生 rows，无 2016 裁剪；C13 只补 `.card{min-width:0}`
+以修复桌面初始化后缩至 390px 时 canvas min-content 撑出横向页面溢出。X 轴继续
+使用 `maxTicksLimit=12` 自动减刻度。`verify-macro-page.mjs` 锁住 1990 首季、
+146 点逐字段映射、真实结构起点、缺口三项同时 null、tick 上限与移动端无溢出。
+
+反恒真结果：GFDEBTN 起点退回 2016 时 67/1，GDP 起点退回 2016 时 67/1；
+前端临时裁掉 2016 前 rows 时宏观护栏 57/11。三项破坏均恢复后重新全绿。

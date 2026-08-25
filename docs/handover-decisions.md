@@ -98,6 +98,10 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 
 ### 联邦债务面板语义（C4，C12 可视化覆盖）
 
+- C13 将 GFDEBTN / FYGFDPUN / FDHBATN / FDHBFIN / GDP 五条债务/GDP 季频源的
+  请求起点固定为 `1990-01-01`；其余 rates/CPI FRED 序列仍从 `2016-01-01`
+  开始。前端展示派生文件的全量真实历史，不通过裁轴、补 0、前值填充或跨序列反算
+  制造覆盖。若结构源有真实缺口，允许总债务/GDP线继续而结构 stack 留空。
 - 前端只消费 `macro_debt.json` 的派生字段，不做百万→十亿换算，不重算
   `domestic_public_bn`，也不以 0 或前值填补 foreign。
 - 债务结构是 `intragov_bn + domestic_public_bn + foreign_bn` 的共同 stack。
