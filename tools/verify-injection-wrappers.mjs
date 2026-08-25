@@ -23,6 +23,7 @@ const wrappers = [
   'verify-spread-injection.mjs',
   'verify-kpi-injection.mjs',
   'verify-isolation-injection.mjs',
+  'verify-cot-index-null-injection.mjs',
 ];
 
 console.log('## static contract');

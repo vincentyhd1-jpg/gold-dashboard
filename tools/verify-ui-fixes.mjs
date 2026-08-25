@@ -1,4 +1,5 @@
 import { launchChromium } from './_browser.mjs';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -255,6 +256,149 @@ await page.screenshot({
   path: path.join(__dirname, '..', 'screenshots', 'ui-fixes.png'),
   clip: { x: 100, y: top.y - 70, width: 1200, height: (bot.y + bot.height) - (top.y - 70) + 16 },
 });
+
+// ── 9. COT Index null = 不可知，绝不回填 50 / 中性 ────────────────────
+// 使用真实 schema v0 envelope 的克隆，只替换 COT Index 字段。必须读取运行时
+// DOM 与 Chart dataset；只查源码文案会让 fallback 仍存在时假绿。
+console.log('\n[9] COT Index null / 不可知语义');
+const cotBase = JSON.parse(fs.readFileSync(
+  path.join(__dirname, '..', 'data', 'cot.json'), 'utf8'));
+
+async function probeCotIndexes(label, configure) {
+  const fixture = JSON.parse(JSON.stringify(cotBase));
+  configure(fixture.data);
+  const scenarioPage = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
+  scenarioPage.on('pageerror', e => errs.push(`[${label}] ${e.message}`));
+  scenarioPage.on('console', m => {
+    if (m.type() === 'error') errs.push(`[${label}] [console] ${m.text()}`);
+  });
+  await scenarioPage.route(/\/data\/cot\.json(?:\?.*)?$/, route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(fixture),
+  }));
+  await scenarioPage.goto('http://localhost:3001', {
+    waitUntil: 'domcontentloaded', timeout: 60000,
+  });
+  await scenarioPage.waitForFunction(
+    () => typeof Chart !== 'undefined' && Chart.getChart('cotIndexChart'),
+    { timeout: 60000 });
+  await scenarioPage.waitForTimeout(300);
+  const state = await scenarioPage.evaluate(() => {
+    const indexChart = Chart.getChart('cotIndexChart');
+    const indexDataset = indexChart.data.datasets.find(ds => ds.label === 'COT Index');
+    const readBar = (barId, valueId) => {
+      const bar = document.getElementById(barId);
+      const value = document.getElementById(valueId);
+      return {
+        value: value.textContent.trim(),
+        valueState: value.dataset.state,
+        barState: bar.dataset.state,
+        width: bar.style.width,
+        background: getComputedStyle(bar).backgroundColor,
+      };
+    };
+    return {
+      mf: readBar('mfPctBar', 'mfPctVal'),
+      cm: readBar('cmPctBar', 'cmPctVal'),
+      badge: document.getElementById('signalBadge').textContent.trim(),
+      badgeClass: document.getElementById('signalBadge').className,
+      risk: document.getElementById('signalRisk').textContent.trim(),
+      reason: document.getElementById('signalReason').textContent.trim(),
+      hitRows: [...document.querySelectorAll('#rulesTable tr.hit-row')].map(el => el.id),
+      activeZones: [...document.querySelectorAll('#indexZones .iz.active')]
+        .map(el => [...el.classList].find(cls =>
+          ['extreme-bear', 'bear', 'neut', 'bull', 'extreme-bull'].includes(cls))),
+      indexData: indexDataset?.data ?? null,
+      nullTooltip: indexChart.options.plugins.tooltip.callbacks.label({ parsed: { y: null } }),
+    };
+  });
+  console.log(`  ${label}: ${JSON.stringify(state)}`);
+  await scenarioPage.close();
+  return state;
+}
+
+const mfUnknown = await probeCotIndexes('mf null / comm 72', data => {
+  data.weekly.forEach(row => { row.mf_index = null; });
+  data.weekly[data.weekly.length - 1].comm_index = 72;
+  data.latest.mf_index = null;
+  data.latest.comm_index = 72;
+});
+check('[9]a mf null 显示 -- 且 bar 为 unknown/0%',
+      mfUnknown.mf.value === '--' && mfUnknown.mf.valueState === 'unknown'
+      && mfUnknown.mf.barState === 'unknown' && mfUnknown.mf.width === '0%', mfUnknown.mf);
+check('[9]a 有效 comm 仍显示真实 72%',
+      mfUnknown.cm.value === '72%' && mfUnknown.cm.valueState === 'known'
+      && mfUnknown.cm.barState === 'known' && mfUnknown.cm.width === '72%', mfUnknown.cm);
+check('[9]a 单侧缺失使综合信号暂不判断且不给方向风险',
+      /数据不足.*暂不判断/.test(mfUnknown.badge)
+      && /unknown/.test(mfUnknown.badgeClass)
+      && /不生成方向判断/.test(mfUnknown.risk)
+      && !/偏拥挤|偏清淡|回调|追多|下跌动能/.test(mfUnknown.badge + mfUnknown.risk),
+      { badge: mfUnknown.badge, risk: mfUnknown.risk });
+check('[9]a 原因明确 mf 不可知、comm 72% 且仅展示有效单项',
+      /管理基金 Index 不可知，商业 Index 72%/.test(mfUnknown.reason)
+      && /仅展示有效单项/.test(mfUnknown.reason), mfUnknown.reason);
+check('[9]a 无综合规则或管理基金区间误高亮',
+      mfUnknown.hitRows.length === 0 && mfUnknown.activeZones.length === 0,
+      { hitRows: mfUnknown.hitRows, activeZones: mfUnknown.activeZones });
+check('[9]a Index 图逐点保持 null，不伪造 50',
+      Array.isArray(mfUnknown.indexData) && mfUnknown.indexData.length === 52
+      && mfUnknown.indexData.every(value => value === null), mfUnknown.indexData);
+check('[9]a null tooltip 安全显示不可知',
+      /不可知/.test(mfUnknown.nullTooltip), mfUnknown.nullTooltip);
+
+const commUnknown = await probeCotIndexes('mf 83 / comm null', data => {
+  data.weekly.forEach(row => { row.comm_index = null; });
+  data.weekly[data.weekly.length - 1].mf_index = 83;
+  data.latest.mf_index = 83;
+  data.latest.comm_index = null;
+});
+check('[9]b 有效 mf 仍显示真实 83% 并高亮自身区间',
+      commUnknown.mf.value === '83%' && commUnknown.mf.valueState === 'known'
+      && commUnknown.mf.width === '83%'
+      && commUnknown.activeZones.join() === 'extreme-bull',
+      { mf: commUnknown.mf, activeZones: commUnknown.activeZones });
+check('[9]b comm null 显示 -- 且 bar 为 unknown/0%',
+      commUnknown.cm.value === '--' && commUnknown.cm.valueState === 'unknown'
+      && commUnknown.cm.barState === 'unknown' && commUnknown.cm.width === '0%', commUnknown.cm);
+check('[9]b 单侧缺失不产生偏拥挤或任何规则高亮',
+      /数据不足.*暂不判断/.test(commUnknown.badge)
+      && !/偏拥挤|偏清淡/.test(commUnknown.badge)
+      && commUnknown.hitRows.length === 0,
+      { badge: commUnknown.badge, hitRows: commUnknown.hitRows });
+check('[9]b 原因明确 mf 83%、comm 不可知',
+      /管理基金 Index 83%，商业 Index 不可知/.test(commUnknown.reason)
+      && /仅展示有效单项/.test(commUnknown.reason), commUnknown.reason);
+check('[9]b Index 图直接使用后端 83，不做前端归一化',
+      Array.isArray(commUnknown.indexData)
+      && commUnknown.indexData.at(-1) === 83, commUnknown.indexData?.at(-1));
+
+const bothUnknown = await probeCotIndexes('mf null / comm null', data => {
+  data.weekly.forEach(row => {
+    row.mf_index = null;
+    row.comm_index = null;
+  });
+  data.latest.mf_index = null;
+  data.latest.comm_index = null;
+});
+check('[9]c 双侧 null 均显示 -- 且两个 bar 均 unknown/0%',
+      bothUnknown.mf.value === '--' && bothUnknown.cm.value === '--'
+      && bothUnknown.mf.barState === 'unknown' && bothUnknown.cm.barState === 'unknown'
+      && bothUnknown.mf.width === '0%' && bothUnknown.cm.width === '0%',
+      { mf: bothUnknown.mf, cm: bothUnknown.cm });
+check('[9]c 双侧 null 暂不判断、无规则/区间高亮',
+      /数据不足.*暂不判断/.test(bothUnknown.badge)
+      && /不生成方向判断/.test(bothUnknown.risk)
+      && bothUnknown.hitRows.length === 0 && bothUnknown.activeZones.length === 0,
+      { badge: bothUnknown.badge, hitRows: bothUnknown.hitRows,
+        activeZones: bothUnknown.activeZones });
+check('[9]c 原因明确双侧不可知且不生成综合判断',
+      /管理基金 Index 不可知，商业 Index 不可知/.test(bothUnknown.reason)
+      && /暂不生成综合方向判断/.test(bothUnknown.reason), bothUnknown.reason);
+check('[9]c Index 图全 null，无虚假 50 水平线',
+      Array.isArray(bothUnknown.indexData) && bothUnknown.indexData.length === 52
+      && bothUnknown.indexData.every(value => value === null), bothUnknown.indexData);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 console.log('page errors:', errs.length ? errs : 'none');

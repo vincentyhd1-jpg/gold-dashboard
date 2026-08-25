@@ -193,6 +193,17 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - `verify-injection-wrappers.mjs` 是公共状态机的 meta guard；改变 helper 的失败累计或
   恢复语义前必须先用其临时 fixture 证伪，不得只观察真实 wrapper 输出。
 
+### COT Index null / 不可知语义（C11）
+
+- COT Index 算术归 `fetch_cot.py` 所有：在当前 52 周窗口上为每条 weekly 记录预计算
+  `mf_index/comm_index`，`latest` 直接复用最后一条。前端只展示字段，不做 max/min
+  重算。本轮不把算法改成真正的历史 trailing-52。
+- `null` 表示不可知，绝不等于 50、中性、0 或最近值。管理基金图保留 null gap。
+- 任一侧 null 时，有效侧仍可显示真实百分位及其单指标区间；综合双指标信号固定为
+  “数据不足 · 暂不判断”，不输出偏拥挤/偏清淡或方向风险，不高亮任何规则。
+- `weekly[*].mf_index/comm_index` 是 schema v0 envelope 内的 additive 业务字段，
+  不触发 schema_version 升级；原 date/net/OI 与 coverage 不变。
+
 ### 破窗规则
 改格式时，**读取端先容双形状 → 写入端再切**。因为数据文件要等下次 Actions 才变形，
 本地 verify 全绿、破窗在下次 CI 才炸、归因窗口已关。
@@ -341,9 +352,8 @@ B/C 多算进来的部分，取证证实：差异最大三帧（07-01 Δ=-0.0959
   可能只差几个单位。
   余量备注：NOISE_FIXTURE 当前误差 8.23e-14 vs 容差 1e-12，余一个数量级；
   若将来把 round 收紧到 10 位，这条 fixture 会踩线失效。
-- **`index.html:470` 的 `mfVals.map(v => (mx===mn) ? 50 : ...)` 重算删除** ——
-  **先补 verify 再删，无护栏不删**。采集层 `cot_index()` 已返 None，
-  前端仍把退化输入粉饰成 50%，两处语义不一致，且六个 verify 无一条校验 COT Index 显示值。
+- **COT Index 前端重算已于 C11 删除**：三个真实 route fixture 与 C10 状态机 wrapper
+  分别锁住 current null 和 chart null，任何 `null → 50` 恢复都会使 guard 变红。
 - **「页面更新」文案覆盖不全**：时间戳源自 `cot.json` 的 `generated_at`（读取点 `:1252`），
   只代表 COT 一源，但页面还有金价、库存、期限结构。
   若 stocks 因 WAF 封锁 exit 2 停在旧数据而 COT 正常更新，用户会以为全页都是新的。
