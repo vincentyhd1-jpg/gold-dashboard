@@ -149,6 +149,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
+| `tools/verify-injection-wrappers.mjs` | 0 | 28 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 22 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
@@ -169,24 +170,23 @@ playback/gapframe 无 passed/failed 累加器，
 `44aecf2` 反转了那条编码旧口径的断言（「JUN26 已到期已剔除」→「已到期合约仍保留
 X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案一致，断言未删。
 
-### 注入类护栏（五条）
+### 注入类护栏（六条，含 wrapper meta guard）
 
 每条自身 exit 0 表示「注入→红、还原→绿」的完整序列成立。逐阶段实测：
 
 | 护栏 | exit | 阶段序列 |
 |---|---|---|
-| `tools/verify-kpi-injection.mjs` | 0 | 基线绿 → 4 种注入（年化改错值 / 年化置 null / spread 改错值 / total_oi 改 1）全部 exit=1 变红 |
-| `tools/verify-spread-injection.mjs` | 0 | 绿 → 红 → 改回后绿（29 passed, 0 failed） |
-| `tools/verify-totaloi-injection.mjs` | 0 | 绿 → 红 → 改回后绿（29 passed, 0 failed） |
-| `tools/verify-isolation-injection.mjs` | 0 | 基线绿 → 2 种注入（`_safeRender` 吞异常 / 隔离失效双模块受害）均红 → 改回绿 |
+| `tools/verify-kpi-injection.mjs` | 0 | wrapper 32/0；基线 29/0 → 4 种注入逐项红且 marker 命中 → 恢复 29/0 + hash 一致 |
+| `tools/verify-spread-injection.mjs` | 0 | wrapper 11/0；基线 29/0 → spread 注入 28/1 → 恢复 29/0 + hash 一致 |
+| `tools/verify-totaloi-injection.mjs` | 0 | wrapper 11/0；基线 29/0 → 旧 total_oi 口径 28/1 → 恢复 29/0 + hash 一致 |
+| `tools/verify-isolation-injection.mjs` | 0 | wrapper 18/0；基线 37/0 → 两种隔离破坏分别红 → 恢复 37/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
+| `tools/verify-injection-wrappers.mjs` | 0 | 28/0；静态锁四 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
 
-修改 `data/derived/term-structure-series.json` 的注入类 verify 之间无隔离：改回用的是
-自己记的原值，不是 derive 重算的产物。连跑时前一条的残留会让
-后一条的基线阶段假红 —— 实测 `verify-totaloi-injection` 因此显示「改回后 exit=1 红」，
-重跑 derive 后转绿。**一条跑完必须重跑 `python3 derive_term_structure.py` 再跑下一条。**
-`verify-noise-injection.py` 不改派生 JSON；它短暂修改生产 Python 源码并在每个 case 后
-从系统临时目录恢复，且以 SHA-256 校验恢复，不参与上述数据文件污染。
+C10 后四个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
+系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
+exit 0 已包含「未污染下一个 wrapper」的证据，不再需要在 wrapper 之间重跑 derive。
+`verify-noise-injection.py` 继续独立使用同等严格的 WSL/Python 恢复契约。
 
 ### verify-noise-injection 执行链（C5 已修复）
 
@@ -400,7 +400,7 @@ index.html:484   label 文案「页面更新：」
 - **`tools/verify-noise-injection.py`** 的跨层启动与假绿路径已由 C5 修复（见第 4 节）。
 - **`tools/verify-isolation.mjs`** 历史上有过「只打印不断言」的时期（退出码仅反映
   脚本是否抛异常），`63e28c5` 补齐后现为 37 条真断言。
-- **注入类 verify 无相互隔离**（见第 4 节），连跑会互相污染基线。
+- **注入类 verify 的相互污染已由 C10 修复**（见第 4、12 节）。
 
 ### 抽查 2 会随窗口滚动转 SKIP，而口径问题未必已解
 
@@ -527,3 +527,20 @@ PASS/SKIP。
 迁移后 11 个 browser-owning 脚本及四个既有 injection wrapper 全部 exit 0；原有
 22/29/37/3/8/4/54 等业务断言基线与 page/console error 语义未变化。C9 未修改生产
 页面、数据、Python、workflow、package 版本或依赖。
+
+## 12. C10 前端 injection wrapper 自动判定
+
+新增 `tools/_injection.mjs` 统一四个 Node wrapper 的执行状态机：保存原始 bytes/hash，
+在系统临时目录备份，要求 baseline exit 0；每个 patch 必须改变文件与指定业务锚点，
+目标 guard 必须正常返回非零且命中稳定 FAIL marker；每 case 从原始 bytes 重建，
+恢复后重新跑 guard，并在 case/finally 两层校验 SHA-256。spawn error、signal、timeout
+或恢复错误都记为 wrapper failure，wrapper 明确设置自身 exit code。
+
+`verify-injection-wrappers.mjs` 当前 **28 passed, 0 failed**。动态临时 fixture 覆盖
+成功状态机、红色基线不执行 injection、spawn error、signal、注入仍绿、no-op patch、
+restore mismatch 与 patch throw 后恢复。反恒真结果：吞掉“注入仍绿”累计、放行
+no-op、禁用 restore hash 三次均使 meta guard exit 1；所有临时破坏均已恢复。
+
+真实 wrapper 最终结果：total_oi 11/0、spread 11/0、KPI 32/0、isolation 18/0；
+目标 guard 恢复后仍为 contract-contango 29/0、isolation 37/0。C10 未修改
+`index.html`、派生 JSON、业务断言、浏览器 helper、workflow 或生产逻辑。

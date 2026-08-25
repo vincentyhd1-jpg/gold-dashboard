@@ -1,67 +1,62 @@
-// 破坏注入：KPI 字段下沉后，verify-contract-contango 是否仍会变红？
-// 它反算年化率并与卡片显示比对。若前端改成读字段后该断言失效，
-// 注入错值就会静默通过 —— 那正是 CLAUDE.md 记的那类失效。
-import { spawn } from 'child_process';
-import fs from 'fs';
+// KPI 字段的四种破坏必须逐项让 verify-contract-contango 变红。
+import { runInjectionSuite } from './_injection.mjs';
 
-const SERIES = 'data/derived/term-structure-series.json';
-const BACKUP = 'series.injection-backup.json';
-
-function run(script) {
-  return new Promise(resolve => {
-    const p = spawn('node', ['tools/' + script], { shell: false });
-    let out = '';
-    p.stdout.on('data', d => out += d);
-    p.stderr.on('data', d => out += d);
-    p.on('close', code => resolve({ code, out }));
-  });
+function patchFrames(field, value) {
+  return original => {
+    const payload = JSON.parse(original.toString('utf8'));
+    let changed = 0;
+    for (const frame of payload.data.frames) {
+      if (field === 'spread_annualized_pct' && value !== null
+          && frame.spread_annualized_pct == null) continue;
+      if (frame[field] !== value) changed++;
+      frame[field] = value;
+    }
+    if (changed === 0) throw new Error(`${field}: 目标值原本已是 ${value}`);
+    return JSON.stringify(payload);
+  };
 }
 
-fs.copyFileSync(SERIES, BACKUP);
-
-const CASES = [
-  ['年化率改错值 (+99.99%)', s => {
-    for (const f of s.data.frames) {
-      if (f.spread_annualized_pct != null) f.spread_annualized_pct = 99.99;
-    }
-    return s;
-  }],
-  ['年化率置 null', s => {
-    for (const f of s.data.frames) f.spread_annualized_pct = null;
-    return s;
-  }],
-  ['spread 改错值 (999.9)', s => {
-    for (const f of s.data.frames) {
-      if (f.spread != null) f.spread = 999.9;
-    }
-    return s;
-  }],
-  ['total_oi 改错值 (1)', s => {
-    for (const f of s.data.frames) f.total_oi = 1;
-    return s;
-  }],
-];
-
-try {
-  console.log('=== 基线（未注入）===');
-  const base = await run('verify-contract-contango.mjs');
-  console.log(`  verify-contract-contango  exit=${base.code}  ${base.code === 0 ? '绿' : '红'}`);
-
-  for (const [label, patch] of CASES) {
-    const orig = JSON.parse(fs.readFileSync(BACKUP, 'utf8'));
-    fs.writeFileSync(SERIES, JSON.stringify(patch(orig)));
-
-    const r = await run('verify-contract-contango.mjs');
-    const failed = r.code !== 0;
-    console.log(`\n=== 注入：${label} ===`);
-    console.log(`  exit=${r.code}  ${failed ? '变红 ✓ 护栏有效' : '仍绿 ✗ 静默通过'}`);
-    if (failed) {
-      const lines = r.out.split('\n').filter(l => /FAIL/.test(l)).slice(0, 3);
-      for (const l of lines) console.log('   ', l.trim().slice(0, 110));
-    }
-  }
-} finally {
-  fs.copyFileSync(BACKUP, SERIES);
-  fs.unlinkSync(BACKUP);
-  console.log('\n派生文件已恢复');
+function verifyField(field, expected) {
+  return (original, patched) => {
+    const before = JSON.parse(original.toString('utf8')).data.frames;
+    const after = JSON.parse(patched.toString('utf8')).data.frames;
+    const changed = after.filter((frame, i) => frame[field] !== before[i][field]);
+    const valuesCorrect = changed.length > 0
+      && changed.every(frame => frame[field] === expected);
+    return { ok: valuesCorrect, detail: `${field} changed=${changed.length}` };
+  };
 }
+
+const result = await runInjectionSuite({
+  name: 'KPI injection wrapper',
+  target: 'data/derived/term-structure-series.json',
+  guard: 'tools/verify-contract-contango.mjs',
+  cases: [
+    {
+      name: 'annualized wrong value 99.99',
+      patch: patchFrames('spread_annualized_pct', 99.99),
+      verifyPatch: verifyField('spread_annualized_pct', 99.99),
+      expectedFailureMarkers: ['derive 年化与复算一致'],
+    },
+    {
+      name: 'annualized null',
+      patch: patchFrames('spread_annualized_pct', null),
+      verifyPatch: verifyField('spread_annualized_pct', null),
+      expectedFailureMarkers: ['derive 年化与复算一致'],
+    },
+    {
+      name: 'spread wrong value 999.9',
+      patch: patchFrames('spread', 999.9),
+      verifyPatch: verifyField('spread', 999.9),
+      expectedFailureMarkers: ['derive spread'],
+    },
+    {
+      name: 'total_oi wrong value 1',
+      patch: patchFrames('total_oi', 1),
+      verifyPatch: verifyField('total_oi', 1),
+      expectedFailureMarkers: ['derive total_oi'],
+    },
+  ],
+});
+
+process.exitCode = result.ok ? 0 : 1;

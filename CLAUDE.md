@@ -73,6 +73,14 @@ tools/*.mjs       Playwright 验证脚本
 `tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
 不 fallback 与 EPERM 继续抛出。
 
+**前端破坏注入（C10）**：四个 `verify-*-injection.mjs` 统一经
+`tools/_injection.mjs` 执行 `baseline green → injection red → restore green`。
+每个 case 必须证明 patch 与业务锚点真实改变、目标 guard 非零且命中稳定 FAIL
+marker；备份只进系统临时目录，每 case 与最外层 `finally` 都按原始 bytes/SHA-256
+恢复。任一条件不满足，wrapper 自身 exit 1。`tools/verify-injection-wrappers.mjs`
+用临时 fixture 锁死基线已红、注入假绿、no-op、restore mismatch、patch throw 与
+子进程异常都不能转成成功。
+
 ### 落盘统一信封（schema_version = 0）
 
 所有派生文件走 `data_envelope.py` 的 `envelope()` + `write_json()`：
@@ -715,6 +723,7 @@ node tools/verify-kpi-injection.mjs        # 注入错误 KPI 值，验证护栏
 node tools/verify-spread-injection.mjs     # 注入错误 spread，验证护栏会变红
 node tools/verify-totaloi-injection.mjs    # 注入旧口径 total_oi，验证护栏会变红
 node tools/verify-isolation-injection.mjs  # 注入隔离失效，验证 isolation 会变红
+node tools/verify-injection-wrappers.mjs   # wrapper 状态机/恢复/退出码基础设施
 node tools/verify-macro-page.mjs           # macro.html 图形态 / CPI 右端 / 债务缺口与隔离
 python3 tools/verify-noise-injection.py    # WSL 内运行；三种 noise 注入必须红，恢复后绿
 node tools/verify-live.mjs                 # 线上端到端
