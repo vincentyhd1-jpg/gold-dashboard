@@ -96,17 +96,19 @@ cot 比整个 data（latest+weekly 全量，因 CFTC 会修订历史期）；gol
 `front_remaining` 保留 round(4)（纯展示比率）；`roll_noise`/`roll_noise_ma` 全精度落盘。
 CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 
-### 联邦债务面板语义（C4）
+### 联邦债务面板语义（C4，C12 可视化覆盖）
 
 - 前端只消费 `macro_debt.json` 的派生字段，不做百万→十亿换算，不重算
   `domestic_public_bn`，也不以 0 或前值填补 foreign。
 - 债务结构是 `intragov_bn + domestic_public_bn + foreign_bn` 的共同 stack。
   foreign 右端滞后一季时，三项同时保持 null；宁可显示结构缺口，也不画一个会被
   误读成债务骤降的不完整堆叠。
-- 总债务与比率按各自真实 coverage 延伸：结构缺口季度仍可显示 `total_bn`、
-  `debt_gdp_pct`、`public_gdp_pct`。结构 coverage 与 ratio coverage 不强行对齐。
-- 比率与金额分图、分轴：比率轴 `%`，结构/总额轴 `USD bn`；不使用双 Y 轴制造
-  视觉相关性。
+- 总债务、GDP 与比率按各自真实 coverage 延伸：结构缺口季度仍可显示 `total_bn`、
+  `gdp_bn`、`debt_gdp_pct`。结构 coverage 与金额/ratio coverage 不强行对齐。
+- C12 按明确产品要求将债务区域收口为一张双 Y 轴综合图：三项结构柱、`total_bn`
+  与 `gdp_bn` 共用左轴 `yAmount`（`USD bn`），`debt_gdp_pct` 独占右轴 `yPct`（`%`）。
+  `public_gdp_pct` 不在主图展示但不从派生契约删除。所有六个 dataset 直接读取派生
+  字段，折线 `spanGaps=false` 且不做平滑插值或前值填充。
 - rates/CPI 与 debt 是两个独立前端加载边界，任一组失败不得拖掉另一组。
 
 ### 帧级 vs 展示视图二分（重要）
@@ -322,7 +324,7 @@ B/C 多算进来的部分，取证证实：差异最大三帧（07-01 Δ=-0.0959
   `returncode`，不再跨 WSL → Windows → shell。三种注入必须各自变红且命中预期
   NOISE 断言，基线/恢复必须绿，否则脚本自身 exit 1。备份在系统临时目录，
   `finally` 恢复并校验 SHA-256。
-- **注入类 verify 之间的隔离已由 C10 完成**：四个 Node wrapper 每 case 从运行前
+- **注入类 verify 之间的隔离已由 C10 完成**：当前六个 Node wrapper 每 case 从运行前
   原始 bytes 重建，系统临时目录备份，并在 case/finally 校验 SHA-256；wrapper exit 0
   已包含恢复后目标 guard 再次全绿的证据。
 - **抽查 2 的滑窗 SKIP**：见第 4 节末，约两年后到期。

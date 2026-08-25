@@ -41,9 +41,8 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .card-sub{font-size:11px;color:#8b949e;margin-bottom:16px}
 .chart-wrap{position:relative;height:260px}
 .card.full .chart-wrap{height:300px}
-.debt-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.debt-chart-title{font-size:12px;font-weight:600;color:#c9d1d9;margin-bottom:8px}
-@media(max-width:800px){.debt-grid{grid-template-columns:1fr}}
+.debt-chart-wrap{height:420px!important}
+@media(max-width:640px){.debt-chart-wrap{height:360px!important}}
 
 /* 状态行 */
 .status{font-size:12px;color:#8b949e;min-height:18px}
@@ -101,17 +100,8 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
 
     <div class="card full" id="debtPanel">
       <div class="card-title">美国联邦债务</div>
-      <div class="card-sub">比率按季度、单位 %；债务结构为政府内部持有 + 本国公众持有 + 外国持有，单位十亿美元（USD bn）。结构缺口不做前值填充。</div>
-      <div class="debt-grid">
-        <div>
-          <div class="debt-chart-title">债务与公众持有占 GDP 比率</div>
-          <div class="chart-wrap"><canvas id="debtRatioChart"></canvas></div>
-        </div>
-        <div>
-          <div class="debt-chart-title">联邦债务结构</div>
-          <div class="chart-wrap"><canvas id="debtStackChart"></canvas></div>
-        </div>
-      </div>
+      <div class="card-sub">债务结构、联邦债务总额与美国名义 GDP 使用左轴（USD bn）；联邦债务 / GDP 使用右轴（%）。结构缺口不做前值填充。</div>
+      <div class="chart-wrap debt-chart-wrap"><canvas id="debtOverviewChart"></canvas></div>
       <div class="status" id="debtStatus" role="status">正在加载联邦债务数据…</div>
     </div>
 
@@ -128,6 +118,7 @@ const COLORS = {
   gold:  '#f5c842',
   blue:  '#58a6ff',
   red:   '#f85149',
+  green: '#3fb950',
   muted: '#8b949e',
   grid:  '#21262d',
 };
@@ -224,79 +215,101 @@ function renderCPI(rows) {
   ]);
 }
 
-function debtOptions(axisId, unit, stacked = false) {
+function debtOverviewOptions() {
   const options = chartOptions();
   const yStyle = options.scales.y;
   delete options.scales.y;
-  options.scales.x.stacked = stacked;
-  options.scales[axisId] = {
+  options.scales.x.stacked = true;
+  options.scales.yAmount = {
     ...yStyle,
-    stacked,
-    title: { display: true, text: unit, color: COLORS.muted, font: { size: 10 } },
+    position: 'left',
+    stacked: true,
+    title: { display: true, text: 'USD bn', color: COLORS.muted, font: { size: 10 } },
     ticks: {
       ...yStyle.ticks,
-      callback: v => unit === '%' ? v + '%' : Number(v).toLocaleString(),
+      callback: v => Number(v).toLocaleString('en-US'),
     },
+  };
+  options.scales.yPct = {
+    ...yStyle,
+    position: 'right',
+    stacked: false,
+    grid: { color: COLORS.grid, drawOnChartArea: false },
+    title: { display: true, text: '%', color: COLORS.muted, font: { size: 10 } },
+    ticks: {
+      ...yStyle.ticks,
+      callback: v => Number(v).toLocaleString('en-US', { maximumFractionDigits: 1 }) + '%',
+    },
+  };
+  options.plugins.title = {
+    display: true,
+    text: '美国联邦债务总览',
+    color: '#c9d1d9',
+    font: { size: 12, weight: '600' },
+  };
+  options.plugins.legend.labels = {
+    ...options.plugins.legend.labels,
+    usePointStyle: true,
+    pointStyleWidth: 24,
+    boxHeight: 8,
+    sort: (a, b) => a.datasetIndex - b.datasetIndex,
   };
   options.plugins.tooltip.callbacks = {
     label: ctx => ctx.parsed.y === null
       ? '  ' + ctx.dataset.label + ': --'
-      : '  ' + ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString(undefined, {
-          minimumFractionDigits: unit === '%' ? 2 : 0,
-          maximumFractionDigits: unit === '%' ? 2 : 1,
-        }) + (unit === '%' ? '%' : ' USD bn'),
+      : '  ' + ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString('en-US', {
+          minimumFractionDigits: ctx.dataset.yAxisID === 'yPct' ? 1 : 0,
+          maximumFractionDigits: ctx.dataset.yAxisID === 'yPct' ? 1 : 1,
+        }) + (ctx.dataset.yAxisID === 'yPct' ? '%' : ' USD bn'),
   };
   return options;
 }
 
 function renderDebt(rows) {
   const labels = rows.map(r => r.quarter);
-  const ratioAxis = 'yRatio';
-  const debtAxis = 'yDebt';
+  const amountAxis = 'yAmount';
+  const ratioAxis = 'yPct';
   const structureStack = 'debtStructure';
 
-  new Chart(document.getElementById('debtRatioChart'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        lineDataset('联邦债务 / GDP', rows.map(r => r.debt_gdp_pct), COLORS.gold, {
-          yAxisID: ratioAxis, sourceField: 'debt_gdp_pct',
-        }),
-        lineDataset('公众持有债务 / GDP', rows.map(r => r.public_gdp_pct), COLORS.blue, {
-          yAxisID: ratioAxis, sourceField: 'public_gdp_pct',
-        }),
-      ],
-    },
-    options: debtOptions(ratioAxis, '%'),
-  });
-
-  new Chart(document.getElementById('debtStackChart'), {
+  new Chart(document.getElementById('debtOverviewChart'), {
     type: 'bar',
     data: {
       labels,
       datasets: [
         {
           label: '政府内部持有', data: rows.map(r => r.intragov_bn),
-          backgroundColor: 'rgba(88,166,255,.75)', stack: structureStack, yAxisID: debtAxis,
-          sourceField: 'intragov_bn',
+          type: 'bar', backgroundColor: 'rgba(88,166,255,.48)',
+          stack: structureStack, yAxisID: amountAxis, sourceField: 'intragov_bn',
+          order: 3, pointStyle: 'rect', borderWidth: 0,
         },
         {
           label: '本国公众持有', data: rows.map(r => r.domestic_public_bn),
-          backgroundColor: 'rgba(245,200,66,.75)', stack: structureStack, yAxisID: debtAxis,
-          sourceField: 'domestic_public_bn',
+          type: 'bar', backgroundColor: 'rgba(163,113,247,.48)',
+          stack: structureStack, yAxisID: amountAxis, sourceField: 'domestic_public_bn',
+          order: 3, pointStyle: 'rect', borderWidth: 0,
         },
         {
           label: '外国持有', data: rows.map(r => r.foreign_bn),
-          backgroundColor: 'rgba(163,113,247,.75)', stack: structureStack, yAxisID: debtAxis,
-          sourceField: 'foreign_bn',
+          type: 'bar', backgroundColor: 'rgba(245,200,66,.48)',
+          stack: structureStack, yAxisID: amountAxis, sourceField: 'foreign_bn',
+          order: 3, pointStyle: 'rect', borderWidth: 0,
         },
         lineDataset('联邦债务总额', rows.map(r => r.total_bn), COLORS.red, {
-          type: 'line', yAxisID: debtAxis, order: 0, sourceField: 'total_bn',
+          type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'total_bn',
+          stack: 'totalDebtLine', borderWidth: 2.5, tension: 0, pointStyle: 'line',
+        }),
+        lineDataset('美国名义 GDP', rows.map(r => r.gdp_bn), COLORS.green, {
+          type: 'line', yAxisID: amountAxis, order: 0, sourceField: 'gdp_bn',
+          stack: 'gdpLine', borderWidth: 2.5, tension: 0, pointStyle: 'line',
+        }),
+        lineDataset('联邦债务 / GDP', rows.map(r => r.debt_gdp_pct), COLORS.gold, {
+          type: 'line', yAxisID: ratioAxis, order: 0, sourceField: 'debt_gdp_pct',
+          stack: 'debtRatioLine', borderWidth: 3, borderDash: [7, 4],
+          tension: 0, pointStyle: 'line',
         }),
       ],
     },
-    options: debtOptions(debtAxis, 'USD bn', true),
+    options: debtOverviewOptions(),
   });
 }
 
