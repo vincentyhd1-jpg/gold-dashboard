@@ -129,7 +129,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 
 ## 4. 护栏清单与当前状态
 
-全部在 C15 分支（基于 `97d946d`）上实测。**Python 侧经 `wsl -d Ubuntu-22.04 --cd <repo> -- python3`，
+全部在 C16 分支（基于 `afc18e2`）上实测。**Python 侧经 `wsl -d Ubuntu-22.04 --cd <repo> -- python3`，
 前端 `.mjs` 从 PowerShell 原生调 `node`** —— 执行侧错配会产生假红/假绿，见 CLAUDE.md
 「执行侧陷阱」一节。
 
@@ -160,10 +160,11 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
 | `tools/verify-macro-page.mjs` | 0 | 86 passed, 0 failed；page errors: none |
+| `tools/verify-static-build.mjs` | 0 | 28 passed, 0 failed；34 个公开文件逐字节对账 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
-macro-page(86) 有计数；
+macro-page(86)/static-build(28) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -171,7 +172,7 @@ playback/gapframe 无 passed/failed 累加器，
 `44aecf2` 反转了那条编码旧口径的断言（「JUN26 已到期已剔除」→「已到期合约仍保留
 X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案一致，断言未删。
 
-### 注入类护栏（八条，含 wrapper meta guard）
+### 注入类护栏（九条，含 wrapper meta guard）
 
 每条自身 exit 0 表示「注入→红、还原→绿」的完整序列成立。逐阶段实测：
 
@@ -185,11 +186,15 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 81/0；基线 86/0 → C15 四项及 C14 七项注入均真实变红 → 恢复 86/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
 | `tools/verify-injection-wrappers.mjs` | 0 | 34/0；静态锁六 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
+| `tools/verify-static-build-injection.mjs` | 0 | 23/0；缺 assets.directory、缺 macro.html、泄漏 Python 均真实红 → 恢复 28/0 + config hash 一致 |
 
 C10-C15 的六个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
 exit 0 已包含「未污染下一个 wrapper」的证据，不再需要在 wrapper 之间重跑 derive。
 `verify-noise-injection.py` 继续独立使用同等严格的 WSL/Python 恢复契约。
+`verify-static-build-injection.mjs` 因同时覆盖 config 与 ignored dist 产物，使用专门的
+多目标 wrapper；配置备份仅放系统临时目录，A/B/C 每案后重建 dist，最终与 finally
+同时校验 config SHA-256 和 guard 28/0。
 
 ### verify-noise-injection 执行链（C5 已修复）
 
@@ -648,3 +653,44 @@ foreign stack、恢复“结构快照”标签、恢复公众/政府内部日频
 重复 public、删除 GDP dataset、禁用 drag、删除 reset、结构 forward-fill、恢复不可见
 daily-union null-array 表示。每案目标 guard 都非零并命中 marker；最终 81/0，恢复主
 guard 86/0，`macro.html` SHA-256 与注入前一致。
+
+## 17. C16 Cloudflare Workers Static Assets 发布
+
+C15 已合并到 `afc18e2`，但该 merge commit 没有触发 production check；线上文件哈希
+仍精确等于 C14 `97d946d`。C15 PR head 的 Cloudflare build 报
+`Missing entry-point to Worker script or to assets directory`，根因是仓库没有 Worker
+entry point，也没有 Wrangler assets 配置。
+
+C16 新增无 `main`/bindings 的 `wrangler.jsonc`：worker 名称保持 `gold-dashboard`，
+`compatibility_date=2026-08-25`，`assets.directory=./dist`。构建命令
+`node tools/build-static-site.mjs` 先安全删除仓库内固定 dist，再按 34 项路径逐个复制：
+
+- 根页面：`index.html`、`macro.html`、`term-3d.html`；
+- 当前 5 个 assets、1 个 CSS、3 个 JS；
+- 当前 22 个公开 JSON（逐项枚举，不按扩展名自动吸收未来文件）。
+
+当前产物为 34 文件：3 HTML、5 assets、1 CSS、3 JS、22 JSON，共 3,773,347 bytes。
+`data/section62_sample.pdf`、`data/quarantine/`、全部 Python/Markdown、AGENTS/CLAUDE/
+README、docs/tools/.github/.git、测试与临时文件都不公开。`dist/` 和 Wrangler 临时目录
+`.wrangler/` 均在 `.gitignore`，不进入 commit。
+
+Cloudflare Dashboard 的 Workers Builds 必须配置：
+
+| 设置 | 值 |
+|---|---|
+| Root directory | `/` |
+| Build command | `node tools/build-static-site.mjs` |
+| Production deploy command | `npx wrangler deploy` |
+| Preview deploy command | `npx wrangler versions upload` |
+
+仓库配置不能自动改 Dashboard trigger；C16 merge 前后均需由用户确认这四项已经保存。
+Wrangler 4.125.0 的 `versions upload --dry-run` 与 `deploy --dry-run` 均 exit 0，后者明确
+读取 `dist` assets、无 bindings，二者都不再报 missing entry-point/assets。Windows
+首次 `npx` 因 npm 缓存缺 `@cloudflare/workerd-windows-64` 失败，属于本机 optional
+dependency 环境问题；在系统 TEMP 以 `--include=optional` 隔离安装后两个 dry-run
+真实通过，临时安装已删除，未修改仓库 package 依赖。
+
+`verify-static-build.mjs` 为 28/0：锁定 config、必需页面、完整 manifest、逐字节一致和
+内部文件不公开。三项负向 wrapper 为 23/0：删除 `assets.directory` 使 26/2，删除
+`dist/macro.html` 使 26/2，将 `fetch_treasury_debt.py` 放入 dist 使 25/3；每案恢复，
+最终重新 28/0。`verify-macro-page.mjs --site-root dist` 对真实产物完整通过 86/0。
