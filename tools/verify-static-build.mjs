@@ -11,6 +11,7 @@ const PUBLIC_DIRS = ['assets', 'css', 'js'];
 const REQUIRED_PATHS = [
   ...ROOT_PAGES,
   'assets/favicon.svg',
+  'assets/js/cbo-scenario-engine.js',
   'css/chart.css',
   'js/data-helpers.js',
   'data/cot.json',
@@ -18,11 +19,12 @@ const REQUIRED_PATHS = [
   'data/treasury_mts_fiscal.json',
   'data/derived/macro_fiscal_stress.json',
   'data/derived/cbo_baseline_latest.json',
+  'data/derived/cbo_scenario_basis.json',
 ];
 const FORBIDDEN_PATHS = [
   'AGENTS.md', 'CLAUDE.md', 'README.md',
   'fetch_fred.py', 'fetch_treasury_debt.py', 'fetch_treasury_fiscal.py',
-  'fetch_cbo_baseline.py', 'tools', 'docs', '.github', '.git',
+  'fetch_cbo_baseline.py', 'derive_cbo_scenario_basis.py', 'tools', 'docs', '.github', '.git',
   'data/quarantine', 'data/cbo',
 ];
 

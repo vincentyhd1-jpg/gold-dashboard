@@ -1,0 +1,213 @@
+{
+  "schema_version": 0,
+  "source": "cbo_fiscal_scenario_basis",
+  "freq": "annual",
+  "generated_at": "2026-08-27T23:25:27Z",
+  "date_field": "year",
+  "coverage": {
+    "first": "2025",
+    "last": "2036",
+    "count": 12
+  },
+  "derived_from": [
+    {
+      "source": "cbo_budget_baseline",
+      "generated_at": "2026-08-27T08:22:01Z",
+      "coverage": {
+        "first": "2025",
+        "last": "2036",
+        "count": 12
+      },
+      "envelope": true
+    }
+  ],
+  "warnings": [],
+  "info": [
+    "deterministic_user_scenario_basis_not_a_forecast",
+    "official_cbo_baseline_remains_read_only",
+    "stock_flow_adjustment_is_accounting_reconciliation_not_risk_metric",
+    "zero_shock_reproduces_official_baseline",
+    "no_probability_no_crisis_year_no_forward_fiscal_gap"
+  ],
+  "data": {
+    "annual": [
+      {
+        "year": 2025,
+        "kind": "actual",
+        "baseline_debt_bn": 30172.402,
+        "baseline_debt_pct_gdp": 99.375,
+        "baseline_gdp_bn": 30362.025,
+        "baseline_nominal_g_pct": null,
+        "baseline_primary_balance_pct_gdp": -2.653,
+        "baseline_net_interest_pct_gdp": 3.195,
+        "baseline_overall_balance_pct_gdp": -5.847,
+        "baseline_sfa_bn": null,
+        "baseline_sfa_pct_gdp": null
+      },
+      {
+        "year": 2026,
+        "kind": "projection",
+        "baseline_debt_bn": 32095.165,
+        "baseline_debt_pct_gdp": 100.605,
+        "baseline_gdp_bn": 31902.006,
+        "baseline_nominal_g_pct": 5.072062881181338,
+        "baseline_primary_balance_pct_gdp": -2.551,
+        "baseline_net_interest_pct_gdp": 3.257,
+        "baseline_overall_balance_pct_gdp": -5.807,
+        "baseline_sfa_bn": 70.21351158000243,
+        "baseline_sfa_pct_gdp": 0.22009121175640942
+      },
+      {
+        "year": 2027,
+        "kind": "projection",
+        "baseline_debt_bn": 34004.52,
+        "baseline_debt_pct_gdp": 102.069,
+        "baseline_gdp_bn": 33315.187,
+        "baseline_nominal_g_pct": 4.429755921931666,
+        "baseline_primary_balance_pct_gdp": -2.34,
+        "baseline_net_interest_pct_gdp": 3.325,
+        "baseline_overall_balance_pct_gdp": -5.665,
+        "baseline_sfa_bn": 22.049656449996064,
+        "baseline_sfa_pct_gdp": 0.06618499980203042
+      },
+      {
+        "year": 2028,
+        "kind": "projection",
+        "baseline_debt_bn": 36092.745,
+        "baseline_debt_pct_gdp": 104.116,
+        "baseline_gdp_bn": 34665.785,
+        "baseline_nominal_g_pct": 4.054000957581305,
+        "baseline_primary_balance_pct_gdp": -2.486,
+        "baseline_net_interest_pct_gdp": 3.513,
+        "baseline_overall_balance_pct_gdp": -5.999,
+        "baseline_sfa_bn": 8.624557850005658,
+        "baseline_sfa_pct_gdp": 0.024879165003780113
+      },
+      {
+        "year": 2029,
+        "kind": "projection",
+        "baseline_debt_bn": 38102.757,
+        "baseline_debt_pct_gdp": 105.811,
+        "baseline_gdp_bn": 36010.049,
+        "baseline_nominal_g_pct": 3.877783237852528,
+        "baseline_primary_balance_pct_gdp": -1.931,
+        "baseline_net_interest_pct_gdp": 3.678,
+        "baseline_overall_balance_pct_gdp": -5.609,
+        "baseline_sfa_bn": -9.791648410004882,
+        "baseline_sfa_pct_gdp": -0.027191433174681
+      },
+      {
+        "year": 2030,
+        "kind": "projection",
+        "baseline_debt_bn": 40279.639,
+        "baseline_debt_pct_gdp": 107.726,
+        "baseline_gdp_bn": 37390.673,
+        "baseline_nominal_g_pct": 3.8339964491578504,
+        "baseline_primary_balance_pct_gdp": -2.056,
+        "baseline_net_interest_pct_gdp": 3.829,
+        "baseline_overall_balance_pct_gdp": -5.886,
+        "baseline_sfa_bn": -23.93301277999535,
+        "baseline_sfa_pct_gdp": -0.06400797541139563
+      },
+      {
+        "year": 2031,
+        "kind": "projection",
+        "baseline_debt_bn": 42528.336,
+        "baseline_debt_pct_gdp": 109.573,
+        "baseline_gdp_bn": 38812.821,
+        "baseline_nominal_g_pct": 3.8034832911405525,
+        "baseline_primary_balance_pct_gdp": -1.9,
+        "baseline_net_interest_pct_gdp": 3.989,
+        "baseline_overall_balance_pct_gdp": -5.889,
+        "baseline_sfa_bn": -36.990028690000145,
+        "baseline_sfa_pct_gdp": -0.09530363353387826
+      },
+      {
+        "year": 2032,
+        "kind": "projection",
+        "baseline_debt_bn": 44922.49,
+        "baseline_debt_pct_gdp": 111.535,
+        "baseline_gdp_bn": 40276.527,
+        "baseline_nominal_g_pct": 3.7711919986439524,
+        "baseline_primary_balance_pct_gdp": -1.909,
+        "baseline_net_interest_pct_gdp": 4.147,
+        "baseline_overall_balance_pct_gdp": -6.057,
+        "baseline_sfa_bn": -45.395240390005256,
+        "baseline_sfa_pct_gdp": -0.11270892445618574
+      },
+      {
+        "year": 2033,
+        "kind": "projection",
+        "baseline_debt_bn": 47644.187,
+        "baseline_debt_pct_gdp": 113.992,
+        "baseline_gdp_bn": 41795.93,
+        "baseline_nominal_g_pct": 3.77242804475173,
+        "baseline_primary_balance_pct_gdp": -2.384,
+        "baseline_net_interest_pct_gdp": 4.269,
+        "baseline_overall_balance_pct_gdp": -6.653,
+        "baseline_sfa_bn": -58.986222899999575,
+        "baseline_sfa_pct_gdp": -0.1411291073078158
+      },
+      {
+        "year": 2034,
+        "kind": "projection",
+        "baseline_debt_bn": 50393.853,
+        "baseline_debt_pct_gdp": 116.186,
+        "baseline_gdp_bn": 43373.323,
+        "baseline_nominal_g_pct": 3.7740349359375314,
+        "baseline_primary_balance_pct_gdp": -2.109,
+        "baseline_net_interest_pct_gdp": 4.389,
+        "baseline_overall_balance_pct_gdp": -6.498,
+        "baseline_sfa_bn": -68.73252853999475,
+        "baseline_sfa_pct_gdp": -0.15846728769201002
+      },
+      {
+        "year": 2035,
+        "kind": "projection",
+        "baseline_debt_bn": 53103.223,
+        "baseline_debt_pct_gdp": 117.977,
+        "baseline_gdp_bn": 45011.5,
+        "baseline_nominal_g_pct": 3.776922971753871,
+        "baseline_primary_balance_pct_gdp": -1.688,
+        "baseline_net_interest_pct_gdp": 4.486,
+        "baseline_overall_balance_pct_gdp": -6.174,
+        "baseline_sfa_bn": -69.64001000000462,
+        "baseline_sfa_pct_gdp": -0.15471603923442814
+      },
+      {
+        "year": 2036,
+        "kind": "projection",
+        "baseline_debt_bn": 56152.391,
+        "baseline_debt_pct_gdp": 120.209,
+        "baseline_gdp_bn": 46712.142,
+        "baseline_nominal_g_pct": 3.7782388945047263,
+        "baseline_primary_balance_pct_gdp": -2.079,
+        "baseline_net_interest_pct_gdp": 4.591,
+        "baseline_overall_balance_pct_gdp": -6.669,
+        "baseline_sfa_bn": -66.06474997999476,
+        "baseline_sfa_pct_gdp": -0.1414295023764801
+      }
+    ],
+    "vintage": {
+      "vintage_id": "2026-02",
+      "publication_date": "2026-02-11",
+      "source_page_url": "https://www.cbo.gov/publication/61882"
+    },
+    "methodology": {
+      "model_version": "1",
+      "anchor_year": 2025,
+      "projection_start_year": 2026,
+      "projection_end_year": 2036,
+      "stock_flow_reconciliation_method": "official_debt_change_minus_overall_deficit_amount",
+      "overall_balance_sign": "surplus_positive_deficit_negative",
+      "primary_balance_shock_sign": "positive_is_fiscal_improvement",
+      "net_interest_spending_shock_sign": "positive_is_higher_spending",
+      "scenario_is_deterministic": true,
+      "scenario_is_not_forecast": true,
+      "no_probability": true,
+      "no_crisis_year": true,
+      "no_forward_fiscal_gap": true,
+      "official_baseline_is_read_only": true
+    }
+  }
+}

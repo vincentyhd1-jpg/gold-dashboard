@@ -13,6 +13,7 @@ const PUBLIC_FILES = [
   'assets/favicon-32.png',
   'assets/favicon.ico',
   'assets/favicon.svg',
+  'assets/js/cbo-scenario-engine.js',
   'css/chart.css',
   'js/data-helpers.js',
   'js/playback.js',
@@ -41,6 +42,7 @@ const PUBLIC_FILES = [
   'data/derived/macro_rates.json',
   'data/derived/macro_fiscal_stress.json',
   'data/derived/cbo_baseline_latest.json',
+  'data/derived/cbo_scenario_basis.json',
   'data/derived/term-structure-series.json',
 ];
 

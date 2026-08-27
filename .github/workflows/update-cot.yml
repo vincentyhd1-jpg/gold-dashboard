@@ -45,6 +45,8 @@ jobs:
           # CBO baseline 是手工 vintage 更新；这里只跑完全离线的 parser/schema/
           # immutable-vintage 测试，不在每日任务下载或覆盖官方 workbook。
           python fetch_cbo_baseline.py --test
+          # C18B 只离线验证 scenario basis 的闭合与只读契约；不生成或提交用户情景。
+          python derive_cbo_scenario_basis.py --test
         continue-on-error: true
 
       # 每个采集步骤互不连累：任一失败都不能让其余步骤被跳过，
@@ -240,7 +242,7 @@ jobs:
           }
 
           [ "${{ steps.tests.outcome }}"  = "failure" ] && \
-            fail "校验器自检" "十一个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro / fetch_treasury_debt / fetch_treasury_fiscal / derive_fiscal_stress / fetch_cbo_baseline）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
+            fail "校验器自检" "十二个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro / fetch_treasury_debt / fetch_treasury_fiscal / derive_fiscal_stress / fetch_cbo_baseline / derive_cbo_scenario_basis）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
           # COT 按真实 exit code 三态处理，不能只看 step outcome：
           # continue-on-error 会把 1/2 都折叠成 failure，丢失故障类别。
           case "${{ steps.cot.outputs.code }}" in

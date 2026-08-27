@@ -61,6 +61,8 @@ derive_macro.py                         → macro_rates / macro_cpi / macro_debt
 fetch_treasury_fiscal.py  Treasury MTS Table 9 → data/treasury_mts_fiscal.json
 derive_fiscal_stress.py                 → data/derived/macro_fiscal_stress.json
 fetch_cbo_baseline.py  CBO Budget Baseline XLSX → immutable vintage + cbo_baseline_latest
+derive_cbo_scenario_basis.py             → audited CBO scenario accounting basis
+assets/js/cbo-scenario-engine.js         → browser-only deterministic user scenario
 index.html        期限结构回放 + 各图表
 macro.html        利率 / CPI / 美国联邦债务 / 财政可持续性 / CBO baseline 面板
 term-3d.html      Plotly 3D 曲面页，**已从导航移除**（无运行时入口，见下方专节）
@@ -71,8 +73,8 @@ tools/*.mjs       Playwright 验证脚本
 
 **Cloudflare 静态发布（C16）**：仓库不是 Worker JS 项目，`wrangler.jsonc` 不设
 `main`，只将 `assets.directory` 指向 `./dist`。`node tools/build-static-site.mjs`
-每次删除旧 dist 后按 37 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
-25 个公开 JSON；CBO source/vintage、quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
+每次删除旧 dist 后按 39 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
+26 个公开 JSON；CBO source/vintage、quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
 公开。Cloudflare Workers Builds 的 root 为 `/`，build command 为上述 Node 脚本，
 production deploy 为 `npx wrangler deploy`，preview deploy 为
 `npx wrangler versions upload`。`dist/` 与 `.wrangler/` 均为忽略的构建产物。
@@ -85,7 +87,7 @@ production deploy 为 `npx wrangler deploy`，preview deploy 为
 `tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
 不 fallback 与 EPERM 继续抛出。
 
-**前端破坏注入（C10-C17）**：七个 `verify-*-injection.mjs` 统一经
+**前端破坏注入（C10-C18B）**：九个 `verify-*-injection.mjs` 统一经
 `tools/_injection.mjs` 执行 `baseline green → injection red → restore green`。
 每个 case 必须证明 patch 与业务锚点真实改变、目标 guard 非零且命中稳定 FAIL
 marker；备份只进系统临时目录，每 case 与最外层 `finally` 都按原始 bytes/SHA-256
@@ -200,6 +202,21 @@ net interest、receipts、outlays，和 C17 历史 Q4 actual 分段展示；不�
 比率，不把 baseline 冒充危机时点预测。CBO workbook 没有可严格桥接 C17
 `effective_r` 的利率，因此 C18A 明确不构造 forward Fiscal Gap；待未来拥有同口径
 forward `r/g/d/primary balance` 才能另行评估。
+
+**CBO 财政情景实验室（C18B）**：`derive_cbo_scenario_basis.py` 只读 C18A latest，
+以 2025 actual 为锚并为 2026..2036 保存会计闭合 residual：
+`deficit=-overall_balance%*GDP`，`SFA=official debt-prev debt-deficit`。SFA 只是
+stock-flow accounting reconciliation，不是风险指标。浏览器纯函数从用户选择年份起
+永久施加 `g+growth shock`、`overall balance+primary shock-interest spending shock`，
+按情景 GDP 缩放 baseline SFA% 后递推债务。正 primary shock 表示财政改善，正 interest
+shock 表示利息支出增加。零冲击先验证金额闭合，再逐年返回官方 debt amount 与官方
+三位小数 debt/GDP，保证 exact baseline invariant 且不改写 CBO 字段。
+
+C18B 是用户主动生成的 deterministic sensitivity，不是 CBO forecast；不输出概率、
+危机/失控年份、颜色阈值或 forward Fiscal Gap，也不读取 C17 `effective_r`。生产数据
+“前端只读”原则的唯一窄例外是浏览器内计算 synthetic user scenario；结果不写 JSON、
+localStorage 或 baseline，不冒充 source/derived observation。Scenario Lab 与 C17/C18A
+各自有独立 load/render failure boundary。
 
 ## 常见陷阱
 
@@ -813,6 +830,7 @@ python3 fetch_treasury_debt.py --test      # Treasury 日频债务（三态 + �
 python3 fetch_treasury_fiscal.py --test    # Treasury MTS 月度财政流量（三态/层级/修订）
 python3 derive_fiscal_stress.py --test     # 财政可持续性公式/频率/缺失/幂等
 python3 fetch_cbo_baseline.py --test       # CBO workbook schema/vintage/单位/发布安全
+python3 derive_cbo_scenario_basis.py --test # C18B SFA 闭合/幂等/baseline 只读
 python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘
 python3 tools/verify-io-utils.py           # 落盘骨架（含隔离区撞名断言）
 node tools/verify-ui-fixes.mjs             # UI 几何 / COT Index 单侧与双侧 null
@@ -835,6 +853,9 @@ node tools/verify-fiscal-stress-page.mjs   # C17 九 KPI/两图/as-of/null/模�
 node tools/verify-fiscal-stress-injection.mjs  # C17 八项跨 Python/前端破坏注入
 node tools/verify-cbo-baseline-page.mjs    # C18A 官方年度字段/分段/来源/隔离
 node tools/verify-cbo-baseline-injection.mjs  # C18A 符号/单位/vintage/前端直读注入
+node tools/verify-cbo-scenario-engine.mjs   # C18B zero-shock/符号/边界/纯函数
+node tools/verify-cbo-scenario-page.mjs     # C18B controls/tooltip/reset/隔离/移动端
+node tools/verify-cbo-scenario-injection.mjs # C18B 八项破坏注入
 node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
 node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
 node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红

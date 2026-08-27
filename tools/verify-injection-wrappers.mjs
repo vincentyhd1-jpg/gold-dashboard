@@ -27,6 +27,7 @@ const wrappers = [
   'verify-debt-overview-injection.mjs',
   'verify-fiscal-stress-injection.mjs',
   'verify-cbo-baseline-injection.mjs',
+  'verify-cbo-scenario-injection.mjs',
 ];
 
 console.log('## static contract');

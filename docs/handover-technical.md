@@ -129,7 +129,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 
 ## 4. 护栏清单与当前状态
 
-当前基线包含 C18A 新增护栏。**Python 侧经 `wsl -d Ubuntu-22.04 --cd <repo> -- python3`，
+当前基线包含 C18B 新增护栏。**Python 侧经 `wsl -d Ubuntu-22.04 --cd <repo> -- python3`，
 前端 `.mjs` 从 PowerShell 原生调 `node`** —— 执行侧错配会产生假红/假绿，见 CLAUDE.md
 「执行侧陷阱」一节。
 
@@ -163,9 +163,12 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_treasury_fiscal.py --test` | 0 | 28 passed, 0 failed |
 | `derive_fiscal_stress.py --test` | 0 | 34 passed, 0 failed |
 | `fetch_cbo_baseline.py --test` | 0 | 22 passed, 0 failed |
+| `derive_cbo_scenario_basis.py --test` | 0 | 19 passed, 0 failed |
 | `tools/verify-fiscal-stress-page.mjs` | 0 | 46 passed, 0 failed；page errors: none |
 | `tools/verify-cbo-baseline-page.mjs` | 0 | 24 passed, 0 failed；page errors: none |
-| `tools/verify-static-build.mjs` | 0 | 34 passed, 0 failed；37 个公开文件逐字节对账 |
+| `tools/verify-cbo-scenario-engine.mjs` | 0 | 20 passed, 0 failed |
+| `tools/verify-cbo-scenario-page.mjs` | 0 | 22 passed, 0 failed；page errors: none |
+| `tools/verify-static-build.mjs` | 0 | 37 passed, 0 failed；39 个公开文件逐字节对账 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
@@ -190,10 +193,11 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-cot-index-null-injection.mjs` | 0 | wrapper 18/0；基线 38/0 → current null→50 为 31/7、chart null→50 为 36/2 → 恢复 38/0 + hash 一致 |
 | `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 81/0；基线 86/0 → C15 四项及 C14 七项注入均真实变红 → 恢复 86/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
-| `tools/verify-injection-wrappers.mjs` | 0 | 40/0；静态锁八 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
+| `tools/verify-injection-wrappers.mjs` | 0 | 43/0；静态锁九 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
 | `tools/verify-static-build-injection.mjs` | 0 | 23/0；缺 assets.directory、缺 macro.html、泄漏 Python 均真实红 → 恢复 34/0 + config hash 一致 |
 | `tools/verify-fiscal-stress-injection.mjs` | 0 | MTS 11/0 + derive 46/0 + frontend 74/0；原八项、C17.1 五项及 Fiscal Gap 图五项注入均真实红，三个目标最终 hash 一致 |
 | `tools/verify-cbo-baseline-injection.mjs` | 0 | parser 32/0 + frontend 18/0；四项 parser/vintage 与两项 frontend 注入均真实红，两个目标最终 hash 一致 |
+| `tools/verify-cbo-scenario-injection.mjs` | 0 | engine 46/0 + page 18/0；八项 engine/page 注入均真实红，两个目标最终 hash 一致 |
 
 C10-C18A 的八个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
@@ -806,3 +810,31 @@ C17 `effective_r` 严格同口径的 forward rate，因此 forward p*/Fiscal Gap
 `verify-static-build.mjs` 明确拒绝 `fetch_cbo_baseline.py` 和整个 `data/cbo/`。C18A
 定向护栏为 parser 22/0、页面 24/0、injection parser 32/0 + frontend 18/0、wrapper
 meta 40/0、static build 34/0、static injection 23/0；所有注入最终恢复源码 SHA-256。
+
+## 21. C18B CBO Fiscal Scenario Lab
+
+`derive_cbo_scenario_basis.py` strict 读取 `cbo_baseline_latest.json`，输出 schema v0 annual
+`cbo_scenario_basis.json`。2025 是 anchor，2026..2036 为 projection。每年保存官方
+debt/GDP、debt bn、GDP bn、nominal growth、primary/net-interest/overall balance，及
+`baseline_sfa_bn = debt_t - debt_(t-1) - (-overall_balance_t/100*GDP_t)` 与对应 GDP 比例。
+当前 11 年闭合最大误差为 `7.28e-12 USD bn`；SFA 从 2026 的 `70.21351158 bn`
+（`0.22009121% GDP`）到 2036 的 `-66.06474998 bn`（`-0.14142950% GDP`）。
+
+`assets/js/cbo-scenario-engine.js` 是无副作用纯函数。shock 从 start year 起永久生效：
+`g_s=g_base+growth shock`，`GDP_s=GDP_s(prev)*(1+g_s/100)`，
+`overall_s=overall_base+primary shock-interest shock`，
+`debt_s=debt_s(prev)-overall_s/100*GDP_s+SFA_base_pct/100*GDP_s`。
+输入 bounds 为 growth/primary ±3pp、interest ±2pp，step 由 UI 固定 0.25pp。
+zero shock 金额闭合后 canonical 返回官方 debt amount/debt-GDP，2026..2036 每年 exact。
+
+`macro.html` 在 CBO Baseline 后新增独立 Scenario Lab：四 controls、Reset、五 KPI 与
+CBO Baseline/User Scenario 双线图。tooltip 显示 fiscal year、两条路径与 difference；
+免责声明明确 deterministic、not CBO forecast、no probability、no crisis/default/loss-of-control
+claim。scenario basis/CBO/C17 三块互相故障隔离，移动端无横向溢出。
+
+定向 guard 为 basis Python 19/0、engine 20/0、page 22/0。八项 injection 覆盖 primary
+符号、interest 符号、删除 SFA、引入 C17 effective_r、覆盖 baseline 字段、破坏 zero-shock、
+伪装 CBO Projection 标签与删除免责声明；每案真实红并命中 marker，恢复后 guard 全绿、
+源码 SHA-256 一致。静态白名单新增 basis JSON 与 engine JS，共 39 文件（26 JSON）；
+CBO source/vintage/diagnostics、Python、tests/docs 继续拒绝公开。每日 workflow 只运行离线
+`derive_cbo_scenario_basis.py --test`，不生成、commit 或保存用户 scenario。
