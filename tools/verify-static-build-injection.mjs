@@ -87,8 +87,8 @@ try {
 
   console.log('\n--- A: 删除 assets.directory ---');
   const configText = originalConfig.toString('utf8');
-  const anchor = '"assets": {\n    "directory": "./dist"\n  }';
-  const hits = configText.split(anchor).length - 1;
+  const anchor = /"assets": \{\r?\n    "directory": "\.\/dist"\r?\n  \}/g;
+  const hits = [...configText.matchAll(anchor)].length;
   check('A 注入锚点恰好命中一次', hits === 1, `hits=${hits}`);
   const missingAssetsDirectory = Buffer.from(configText.replace(anchor, '"assets": {}'));
   fs.writeFileSync(CONFIG, missingAssetsDirectory);

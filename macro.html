@@ -53,6 +53,21 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .debt-freshness{display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#8b949e}
 .debt-freshness strong{color:#c9d1d9;font-weight:600}
 .fine-pointer #debtOverviewChart{cursor:crosshair}
+.fiscal-kpis{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;margin:4px 0 18px}
+.fiscal-kpi{grid-column:span 3;background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px;min-width:0}
+.fiscal-kpi:nth-child(n+5):nth-child(-n+7){grid-column:span 4}
+.fiscal-kpi:nth-child(n+8){grid-column:span 6}
+.fiscal-kpi-label{font-size:11px;color:#8b949e;line-height:1.35;min-height:30px}
+.fiscal-kpi-value{font-size:20px;color:#f0f6fc;font-weight:650;margin-top:6px;white-space:nowrap}
+.fiscal-status-box{background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px 14px;margin-bottom:18px;color:#c9d1d9;font-size:12px;line-height:1.65}
+.fiscal-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.fiscal-chart{min-width:0}
+.fiscal-chart .chart-wrap{height:270px}
+.fiscal-method{font-size:11px;color:#8b949e;line-height:1.65;margin-top:14px}
+.fiscal-asof{display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:#8b949e}
+.fiscal-asof strong{color:#c9d1d9;font-weight:600}
+@media(max-width:800px){.fiscal-charts{grid-template-columns:1fr}.fiscal-kpi{grid-column:span 6!important}}
+@media(max-width:420px){.fiscal-kpis{grid-template-columns:1fr}.fiscal-kpi{grid-column:1!important}.fiscal-kpi-label{min-height:0}}
 
 /* 状态行 */
 .status{font-size:12px;color:#8b949e;min-height:18px}
@@ -69,7 +84,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
     <div class="gi">&#128200;</div>
     <div>
       <h1>宏观数据</h1>
-      <p class="sub">美债收益率 &middot; 联邦基金利率 &middot; CPI 同比 &middot; 美国联邦债务 &middot; FRED 数据</p>
+      <p class="sub">美债收益率 &middot; CPI &middot; 美国联邦债务 &middot; 财政可持续性</p>
     </div>
   </div>
   <nav class="top-nav" aria-label="主导航">
@@ -83,7 +98,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
   <div class="intro">
     <div>
       <h2>利率、通胀与联邦债务</h2>
-      <p>利率、CPI、GDP 与外国持有来自 FRED；每日债务金额来自 U.S. Treasury Fiscal Data。不同频率不互相补点，缺失值保持为空。</p>
+      <p>利率、CPI、GDP 与外国持有来自 FRED；日频债务与月度财政流量来自 U.S. Treasury Fiscal Data。不同频率不互相补点，缺失值保持为空。</p>
     </div>
     <div class="release" id="cpiRelease">CPI 最新参考期 --，发布日：当前采集未保存</div>
   </div>
@@ -122,6 +137,41 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
         <span>GDP 数据截至：<strong id="debtGdpAsOf">--</strong></span>
       </div>
       <div class="status" id="debtStatus" role="status">正在加载联邦债务数据…</div>
+    </div>
+
+    <div class="card full" id="fiscalStressPanel">
+      <div class="card-title">美国财政可持续性</div>
+      <div class="card-sub">财政流量为截至季度末的连续 12 个月（TTM）；GDP 为季度名义 GDP SAAR；债务存量为公众持有债务。完整一致历史约从 2016-Q1 开始。</div>
+      <div class="fiscal-kpis" aria-label="财政可持续性九项指标">
+        <div class="fiscal-kpi"><div class="fiscal-kpi-label">公众持有债务 / GDP</div><div class="fiscal-kpi-value" id="fiscalPublicDebtGdp">--</div></div>
+        <div class="fiscal-kpi"><div class="fiscal-kpi-label">有效利率 r（TTM）</div><div class="fiscal-kpi-value" id="fiscalEffectiveR">--</div></div>
+        <div class="fiscal-kpi"><div class="fiscal-kpi-label">名义 GDP 增速 g（同比）</div><div class="fiscal-kpi-value" id="fiscalNominalG">--</div></div>
+        <div class="fiscal-kpi"><div class="fiscal-kpi-label">r − g</div><div class="fiscal-kpi-value" id="fiscalRMinusG">--</div></div>
+        <div class="fiscal-kpi"><div class="fiscal-kpi-label">实际初级余额 / GDP</div><div class="fiscal-kpi-value" id="fiscalPrimaryBalance">--</div></div>
+        <div class="fiscal-kpi"><div class="fiscal-kpi-label">稳定债务所需初级余额 p*</div><div class="fiscal-kpi-value" id="fiscalStabilizingPrimary">--</div></div>
+        <div class="fiscal-kpi"><div class="fiscal-kpi-label">财政调整缺口 p* − 实际</div><div class="fiscal-kpi-value" id="fiscalGap">--</div></div>
+        <div class="fiscal-kpi"><div class="fiscal-kpi-label">净利息 / GDP</div><div class="fiscal-kpi-value" id="fiscalInterestGdp">--</div></div>
+        <div class="fiscal-kpi"><div class="fiscal-kpi-label">净利息 / 联邦收入</div><div class="fiscal-kpi-value" id="fiscalInterestReceipts">--</div></div>
+      </div>
+      <div class="fiscal-status-box" id="fiscalTrajectory">正在判断最新完整季度…</div>
+      <div class="fiscal-charts">
+        <div class="fiscal-chart">
+          <div class="card-sub">有效利率 r、名义 GDP 增速 g 与 r−g（% / 百分点）</div>
+          <div class="chart-wrap"><canvas id="fiscalRatesChart"></canvas></div>
+        </div>
+        <div class="fiscal-chart">
+          <div class="card-sub">实际初级余额与稳定债务所需初级余额（% GDP）</div>
+          <div class="chart-wrap"><canvas id="fiscalPrimaryChart"></canvas></div>
+        </div>
+      </div>
+      <div class="fiscal-method" id="fiscalMethodNote">财政缺口为稳定初级余额减实际初级余额；正值表示在当前观测组合下需要额外初级调整。r&gt;g 不是唯一判断条件。模型是当期算术监测，不提供预测年份或压力颜色评级。</div>
+      <div class="fiscal-asof" aria-label="财政可持续性数据截至时间">
+        <span>完整季度：<strong id="fiscalCompleteAsOf">--</strong></span>
+        <span>MTS 月报截至：<strong id="fiscalMtsAsOf">--</strong></span>
+        <span>公众债务日频截至：<strong id="fiscalDebtAsOf">--</strong></span>
+        <span>GDP 截至：<strong id="fiscalGdpAsOf">--</strong></span>
+      </div>
+      <div class="status" id="fiscalStatus" role="status">正在加载财政可持续性数据…</div>
     </div>
 
   </div>
@@ -232,6 +282,94 @@ function renderCPI(rows) {
     lineDataset('CPI 同比',     rows.map(r => r.cpiaucsl_yoy === null ? null : r.cpiaucsl_yoy * 100), COLORS.gold),
     lineDataset('核心 CPI 同比', rows.map(r => r.cpilfesl_yoy === null ? null : r.cpilfesl_yoy * 100), COLORS.blue),
   ]);
+}
+
+function _formatFiscalPercent(value, suffix = '%') {
+  return value === null || value === undefined
+    ? '未知'
+    : Number(value).toLocaleString('zh-CN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'auto',
+      }) + suffix;
+}
+
+function _fiscalChartOptions(axisTitle) {
+  const options = chartOptions();
+  options.animation = false;
+  options.scales.y.title.text = axisTitle;
+  options.scales.y.ticks.callback = value => Number(value).toLocaleString('zh-CN', {
+    maximumFractionDigits: 1,
+  }) + '%';
+  options.plugins.tooltip.callbacks.label = ctx => ctx.parsed.y === null
+    ? '  ' + ctx.dataset.label + ': 未知'
+    : '  ' + ctx.dataset.label + ': ' + Number(ctx.parsed.y).toFixed(2)
+      + (ctx.dataset.valueUnit || '%');
+  return options;
+}
+
+function renderFiscalStress(payload) {
+  const rows = payload.quarterly || [];
+  const latest = payload.latest || {};
+  const meta = payload.meta || {};
+  const kpis = [
+    ['fiscalPublicDebtGdp', 'public_debt_gdp_pct', '%'],
+    ['fiscalEffectiveR', 'effective_r_pct', '%'],
+    ['fiscalNominalG', 'nominal_g_pct', '%'],
+    ['fiscalRMinusG', 'r_minus_g_pct_points', ' pp'],
+    ['fiscalPrimaryBalance', 'primary_balance_gdp_pct', '%'],
+    ['fiscalStabilizingPrimary', 'stabilizing_primary_balance_pct_gdp', '%'],
+    ['fiscalGap', 'fiscal_gap_pct_gdp', '%'],
+    ['fiscalInterestGdp', 'net_interest_gdp_pct', '%'],
+    ['fiscalInterestReceipts', 'net_interest_receipts_pct', '%'],
+  ];
+  for (const [id, field, suffix] of kpis) {
+    document.getElementById(id).textContent = _formatFiscalPercent(latest[field], suffix);
+  }
+
+  const trajectoryText = {
+    gap_positive: '最新完整季度的财政调整缺口为正：当前财政组合不足以稳定公众持有债务/GDP。',
+    stabilizing_condition_met: '最新完整季度的财政调整缺口不为正：按当前简化债务动力学，稳定条件暂时满足。',
+    unknown: '数据不足：当前无法判断债务稳定算术条件。',
+  };
+  const condition = latest.trajectory_condition || 'unknown';
+  document.getElementById('fiscalTrajectory').textContent =
+    (trajectoryText[condition] || trajectoryText.unknown)
+    + ' 连续正缺口完整季度：'
+    + (latest.gap_positive_consecutive_complete_quarters ?? '未知')
+    + '；stock-flow residual：'
+    + _formatFiscalPercent(latest.stock_flow_residual_pct_gdp, ' pp')
+    + '（诊断差异，不强制为零）。';
+
+  const labels = rows.map(row => row.quarter);
+  new Chart(document.getElementById('fiscalRatesChart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      lineDataset('有效利率 r', rows.map(row => row.effective_r_pct), COLORS.red,
+        { sourceField: 'effective_r_pct', valueUnit: '%' }),
+      lineDataset('名义 GDP 增速 g', rows.map(row => row.nominal_g_pct), COLORS.green,
+        { sourceField: 'nominal_g_pct', valueUnit: '%' }),
+      lineDataset('r − g', rows.map(row => row.r_minus_g_pct_points), COLORS.gold,
+        { sourceField: 'r_minus_g_pct_points', valueUnit: ' pp', borderDash: [6, 4] }),
+    ]},
+    options: _fiscalChartOptions('% / percentage points'),
+  });
+  new Chart(document.getElementById('fiscalPrimaryChart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      lineDataset('实际初级余额', rows.map(row => row.primary_balance_gdp_pct), COLORS.blue,
+        { sourceField: 'primary_balance_gdp_pct', valueUnit: '% GDP' }),
+      lineDataset('稳定债务所需初级余额 p*',
+        rows.map(row => row.stabilizing_primary_balance_pct_gdp), COLORS.gold,
+        { sourceField: 'stabilizing_primary_balance_pct_gdp', valueUnit: '% GDP' }),
+    ]},
+    options: _fiscalChartOptions('% GDP'),
+  });
+
+  document.getElementById('fiscalCompleteAsOf').textContent = meta.complete_through || '--';
+  document.getElementById('fiscalMtsAsOf').textContent = meta.mts_as_of || '--';
+  document.getElementById('fiscalDebtAsOf').textContent = meta.daily_public_debt_as_of || '--';
+  document.getElementById('fiscalGdpAsOf').textContent = meta.gdp_as_of
+    ? _quarterLabel(meta.gdp_as_of) : '--';
+  return { rows, latest, meta };
 }
 
 function debtOverviewOptions(tooltipLookup) {
@@ -592,6 +730,28 @@ Promise.all([
     console.error('[fetch] 美国联邦债务数据加载失败：', err);
     const el = document.getElementById('debtStatus');
     el.textContent = '联邦债务数据加载失败：' + err.message;
+    el.className = 'status err';
+  });
+
+// fiscal sustainability has its own strict envelope/load/render boundary.
+// All economic arithmetic is already present in macro_fiscal_stress.json.
+loadJson('data/derived/macro_fiscal_stress.json?_=' + Date.now(), {
+  name: 'macro_fiscal_stress.json',
+})
+  .then(fiscal => {
+    const rendered = _safeRender('美国财政可持续性', () => renderFiscalStress(fiscal));
+    const el = document.getElementById('fiscalStatus');
+    if (rendered) {
+      el.textContent = '已加载财政可持续性季度序列；缺失输入保持未知，未做补点或前端重算。';
+    } else {
+      el.textContent = '财政可持续性模块渲染失败，请查看控制台。';
+      el.className = 'status err';
+    }
+  })
+  .catch(err => {
+    console.error('[fetch] 财政可持续性数据加载失败：', err);
+    const el = document.getElementById('fiscalStatus');
+    el.textContent = '财政可持续性数据加载失败：' + err.message;
     el.className = 'status err';
   });
 </script>

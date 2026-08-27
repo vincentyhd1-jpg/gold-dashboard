@@ -1,0 +1,848 @@
+{
+  "schema_version": 0,
+  "source": "treasury_fiscal_data_mts_table_9",
+  "freq": "monthly",
+  "generated_at": "2026-08-27T02:33:08Z",
+  "date_field": "date",
+  "coverage": {
+    "first": "2015-03-31",
+    "last": "2026-07-31",
+    "count": 137
+  },
+  "derived_from": [],
+  "warnings": [],
+  "info": [
+    "endpoint=v1/accounting/mts/mts_table_9",
+    "units=USD_bn",
+    "units_normalized=current_month_usd_divided_by_1e9_once",
+    "selection=hierarchy_first_with_line_and_type_schema_guards",
+    "receipts=Receipts/Total line=120 type=T/SL",
+    "total_outlays=Net Outlays/Total line=340 type=T/SL",
+    "net_interest=Net Outlays/Net Interest line=320 type=D/F",
+    "amount_basis=current_calendar_month_not_fytd_no_fill"
+  ],
+  "data": [
+    {
+      "date": "2015-03-31",
+      "receipts_bn": 234.18733790369,
+      "total_outlays_bn": 287.09739783405,
+      "net_interest_bn": 15.73284444611
+    },
+    {
+      "date": "2015-04-30",
+      "receipts_bn": 471.80124079052,
+      "total_outlays_bn": 315.08716235127,
+      "net_interest_bn": 25.12085844254
+    },
+    {
+      "date": "2015-05-31",
+      "receipts_bn": 212.38582741769,
+      "total_outlays_bn": 294.77110583673,
+      "net_interest_bn": 27.53533915876
+    },
+    {
+      "date": "2015-06-30",
+      "receipts_bn": 342.93305336078,
+      "total_outlays_bn": 291.15728935924,
+      "net_interest_bn": 22.34775305655
+    },
+    {
+      "date": "2015-07-31",
+      "receipts_bn": 225.49336746768,
+      "total_outlays_bn": 374.68013358053,
+      "net_interest_bn": 27.48120841875
+    },
+    {
+      "date": "2015-08-31",
+      "receipts_bn": 210.83683720587,
+      "total_outlays_bn": 275.25735711838,
+      "net_interest_bn": 25.36584409881
+    },
+    {
+      "date": "2015-09-30",
+      "receipts_bn": 365.47283974624,
+      "total_outlays_bn": 274.41230865186,
+      "net_interest_bn": -11.34406479669
+    },
+    {
+      "date": "2015-10-31",
+      "receipts_bn": 211.04624538874,
+      "total_outlays_bn": 347.57833020366,
+      "net_interest_bn": 20.0049147409
+    },
+    {
+      "date": "2015-11-30",
+      "receipts_bn": 204.96779993462,
+      "total_outlays_bn": 269.52071951356,
+      "net_interest_bn": 21.36859009141
+    },
+    {
+      "date": "2015-12-31",
+      "receipts_bn": 349.6307127964,
+      "total_outlays_bn": 364.0746566499,
+      "net_interest_bn": 21.43121443471
+    },
+    {
+      "date": "2016-01-31",
+      "receipts_bn": 313.57898108118,
+      "total_outlays_bn": 258.41569256629,
+      "net_interest_bn": 20.72602434337
+    },
+    {
+      "date": "2016-02-29",
+      "receipts_bn": 169.1468555152,
+      "total_outlays_bn": 361.76085722156,
+      "net_interest_bn": 18.82390272469
+    },
+    {
+      "date": "2016-03-31",
+      "receipts_bn": 227.84782696133,
+      "total_outlays_bn": 335.89055770011,
+      "net_interest_bn": 23.88398483523
+    },
+    {
+      "date": "2016-04-30",
+      "receipts_bn": 438.43234443453,
+      "total_outlays_bn": 331.98047259785,
+      "net_interest_bn": 22.23386849513
+    },
+    {
+      "date": "2016-05-31",
+      "receipts_bn": 224.60343139644,
+      "total_outlays_bn": 277.11084424098,
+      "net_interest_bn": 27.86827768992
+    },
+    {
+      "date": "2016-06-30",
+      "receipts_bn": 329.5722227441,
+      "total_outlays_bn": 323.32023530394,
+      "net_interest_bn": 27.1083461046
+    },
+    {
+      "date": "2016-07-31",
+      "receipts_bn": 209.99766423595,
+      "total_outlays_bn": 322.81290274045,
+      "net_interest_bn": 27.96924943085
+    },
+    {
+      "date": "2016-08-31",
+      "receipts_bn": 231.32681209357,
+      "total_outlays_bn": 338.43838777361,
+      "net_interest_bn": 26.26955426108
+    },
+    {
+      "date": "2016-09-30",
+      "receipts_bn": 356.5373652038,
+      "total_outlays_bn": 323.17787114884,
+      "net_interest_bn": -16.96633776549
+    },
+    {
+      "date": "2016-10-31",
+      "receipts_bn": 221.69206817095,
+      "total_outlays_bn": 265.88426914769,
+      "net_interest_bn": 23.40252592566
+    },
+    {
+      "date": "2016-11-30",
+      "receipts_bn": 199.87495420026,
+      "total_outlays_bn": 336.52552910382,
+      "net_interest_bn": 25.19132242769
+    },
+    {
+      "date": "2016-12-31",
+      "receipts_bn": 319.20413414929,
+      "total_outlays_bn": 346.71993270795,
+      "net_interest_bn": 24.05642872139
+    },
+    {
+      "date": "2017-01-31",
+      "receipts_bn": 344.06928512822,
+      "total_outlays_bn": 292.81210748522,
+      "net_interest_bn": 21.69210003564
+    },
+    {
+      "date": "2017-02-28",
+      "receipts_bn": 171.71265249269,
+      "total_outlays_bn": 363.75711782815,
+      "net_interest_bn": 21.17569804896
+    },
+    {
+      "date": "2017-03-31",
+      "receipts_bn": 216.58355442819,
+      "total_outlays_bn": 392.81587973624,
+      "net_interest_bn": 29.87096036468
+    },
+    {
+      "date": "2017-04-30",
+      "receipts_bn": 455.60537680189,
+      "total_outlays_bn": 273.17731915318,
+      "net_interest_bn": 27.44042955633
+    },
+    {
+      "date": "2017-05-31",
+      "receipts_bn": 240.41797493252,
+      "total_outlays_bn": 328.8439692987,
+      "net_interest_bn": 25.02029044593
+    },
+    {
+      "date": "2017-06-30",
+      "receipts_bn": 338.66048771346,
+      "total_outlays_bn": 428.89367878413,
+      "net_interest_bn": 25.72910984872
+    },
+    {
+      "date": "2017-07-31",
+      "receipts_bn": 232.04014845361,
+      "total_outlays_bn": 274.97952605458,
+      "net_interest_bn": 25.72327631409
+    },
+    {
+      "date": "2017-08-31",
+      "receipts_bn": 226.3109692925,
+      "total_outlays_bn": 333.99974607238,
+      "net_interest_bn": 25.26046781856
+    },
+    {
+      "date": "2017-09-30",
+      "receipts_bn": 348.7222987606,
+      "total_outlays_bn": 340.72221582537,
+      "net_interest_bn": -11.78180751808
+    },
+    {
+      "date": "2017-10-31",
+      "receipts_bn": 235.3406507757,
+      "total_outlays_bn": 298.55466874265,
+      "net_interest_bn": 28.49157586492
+    },
+    {
+      "date": "2017-11-30",
+      "receipts_bn": 208.37426217438,
+      "total_outlays_bn": 346.92169999197,
+      "net_interest_bn": 31.53046984831
+    },
+    {
+      "date": "2017-12-31",
+      "receipts_bn": 325.79689024997,
+      "total_outlays_bn": 348.99044973869,
+      "net_interest_bn": 23.95223568239
+    },
+    {
+      "date": "2018-01-31",
+      "receipts_bn": 361.03759078662,
+      "total_outlays_bn": 311.8018700787,
+      "net_interest_bn": 25.32231406781
+    },
+    {
+      "date": "2018-02-28",
+      "receipts_bn": 155.62271704989,
+      "total_outlays_bn": 370.87088947229,
+      "net_interest_bn": 23.3043886777
+    },
+    {
+      "date": "2018-03-31",
+      "receipts_bn": 210.83236951395,
+      "total_outlays_bn": 419.57561932383,
+      "net_interest_bn": 33.17240607608
+    },
+    {
+      "date": "2018-04-30",
+      "receipts_bn": 510.44666827094,
+      "total_outlays_bn": 296.19155460363,
+      "net_interest_bn": 35.23967483969
+    },
+    {
+      "date": "2018-05-31",
+      "receipts_bn": 217.07493789433,
+      "total_outlays_bn": 363.87138125989,
+      "net_interest_bn": 31.51439715525
+    },
+    {
+      "date": "2018-06-30",
+      "receipts_bn": 316.27819410158,
+      "total_outlays_bn": 391.13618456514,
+      "net_interest_bn": 32.40882391489
+    },
+    {
+      "date": "2018-07-31",
+      "receipts_bn": 225.2662228121,
+      "total_outlays_bn": 302.13145248272,
+      "net_interest_bn": 35.28824987921
+    },
+    {
+      "date": "2018-08-31",
+      "receipts_bn": 219.1152661277,
+      "total_outlays_bn": 433.26279160834,
+      "net_interest_bn": 31.87324671286
+    },
+    {
+      "date": "2018-09-30",
+      "receipts_bn": 343.55934421695,
+      "total_outlays_bn": 224.44333533663,
+      "net_interest_bn": -7.40053473181
+    },
+    {
+      "date": "2018-10-31",
+      "receipts_bn": 252.69152687881,
+      "total_outlays_bn": 353.18266942354,
+      "net_interest_bn": 32.01700816437
+    },
+    {
+      "date": "2018-11-30",
+      "receipts_bn": 205.9611285743,
+      "total_outlays_bn": 410.86368597308,
+      "net_interest_bn": 33.39424993588
+    },
+    {
+      "date": "2018-12-31",
+      "receipts_bn": 312.58403825833,
+      "total_outlays_bn": 326.12339688738,
+      "net_interest_bn": 34.17492922132
+    },
+    {
+      "date": "2019-01-31",
+      "receipts_bn": 339.98004864238,
+      "total_outlays_bn": 331.2971820314,
+      "net_interest_bn": 29.26261077297
+    },
+    {
+      "date": "2019-02-28",
+      "receipts_bn": 167.26546817881,
+      "total_outlays_bn": 401.24271700561,
+      "net_interest_bn": 24.76506460327
+    },
+    {
+      "date": "2019-03-31",
+      "receipts_bn": 228.81123048896,
+      "total_outlays_bn": 375.75599614285,
+      "net_interest_bn": 36.67921183238
+    },
+    {
+      "date": "2019-04-30",
+      "receipts_bn": 535.54453037559,
+      "total_outlays_bn": 375.24002146573,
+      "net_interest_bn": 38.00749830035
+    },
+    {
+      "date": "2019-05-31",
+      "receipts_bn": 232.06449802377,
+      "total_outlays_bn": 439.83288937043,
+      "net_interest_bn": 40.53061179476
+    },
+    {
+      "date": "2019-06-30",
+      "receipts_bn": 333.95233251376,
+      "total_outlays_bn": 342.42865096798,
+      "net_interest_bn": 39.65612689617
+    },
+    {
+      "date": "2019-07-31",
+      "receipts_bn": 251.34778713194,
+      "total_outlays_bn": 371.0435933254,
+      "net_interest_bn": 34.95272387367
+    },
+    {
+      "date": "2019-08-31",
+      "receipts_bn": 227.96497758522,
+      "total_outlays_bn": 428.30932651435,
+      "net_interest_bn": 35.68654663163
+    },
+    {
+      "date": "2019-09-30",
+      "receipts_bn": 374.02815736242,
+      "total_outlays_bn": 291.26049889764,
+      "net_interest_bn": -3.51880159474
+    },
+    {
+      "date": "2019-10-31",
+      "receipts_bn": 245.5201578389,
+      "total_outlays_bn": 379.98772277271,
+      "net_interest_bn": 32.51700181916
+    },
+    {
+      "date": "2019-11-30",
+      "receipts_bn": 225.18541549728,
+      "total_outlays_bn": 434.02370995402,
+      "net_interest_bn": 32.33950014315
+    },
+    {
+      "date": "2019-12-31",
+      "receipts_bn": 335.80540148489,
+      "total_outlays_bn": 349.07795880131,
+      "net_interest_bn": 34.52408701955
+    },
+    {
+      "date": "2020-01-31",
+      "receipts_bn": 372.2879137687,
+      "total_outlays_bn": 404.88119377634,
+      "net_interest_bn": 31.69810460655
+    },
+    {
+      "date": "2020-02-29",
+      "receipts_bn": 187.95053965005,
+      "total_outlays_bn": 423.28575352462,
+      "net_interest_bn": 30.61736522352
+    },
+    {
+      "date": "2020-03-31",
+      "receipts_bn": 236.7662315318,
+      "total_outlays_bn": 355.89139624982,
+      "net_interest_bn": 37.78022446006
+    },
+    {
+      "date": "2020-04-30",
+      "receipts_bn": 241.86300831592,
+      "total_outlays_bn": 979.71362939557,
+      "net_interest_bn": 35.93595509458
+    },
+    {
+      "date": "2020-05-31",
+      "receipts_bn": 173.86055693857,
+      "total_outlays_bn": 572.68197059825,
+      "net_interest_bn": 25.80891175646
+    },
+    {
+      "date": "2020-06-30",
+      "receipts_bn": 240.82866835271,
+      "total_outlays_bn": 1104.90273684442,
+      "net_interest_bn": 18.5482029571
+    },
+    {
+      "date": "2020-07-31",
+      "receipts_bn": 563.49566314069,
+      "total_outlays_bn": 626.48738953523,
+      "net_interest_bn": 29.64787175921
+    },
+    {
+      "date": "2020-08-31",
+      "receipts_bn": 223.22127701017,
+      "total_outlays_bn": 423.31629211783,
+      "net_interest_bn": 36.54761353544
+    },
+    {
+      "date": "2020-09-30",
+      "receipts_bn": 373.16934681225,
+      "total_outlays_bn": 497.77990523144,
+      "net_interest_bn": -1.25837285515
+    },
+    {
+      "date": "2020-10-31",
+      "receipts_bn": 237.6979664071,
+      "total_outlays_bn": 521.76850357994,
+      "net_interest_bn": 32.43901135917
+    },
+    {
+      "date": "2020-11-30",
+      "receipts_bn": 219.5525955881,
+      "total_outlays_bn": 364.81885911795,
+      "net_interest_bn": 29.25471349263
+    },
+    {
+      "date": "2020-12-31",
+      "receipts_bn": 346.11922839691,
+      "total_outlays_bn": 489.68155583604,
+      "net_interest_bn": 25.5874707067
+    },
+    {
+      "date": "2021-01-31",
+      "receipts_bn": 384.65077895812,
+      "total_outlays_bn": 547.48326842566,
+      "net_interest_bn": 25.15919127029
+    },
+    {
+      "date": "2021-02-28",
+      "receipts_bn": 248.31405677618,
+      "total_outlays_bn": 559.23599928085,
+      "net_interest_bn": 25.69625105961
+    },
+    {
+      "date": "2021-03-31",
+      "receipts_bn": 267.61431908325,
+      "total_outlays_bn": 927.20593752383,
+      "net_interest_bn": 31.25916425869
+    },
+    {
+      "date": "2021-04-30",
+      "receipts_bn": 439.18619531248,
+      "total_outlays_bn": 664.76565563825,
+      "net_interest_bn": 33.98540759654
+    },
+    {
+      "date": "2021-05-31",
+      "receipts_bn": 463.74488835377,
+      "total_outlays_bn": 595.69795152198,
+      "net_interest_bn": 36.87395498686
+    },
+    {
+      "date": "2021-06-30",
+      "receipts_bn": 449.19866648473,
+      "total_outlays_bn": 623.35921674689,
+      "net_interest_bn": 38.30672598052
+    },
+    {
+      "date": "2021-07-31",
+      "receipts_bn": 261.99969961961,
+      "total_outlays_bn": 564.05018796311,
+      "net_interest_bn": 37.85170982673
+    },
+    {
+      "date": "2021-08-31",
+      "receipts_bn": 268.37808289779,
+      "total_outlays_bn": 439.01273655966,
+      "net_interest_bn": 41.78557931009
+    },
+    {
+      "date": "2021-09-30",
+      "receipts_bn": 459.52308995015,
+      "total_outlays_bn": 521.06734116283,
+      "net_interest_bn": -5.93515232062
+    },
+    {
+      "date": "2021-10-31",
+      "receipts_bn": 283.92736122257,
+      "total_outlays_bn": 448.98272815582,
+      "net_interest_bn": 29.91643764763
+    },
+    {
+      "date": "2021-11-30",
+      "receipts_bn": 281.20803182982,
+      "total_outlays_bn": 472.54307235179,
+      "net_interest_bn": 30.14703088699
+    },
+    {
+      "date": "2021-12-31",
+      "receipts_bn": 486.73790155754,
+      "total_outlays_bn": 508.04103098277,
+      "net_interest_bn": 41.69997028582
+    },
+    {
+      "date": "2022-01-31",
+      "receipts_bn": 465.07877224749,
+      "total_outlays_bn": 346.37991400583,
+      "net_interest_bn": 34.38841617621
+    },
+    {
+      "date": "2022-02-28",
+      "receipts_bn": 289.8857434489,
+      "total_outlays_bn": 506.47549550495,
+      "net_interest_bn": 32.17635920217
+    },
+    {
+      "date": "2022-03-31",
+      "receipts_bn": 315.17215616472,
+      "total_outlays_bn": 507.85454282165,
+      "net_interest_bn": 43.19272609243
+    },
+    {
+      "date": "2022-04-30",
+      "receipts_bn": 863.6486085631,
+      "total_outlays_bn": 555.43354803631,
+      "net_interest_bn": 43.78289186796
+    },
+    {
+      "date": "2022-05-31",
+      "receipts_bn": 388.99314779319,
+      "total_outlays_bn": 455.21570900277,
+      "net_interest_bn": 55.99520708369
+    },
+    {
+      "date": "2022-06-30",
+      "receipts_bn": 460.76141186746,
+      "total_outlays_bn": 549.60292479355,
+      "net_interest_bn": 42.28410225829
+    },
+    {
+      "date": "2022-07-31",
+      "receipts_bn": 269.33505389158,
+      "total_outlays_bn": 480.38681394184,
+      "net_interest_bn": 55.25616287509
+    },
+    {
+      "date": "2022-08-31",
+      "receipts_bn": 303.72640059484,
+      "total_outlays_bn": 523.32264154448,
+      "net_interest_bn": 62.65678084787
+    },
+    {
+      "date": "2022-09-30",
+      "receipts_bn": 487.72288823204,
+      "total_outlays_bn": 917.39636719388,
+      "net_interest_bn": 3.62472693872
+    },
+    {
+      "date": "2022-10-31",
+      "receipts_bn": 318.57640766087,
+      "total_outlays_bn": 406.37424397226,
+      "net_interest_bn": 43.0056647438
+    },
+    {
+      "date": "2022-11-30",
+      "receipts_bn": 252.1108089824,
+      "total_outlays_bn": 500.64568963498,
+      "net_interest_bn": 47.30298293805
+    },
+    {
+      "date": "2022-12-31",
+      "receipts_bn": 454.94237165952,
+      "total_outlays_bn": 539.9431082374,
+      "net_interest_bn": 54.00278106212
+    },
+    {
+      "date": "2023-01-31",
+      "receipts_bn": 447.28831796229,
+      "total_outlays_bn": 486.07208980151,
+      "net_interest_bn": 49.79982652078
+    },
+    {
+      "date": "2023-02-28",
+      "receipts_bn": 262.11390949588,
+      "total_outlays_bn": 524.54775269011,
+      "net_interest_bn": 40.61961958676
+    },
+    {
+      "date": "2023-03-31",
+      "receipts_bn": 313.24036441241,
+      "total_outlays_bn": 691.31668088415,
+      "net_interest_bn": 66.53231787287
+    },
+    {
+      "date": "2023-04-30",
+      "receipts_bn": 638.52036115851,
+      "total_outlays_bn": 462.33957080939,
+      "net_interest_bn": 62.47335438695
+    },
+    {
+      "date": "2023-05-31",
+      "receipts_bn": 307.48688035041,
+      "total_outlays_bn": 547.83512000878,
+      "net_interest_bn": 60.58866167694
+    },
+    {
+      "date": "2023-06-30",
+      "receipts_bn": 418.31690236896,
+      "total_outlays_bn": 646.08531490701,
+      "net_interest_bn": 69.90586551247
+    },
+    {
+      "date": "2023-07-31",
+      "receipts_bn": 276.16085414385,
+      "total_outlays_bn": 496.94295149745,
+      "net_interest_bn": 67.03181745
+    },
+    {
+      "date": "2023-08-31",
+      "receipts_bn": 283.13020615726,
+      "total_outlays_bn": 193.87463346353,
+      "net_interest_bn": 68.82429484227
+    },
+    {
+      "date": "2023-09-30",
+      "receipts_bn": 467.47268336996,
+      "total_outlays_bn": 638.45488424474,
+      "net_interest_bn": 29.09512669032
+    },
+    {
+      "date": "2023-10-31",
+      "receipts_bn": 403.4335409198,
+      "total_outlays_bn": 469.99709204953,
+      "net_interest_bn": 75.9898644128
+    },
+    {
+      "date": "2023-11-30",
+      "receipts_bn": 274.83003578115,
+      "total_outlays_bn": 588.84203806824,
+      "net_interest_bn": 71.8178511395
+    },
+    {
+      "date": "2023-12-31",
+      "receipts_bn": 429.31065456608,
+      "total_outlays_bn": 558.67606948587,
+      "net_interest_bn": 67.75877615268
+    },
+    {
+      "date": "2024-01-31",
+      "receipts_bn": 477.31965545716,
+      "total_outlays_bn": 499.25001178818,
+      "net_interest_bn": 67.70812836231
+    },
+    {
+      "date": "2024-02-29",
+      "receipts_bn": 271.12606875909,
+      "total_outlays_bn": 567.40071683898,
+      "net_interest_bn": 67.11347296662
+    },
+    {
+      "date": "2024-03-31",
+      "receipts_bn": 332.09100914801,
+      "total_outlays_bn": 568.54783309821,
+      "net_interest_bn": 79.03378778341
+    },
+    {
+      "date": "2024-04-30",
+      "receipts_bn": 776.19809317694,
+      "total_outlays_bn": 566.66878655161,
+      "net_interest_bn": 84.73882762249
+    },
+    {
+      "date": "2024-05-31",
+      "receipts_bn": 323.6469869784,
+      "total_outlays_bn": 670.77788067005,
+      "net_interest_bn": 87.09601722629
+    },
+    {
+      "date": "2024-06-30",
+      "receipts_bn": 466.25491840716,
+      "total_outlays_bn": 532.2202108835,
+      "net_interest_bn": 81.13456382612
+    },
+    {
+      "date": "2024-07-31",
+      "receipts_bn": 330.37742830009,
+      "total_outlays_bn": 574.11851559752,
+      "net_interest_bn": 80.80920128593
+    },
+    {
+      "date": "2024-08-31",
+      "receipts_bn": 306.53973701932,
+      "total_outlays_bn": 686.62014245382,
+      "net_interest_bn": 80.18400404043
+    },
+    {
+      "date": "2024-09-30",
+      "receipts_bn": 527.61971097708,
+      "total_outlays_bn": 463.35670210934,
+      "net_interest_bn": 38.26650021688
+    },
+    {
+      "date": "2024-10-31",
+      "receipts_bn": 326.7702360581,
+      "total_outlays_bn": 584.22057925001,
+      "net_interest_bn": 80.30940053879
+    },
+    {
+      "date": "2024-11-30",
+      "receipts_bn": 301.75429981279,
+      "total_outlays_bn": 668.51736418086,
+      "net_interest_bn": 79.37846496114
+    },
+    {
+      "date": "2024-12-31",
+      "receipts_bn": 454.41470849147,
+      "total_outlays_bn": 541.14632750476,
+      "net_interest_bn": 81.81574512261
+    },
+    {
+      "date": "2025-01-31",
+      "receipts_bn": 513.29434265193,
+      "total_outlays_bn": 641.93454932542,
+      "net_interest_bn": 80.77156610049
+    },
+    {
+      "date": "2025-02-28",
+      "receipts_bn": 296.42368382257,
+      "total_outlays_bn": 603.44087852184,
+      "net_interest_bn": 74.16534858633
+    },
+    {
+      "date": "2025-03-31",
+      "receipts_bn": 367.63517099032,
+      "total_outlays_bn": 528.16549248968,
+      "net_interest_bn": 92.87470860803
+    },
+    {
+      "date": "2025-04-30",
+      "receipts_bn": 850.16931777281,
+      "total_outlays_bn": 591.76936865785,
+      "net_interest_bn": 89.3756578279
+    },
+    {
+      "date": "2025-05-31",
+      "receipts_bn": 371.22885711076,
+      "total_outlays_bn": 687.2326183002,
+      "net_interest_bn": 86.01474363257
+    },
+    {
+      "date": "2025-06-30",
+      "receipts_bn": 526.44535175697,
+      "total_outlays_bn": 499.4353296792,
+      "net_interest_bn": 84.34468796381
+    },
+    {
+      "date": "2025-07-31",
+      "receipts_bn": 338.49184842317,
+      "total_outlays_bn": 629.63450871084,
+      "net_interest_bn": 92.01138112519
+    },
+    {
+      "date": "2025-08-31",
+      "receipts_bn": 344.31532201032,
+      "total_outlays_bn": 689.10721386844,
+      "net_interest_bn": 92.69867065587
+    },
+    {
+      "date": "2025-09-30",
+      "receipts_bn": 543.66298746122,
+      "total_outlays_bn": 345.71335709906,
+      "net_interest_bn": 36.90022795499
+    },
+    {
+      "date": "2025-10-31",
+      "receipts_bn": 404.3713489737,
+      "total_outlays_bn": 688.7213997565,
+      "net_interest_bn": 90.87088414788
+    },
+    {
+      "date": "2025-11-30",
+      "receipts_bn": 336.00119570996,
+      "total_outlays_bn": 509.27837078688,
+      "net_interest_bn": 87.85309939104
+    },
+    {
+      "date": "2025-12-31",
+      "receipts_bn": 484.38401553925,
+      "total_outlays_bn": 629.13325114853,
+      "net_interest_bn": 91.54028063363
+    },
+    {
+      "date": "2026-01-31",
+      "receipts_bn": 559.93544593071,
+      "total_outlays_bn": 654.55060829992,
+      "net_interest_bn": 75.94388395901
+    },
+    {
+      "date": "2026-02-28",
+      "receipts_bn": 313.12168524684,
+      "total_outlays_bn": 620.62311867301,
+      "net_interest_bn": 78.64356091944
+    },
+    {
+      "date": "2026-03-31",
+      "receipts_bn": 384.86257703579,
+      "total_outlays_bn": 548.96291585365,
+      "net_interest_bn": 94.33616426962
+    },
+    {
+      "date": "2026-04-30",
+      "receipts_bn": 837.34012424853,
+      "total_outlays_bn": 622.31598405076,
+      "net_interest_bn": 96.56441535989
+    },
+    {
+      "date": "2026-05-31",
+      "receipts_bn": 335.51218322742,
+      "total_outlays_bn": 628.16064531116,
+      "net_interest_bn": 106.95447220961
+    },
+    {
+      "date": "2026-06-30",
+      "receipts_bn": 495.7614815687,
+      "total_outlays_bn": 616.06675715507,
+      "net_interest_bn": 104.49068274368
+    },
+    {
+      "date": "2026-07-31",
+      "receipts_bn": 334.00987555579,
+      "total_outlays_bn": 766.31775017727,
+      "net_interest_bn": 104.15882487417
+    }
+  ]
+}

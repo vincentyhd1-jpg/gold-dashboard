@@ -22,6 +22,7 @@ const expectedBrowserOwners = new Set([
   'verify-contract-contango.mjs',
   'verify-cot-sentinel-strict.mjs',
   'verify-envelope-helper-raw-inputs.mjs',
+  'verify-fiscal-stress-page.mjs',
   'verify-gapframe.mjs',
   'verify-isolation.mjs',
   'verify-live.mjs',
@@ -47,7 +48,7 @@ const cacheToken = ['ms', 'playwright'].join('-');
 const userCachePattern = /[A-Za-z]:[\\/]+Users[\\/]+[^\s'"`]+[\\/]+AppData[\\/]+Local/i;
 
 const missingOwners = [...expectedBrowserOwners].filter(name => !sources.has(name));
-check('11 个 browser-owning 脚本清单完整', missingOwners.length === 0,
+check('12 个 browser-owning 脚本清单完整', missingOwners.length === 0,
       `missing=${missingOwners.join(',')}`);
 
 const notMigrated = [...expectedBrowserOwners].filter(name => {
@@ -55,7 +56,7 @@ const notMigrated = [...expectedBrowserOwners].filter(name => {
   return !source.includes("from './_browser.mjs'")
     || !source.includes('launchChromium(');
 });
-check('11 个 browser-owning 脚本全部调用公共 helper', notMigrated.length === 0,
+check('12 个 browser-owning 脚本全部调用公共 helper', notMigrated.length === 0,
       `violations=${notMigrated.join(',')}`);
 
 const directLaunchViolations = files.filter(name =>
