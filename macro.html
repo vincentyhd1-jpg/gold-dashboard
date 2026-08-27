@@ -82,8 +82,23 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .fiscal-method{font-size:11px;color:#8b949e;line-height:1.65;margin-top:14px}
 .fiscal-asof{display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:#8b949e}
 .fiscal-asof strong{color:#c9d1d9;font-weight:600}
+.cbo-meta{display:flex;gap:8px 20px;flex-wrap:wrap;margin:2px 0 16px;font-size:12px;color:#8b949e}
+.cbo-meta strong,.cbo-meta a{color:#c9d1d9;font-weight:600}
+.cbo-meta a{text-decoration:none;border-bottom:1px dotted #6e7681}
+.cbo-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.cbo-kpi{background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px;min-width:0}
+.cbo-kpi-label{font-size:11px;color:#8b949e;line-height:1.35;min-height:30px}
+.cbo-kpi-value{font-size:20px;color:#f0f6fc;font-weight:650;margin-top:6px;white-space:nowrap}
+.cbo-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cbo-chart{min-width:0}
+.cbo-chart:first-child{grid-column:1/-1}
+.cbo-chart .chart-wrap{height:285px}
+.cbo-notes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.cbo-note{font-size:11px;color:#8b949e;line-height:1.55;background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:10px 12px}
 @media(max-width:800px){.fiscal-charts{grid-template-columns:1fr}.fiscal-kpi{grid-column:span 6!important}}
 @media(max-width:420px){.fiscal-kpis{grid-template-columns:1fr}.fiscal-kpi{grid-column:1!important}.fiscal-kpi-label{min-height:0}}
+@media(max-width:800px){.cbo-charts,.cbo-notes{grid-template-columns:1fr}.cbo-chart:first-child{grid-column:auto}.cbo-kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:420px){.cbo-kpis{grid-template-columns:1fr}.cbo-kpi-label{min-height:0}}
 
 /* 状态行 */
 .status{font-size:12px;color:#8b949e;min-height:18px}
@@ -205,6 +220,43 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
         <span>GDP 截至：<strong id="fiscalGdpAsOf">--</strong></span>
       </div>
       <div class="status" id="fiscalStatus" role="status">正在加载财政可持续性数据…</div>
+    </div>
+
+    <div class="card full" id="cboBaselinePanel">
+      <div class="card-title">美国财政基准展望（CBO Baseline）</div>
+      <div class="card-sub">联邦财政年度数据；历史实际与 CBO 预测明确分开。CBO Baseline 是在现行法律和 CBO 经济假设下的基准预测，不是确定性结果。</div>
+      <div class="cbo-meta" aria-label="CBO baseline vintage metadata">
+        <span>发布日期：<strong id="cboPublicationDate">--</strong></span>
+        <span>Projection horizon：<strong id="cboProjectionHorizon">--</strong></span>
+        <span>Actual through：<strong id="cboActualThrough">--</strong></span>
+        <span>Vintage：<strong id="cboVintageId">--</strong></span>
+        <span>Source：<a id="cboSourceLink" href="https://www.cbo.gov/" target="_blank" rel="noopener noreferrer">CBO official</a></span>
+      </div>
+      <div class="cbo-kpis" aria-label="CBO baseline endpoint summary">
+        <div class="cbo-kpi"><div class="cbo-kpi-label">基准终点公众持有债务 / GDP</div><div class="cbo-kpi-value" id="cboTerminalDebt">--</div></div>
+        <div class="cbo-kpi"><div class="cbo-kpi-label">基准终点净利息 / GDP</div><div class="cbo-kpi-value" id="cboTerminalInterest">--</div></div>
+        <div class="cbo-kpi"><div class="cbo-kpi-label">基准终点初级余额 / GDP</div><div class="cbo-kpi-value" id="cboTerminalPrimary">--</div></div>
+        <div class="cbo-kpi"><div class="cbo-kpi-label">Actual through → horizon 债务率变化</div><div class="cbo-kpi-value" id="cboTerminalDebtChange">--</div></div>
+      </div>
+      <div class="cbo-charts">
+        <div class="cbo-chart">
+          <div class="card-sub">公众持有债务 / GDP：实际 + CBO Baseline（%）<br>历史季度实际为实线；CBO 财政年度 baseline 为虚线，预测起点由垂直标记分隔。</div>
+          <div class="chart-wrap"><canvas id="cboDebtChart"></canvas></div>
+        </div>
+        <div class="cbo-chart">
+          <div class="card-sub">初级余额与净利息：CBO Baseline（% GDP）</div>
+          <div class="chart-wrap"><canvas id="cboBalanceChart"></canvas></div>
+        </div>
+        <div class="cbo-chart">
+          <div class="card-sub">财政收入 / 支出：CBO Baseline（% GDP）</div>
+          <div class="chart-wrap"><canvas id="cboReceiptsOutlaysChart"></canvas></div>
+        </div>
+      </div>
+      <div class="cbo-notes">
+        <div class="cbo-note" id="cboTrajectoryNote">正在读取 CBO baseline 的描述性债务路径…</div>
+        <div class="cbo-note" id="cboMethodNote">C18A 不把市场收益率当作 C17 effective r，因此不构造 forward Fiscal Gap，也不定义“失控年份”。</div>
+      </div>
+      <div class="status" id="cboStatus" role="status">正在加载 CBO baseline…</div>
     </div>
 
   </div>
@@ -530,6 +582,145 @@ function renderFiscalStress(payload) {
   document.getElementById('fiscalGdpAsOf').textContent = meta.gdp_as_of
     ? _quarterLabel(meta.gdp_as_of) : '--';
   return { rows, latest, meta };
+}
+
+const CBO_PROJECTION_MARKER = {
+  id: 'cboProjectionMarker',
+  afterDraw(chart, _args, options) {
+    const index = chart.data.labels.indexOf(String(options.startYear));
+    if (index < 0) return;
+    const x = chart.scales.x.getPixelForValue(index);
+    const { top, bottom } = chart.chartArea;
+    const context = chart.ctx;
+    context.save();
+    context.strokeStyle = '#6e7681';
+    context.lineWidth = 1;
+    context.setLineDash([4, 4]);
+    context.beginPath();
+    context.moveTo(x, top);
+    context.lineTo(x, bottom);
+    context.stroke();
+    context.setLineDash([]);
+    context.fillStyle = '#8b949e';
+    context.font = '10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+    context.fillText('CBO projection', Math.min(x + 5, chart.chartArea.right - 80), top + 12);
+    context.restore();
+  },
+};
+
+function _formatCboPct(value, suffix = '%') {
+  return value === null || value === undefined
+    ? '--'
+    : Number(value).toLocaleString('zh-CN', {
+        minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: 'auto',
+      }) + suffix;
+}
+
+function _cboChartOptions(axisTitle, projectionStartYear) {
+  const options = chartOptions();
+  options.animation = false;
+  options.scales.y.title.text = axisTitle;
+  options.scales.y.ticks.callback = value => Number(value).toLocaleString('zh-CN', {
+    maximumFractionDigits: 1,
+  }) + '%';
+  options.plugins.cboProjectionMarker = { startYear: projectionStartYear };
+  options.plugins.tooltip.callbacks.label = context => context.parsed.y === null
+    ? `  ${context.dataset.label}：--`
+    : `  ${context.dataset.label}：${Number(context.parsed.y).toFixed(2)}% GDP`;
+  return options;
+}
+
+function renderCboBaseline(payload, historicalQuarterly) {
+  const rows = payload.annual || [];
+  const summary = payload.summary || {};
+  const vintage = payload.vintage || {};
+  const methodology = payload.methodology || {};
+  const projectionRows = rows.filter(row => row.kind === 'projection');
+  const actualThrough = Number(vintage.actual_through_year);
+  const projectionStart = Number(vintage.projection_start_year);
+  const actualRows = (historicalQuarterly || []).filter(row => {
+    const match = /^(\d{4})-Q4$/.exec(row.quarter || '');
+    return match && Number(match[1]) <= actualThrough
+      && row.public_debt_gdp_pct !== null && row.public_debt_gdp_pct !== undefined;
+  });
+  const labels = [...new Set([
+    ...actualRows.map(row => row.quarter.slice(0, 4)),
+    ...rows.map(row => String(row.year)),
+  ])].sort();
+  const actualByYear = new Map(actualRows.map(row => [row.quarter.slice(0, 4),
+    row.public_debt_gdp_pct]));
+  const cboByYear = new Map(projectionRows.map(row => [String(row.year),
+    row.debt_held_by_public_pct_gdp]));
+
+  document.getElementById('cboPublicationDate').textContent = vintage.publication_date || '--';
+  document.getElementById('cboProjectionHorizon').textContent =
+    `${vintage.projection_start_year ?? '--'}–${vintage.projection_end_year ?? '--'}`;
+  document.getElementById('cboActualThrough').textContent = vintage.actual_through_year ?? '--';
+  document.getElementById('cboVintageId').textContent = vintage.vintage_id || '--';
+  const source = document.getElementById('cboSourceLink');
+  source.href = vintage.source_page_url;
+  source.textContent = 'CBO official baseline';
+  document.getElementById('cboTerminalDebt').textContent =
+    _formatCboPct(summary.terminal_debt_held_by_public_pct_gdp);
+  document.getElementById('cboTerminalInterest').textContent =
+    _formatCboPct(summary.terminal_net_interest_pct_gdp);
+  document.getElementById('cboTerminalPrimary').textContent =
+    _formatCboPct(summary.terminal_primary_balance_pct_gdp);
+  document.getElementById('cboTerminalDebtChange').textContent =
+    _formatCboPct(summary.debt_change_from_actual_through_pp, ' pp');
+
+  new Chart(document.getElementById('cboDebtChart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      lineDataset('历史实际（C17 Q4 观测）', labels.map(year => actualByYear.get(year) ?? null),
+        COLORS.blue, { sourceField: 'public_debt_gdp_pct', sourceKind: 'historical_actual',
+          borderWidth: 2.5, tension: 0, pointRadius: 2, pointHoverRadius: 4 }),
+      lineDataset('CBO Baseline（FY）', labels.map(year => cboByYear.get(year) ?? null),
+        COLORS.gold, { sourceField: 'debt_held_by_public_pct_gdp',
+          sourceKind: 'cbo_official_baseline', borderDash: [8, 5], borderWidth: 2.5,
+          tension: 0, pointRadius: 2, pointHoverRadius: 4 }),
+    ]},
+    options: _cboChartOptions('% GDP', projectionStart),
+    plugins: [CBO_PROJECTION_MARKER],
+  });
+
+  const projectionLabels = projectionRows.map(row => String(row.year));
+  new Chart(document.getElementById('cboBalanceChart'), {
+    type: 'line',
+    data: { labels: projectionLabels, datasets: [
+      lineDataset('初级余额', projectionRows.map(row => row.primary_balance_pct_gdp),
+        COLORS.blue, { sourceField: 'primary_balance_pct_gdp', sourceKind: 'cbo_projection',
+          tension: 0, pointRadius: 2, pointHoverRadius: 4 }),
+      lineDataset('净利息', projectionRows.map(row => row.net_interest_pct_gdp),
+        COLORS.red, { sourceField: 'net_interest_pct_gdp', sourceKind: 'cbo_projection',
+          tension: 0, pointRadius: 2, pointHoverRadius: 4 }),
+    ]},
+    options: _cboChartOptions('% GDP', projectionStart),
+    plugins: [CBO_PROJECTION_MARKER],
+  });
+  new Chart(document.getElementById('cboReceiptsOutlaysChart'), {
+    type: 'line',
+    data: { labels: projectionLabels, datasets: [
+      lineDataset('财政收入', projectionRows.map(row => row.receipts_pct_gdp),
+        COLORS.green, { sourceField: 'receipts_pct_gdp', sourceKind: 'cbo_projection',
+          tension: 0, pointRadius: 2, pointHoverRadius: 4 }),
+      lineDataset('财政支出', projectionRows.map(row => row.outlays_pct_gdp),
+        COLORS.red, { sourceField: 'outlays_pct_gdp', sourceKind: 'cbo_projection',
+          tension: 0, pointRadius: 2, pointHoverRadius: 4 }),
+    ]},
+    options: _cboChartOptions('% GDP', projectionStart),
+    plugins: [CBO_PROJECTION_MARKER],
+  });
+
+  document.getElementById('cboTrajectoryNote').textContent =
+    `描述性路径：债务/GDP 上升年份 ${summary.baseline_debt_rising_years.join('、')}；`
+    + `初级余额为负年份 ${summary.baseline_primary_deficit_years.join('、')}。`
+    + '这些是 baseline 数学描述，不是危机或“失控”判定。';
+  document.getElementById('cboMethodNote').textContent =
+    methodology.forward_fiscal_gap_available
+      ? 'Forward Fiscal Gap 方法已提供。'
+      : 'C18A 不把 CBO 市场利率当作 C17 effective r，因此不构造 forward Fiscal Gap，也不定义“失控年份”。';
+  return { rows, projectionRows, actualRows, summary, vintage };
 }
 
 function debtOverviewOptions(tooltipLookup) {
@@ -912,6 +1103,40 @@ loadJson('data/derived/macro_fiscal_stress.json?_=' + Date.now(), {
     console.error('[fetch] 财政可持续性数据加载失败：', err);
     const el = document.getElementById('fiscalStatus');
     el.textContent = '财政可持续性数据加载失败：' + err.message;
+    el.className = 'status err';
+  });
+
+// CBO baseline has an independent required source and an optional historical
+// bridge.  A C17 load failure may remove the actual line but must not hide the
+// official CBO projection; a CBO failure must not affect the C17 panel above.
+Promise.allSettled([
+  loadJson('data/derived/cbo_baseline_latest.json?_=' + Date.now(), {
+    name: 'cbo_baseline_latest.json',
+  }),
+  loadJson('data/derived/macro_fiscal_stress.json?_=' + Date.now(), {
+    name: 'macro_fiscal_stress.json (CBO historical bridge)',
+  }),
+])
+  .then(results => {
+    if (results[0].status !== 'fulfilled') throw results[0].reason;
+    const historical = results[1].status === 'fulfilled'
+      ? results[1].value.quarterly || [] : [];
+    const rendered = _safeRender('CBO Baseline', () =>
+      renderCboBaseline(results[0].value, historical));
+    const el = document.getElementById('cboStatus');
+    if (!rendered) {
+      el.textContent = 'CBO baseline 图表渲染失败，请查看控制台。';
+      el.className = 'status err';
+      return;
+    }
+    el.textContent = historical.length
+      ? '已加载 CBO baseline 与 C17 Q4 实际观测；actual / projection 未混写。'
+      : '已加载 CBO baseline；C17 历史暂不可用，未伪造 actual。';
+  })
+  .catch(err => {
+    console.error('[fetch] CBO baseline 加载失败：', err);
+    const el = document.getElementById('cboStatus');
+    el.textContent = 'CBO baseline 加载失败：' + err.message;
     el.className = 'status err';
   });
 </script>

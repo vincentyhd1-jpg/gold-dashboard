@@ -113,11 +113,12 @@ REQUIRED_ENVELOPE_KEYS = (
 )
 
 # 频率白名单。往里加一项等于**放宽**校验，而放宽本身不会让任何断言变红 ——
-# 所以 tools/verify-io-utils.py 里配了一条「VALID_FREQ 恰为这四项」的锚：
+# 所以 tools/verify-io-utils.py 里配了一条精确集合锚：
 # 增或删任何一项都会红，逼人先来这里看清楚再改。
 # quarterly：Treasury Bulletin 的债务持有人结构与 BEA 名义 GDP 都是季频，
 # 观测日期按季度首月 1 日标记（2026-01-01 = 2026 Q1）。
-VALID_FREQ = frozenset({"daily", "weekly", "monthly", "quarterly"})
+# annual：CBO baseline 按联邦财政年度发布，actual/projection 分界另存业务 metadata。
+VALID_FREQ = frozenset({"daily", "weekly", "monthly", "quarterly", "annual"})
 
 
 def is_envelope(payload) -> bool:

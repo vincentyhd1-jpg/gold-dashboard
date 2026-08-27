@@ -536,8 +536,8 @@ except ValueError as e:
 
 # 白名单本身的锚：增或删任何一项都红。放宽校验不会让别的断言变红，
 # 这条是唯一会拦住「悄悄多加一种频率」的地方。
-check("VALID_FREQ 恰为 {daily,weekly,monthly,quarterly} 四项",
-      VALID_FREQ == frozenset({"daily", "weekly", "monthly", "quarterly"}),
+check("VALID_FREQ 恰为 {daily,weekly,monthly,quarterly,annual} 五项",
+      VALID_FREQ == frozenset({"daily", "weekly", "monthly", "quarterly", "annual"}),
       str(sorted(VALID_FREQ)))
 
 # unwrap 对坏信封也必须拒绝（不能绕过 assert）

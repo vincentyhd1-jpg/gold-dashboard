@@ -129,7 +129,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 
 ## 4. 护栏清单与当前状态
 
-全部在 C16 分支（基于 `afc18e2`）上实测。**Python 侧经 `wsl -d Ubuntu-22.04 --cd <repo> -- python3`，
+当前基线包含 C18A 新增护栏。**Python 侧经 `wsl -d Ubuntu-22.04 --cd <repo> -- python3`，
 前端 `.mjs` 从 PowerShell 原生调 `node`** —— 执行侧错配会产生假红/假绿，见 CLAUDE.md
 「执行侧陷阱」一节。
 
@@ -162,12 +162,14 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-macro-page.mjs` | 0 | 86 passed, 0 failed；page errors: none |
 | `fetch_treasury_fiscal.py --test` | 0 | 28 passed, 0 failed |
 | `derive_fiscal_stress.py --test` | 0 | 34 passed, 0 failed |
+| `fetch_cbo_baseline.py --test` | 0 | 22 passed, 0 failed |
 | `tools/verify-fiscal-stress-page.mjs` | 0 | 46 passed, 0 failed；page errors: none |
-| `tools/verify-static-build.mjs` | 0 | 31 passed, 0 failed；36 个公开文件逐字节对账 |
+| `tools/verify-cbo-baseline-page.mjs` | 0 | 24 passed, 0 failed；page errors: none |
+| `tools/verify-static-build.mjs` | 0 | 34 passed, 0 failed；37 个公开文件逐字节对账 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
-macro-page(86)/fiscal-stress-page(46)/static-build(31) 有计数；
+macro-page(86)/fiscal-stress-page(46)/cbo-baseline-page(24)/static-build(34) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -175,7 +177,7 @@ playback/gapframe 无 passed/failed 累加器，
 `44aecf2` 反转了那条编码旧口径的断言（「JUN26 已到期已剔除」→「已到期合约仍保留
 X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案一致，断言未删。
 
-### 注入类护栏（十条，含 wrapper meta guard）
+### 注入类护栏（十一条，含 wrapper meta guard）
 
 每条自身 exit 0 表示「注入→红、还原→绿」的完整序列成立。逐阶段实测：
 
@@ -188,11 +190,12 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-cot-index-null-injection.mjs` | 0 | wrapper 18/0；基线 38/0 → current null→50 为 31/7、chart null→50 为 36/2 → 恢复 38/0 + hash 一致 |
 | `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 81/0；基线 86/0 → C15 四项及 C14 七项注入均真实变红 → 恢复 86/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
-| `tools/verify-injection-wrappers.mjs` | 0 | 37/0；静态锁七 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
-| `tools/verify-static-build-injection.mjs` | 0 | 缺 assets.directory、缺 macro.html、泄漏 Python 均真实红 → 恢复 31/0 + config hash 一致 |
+| `tools/verify-injection-wrappers.mjs` | 0 | 40/0；静态锁八 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
+| `tools/verify-static-build-injection.mjs` | 0 | 23/0；缺 assets.directory、缺 macro.html、泄漏 Python 均真实红 → 恢复 34/0 + config hash 一致 |
 | `tools/verify-fiscal-stress-injection.mjs` | 0 | MTS 11/0 + derive 46/0 + frontend 74/0；原八项、C17.1 五项及 Fiscal Gap 图五项注入均真实红，三个目标最终 hash 一致 |
+| `tools/verify-cbo-baseline-injection.mjs` | 0 | parser 32/0 + frontend 18/0；四项 parser/vintage 与两项 frontend 注入均真实红，两个目标最终 hash 一致 |
 
-C10-C17 的七个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
+C10-C18A 的八个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
 exit 0 已包含「未污染下一个 wrapper」的证据，不再需要在 wrapper 之间重跑 derive。
 `verify-noise-injection.py` 继续独立使用同等严格的 WSL/Python 恢复契约。
@@ -765,3 +768,41 @@ p* 样式、两种 0% 线语义、三图布局、presentation dataset 与无前�
 误叫参考线、正 gap 判决反转、tooltip gap 删除与前端重算；恢复后重新 46/0，frontend
 wrapper **74/0**，
 最终 `macro.html` SHA-256 与注入前一致。
+
+## 20. C18A CBO 官方 Baseline
+
+`fetch_cbo_baseline.py` 解析 CBO 于 `2026-02-11` 发布的 *The Budget and Economic
+Outlook: 2026 to 2036* Budget workbook。当前人工审计源为官方 publication
+`https://www.cbo.gov/publication/61882` 与文件
+`51118-2026-02-Budget-Projections.xlsx`，SHA-256 为
+`06593fcc3b8517806994090a6a9ffe748cfdd19514d2f9d2f18a1841b64b33a5`。解析器锁定完整
+sheet 集、Table 1-1 标题/坐标/单位、2025 actual 与 2026..2036 projection 分界；百分数
+必须按官方 percentage points 读取，primary deficit 转为 surplus-positive 口径。
+同一 publication 的 Economic workbook `51135-2026-02-Economic-Projections.xlsx`
+（SHA-256 `ae8f4920702fabf8fb3136bc94a42c53466cff5e890dec22396d8dc49dc2f776`）已审计但
+未消费：C18A 所需财政年度指标都在 Budget Table 1-1，避免混入 calendar-year 表。
+
+成功输出 strict schema v0 annual envelope。不可变版本落
+`data/cbo/baseline-2026-02.json`，浏览器指针落
+`data/derived/cbo_baseline_latest.json`；vintage 另存人工 source artifact 的
+`downloaded_at=2026-08-27T07:58:05Z`。相同 source 重跑 bytes 与 generated_at 不变，
+不同业务内容拒绝覆盖旧 vintage，latest 只在完成验证后切换；异常诊断写入 ignored
+`data/cbo/diagnostics/`。原始 Budget/Economic XLSX 位于 ignored `data/cbo/source/`，
+不进 Git、不进 dist。每日 workflow 只运行离线
+`fetch_cbo_baseline.py --test`，不自动下载或发布新 vintage。
+
+年度输出直接含 debt held by public/GDP、primary balance、net interest、receipts、
+outlays、overall balance 与债务变化描述量。2036 终点为 debt/GDP `120.209%`、net
+interest/GDP `4.591%`、primary balance/GDP `-2.079%`；2025 actual 至 2036 baseline
+债务率上升 `20.834 pp`。这些是 conditional baseline，不是危机年份或确定性预测。
+
+`macro.html` 新增独立 CBO 卡片与三图：C17 Q4 actual 实线和 CBO annual baseline 虚线
+分段债务率、projection primary balance/net interest、projection receipts/outlays；2026
+由垂直 marker 标出。页面直接消费官方百分比，不以金额/GDP重算。CBO 数据失败不影响
+C17，C17 bridge 失败时 projection 仍显示但不伪造 actual。当前 workbook 无法提供与
+C17 `effective_r` 严格同口径的 forward rate，因此 forward p*/Fiscal Gap 明确 unavailable。
+
+静态白名单只增加 `data/derived/cbo_baseline_latest.json`，产物为 37 文件（25 JSON）；
+`verify-static-build.mjs` 明确拒绝 `fetch_cbo_baseline.py` 和整个 `data/cbo/`。C18A
+定向护栏为 parser 22/0、页面 24/0、injection parser 32/0 + frontend 18/0、wrapper
+meta 40/0、static build 34/0、static injection 23/0；所有注入最终恢复源码 SHA-256。

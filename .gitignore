@@ -12,3 +12,8 @@ __pycache__/
 reports/
 dist/
 .wrangler/
+
+# CBO official workbooks are local parser inputs.  Only versioned JSON
+# envelopes are reviewed/committed and only the latest derived JSON is public.
+data/cbo/source/*.xlsx
+data/cbo/diagnostics/
