@@ -179,6 +179,14 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - 九项一致历史从 2016-Q1 开始，不向 1990 拼接其它财政流量。schema 保持 v0。
   C17 只做实际历史/当前算术监测：`stress_level=unscored`、`threshold_version=null`，
   不接 CBO、不输出失控年份、不拍 GREEN/YELLOW/ORANGE/RED 阈值。预测与校准属于 C18。
+- Fiscal Gap 的产品判决严格沿用 `gap = p* - actual`：`gap <= 0` 为“稳定条件满足”，
+  `gap > 0` 为“稳定条件不满足”，unknown 不判断；前端只读逐季 gap/trajectory，禁止
+  重算。负 gap 的绝对值称“当前稳定缓冲”，正 gap 的值称“当前财政调整缺口”，仅是
+  当期数学 adjustment gap，不转换成必须立即削减的美元金额。
+- p* 本身是动态判据线；0% GDP 只区分初级盈余/赤字，必须叫“参考线”，不能冒充稳定
+  判据。判决颜色只表示 condition met/not met，不是 Fiscal Stress Score 或风险等级。
+- “稳定条件满足”不等于观测债务/GDP 当期必然下降；stock-flow residual 必须继续展示，
+  且页面和 tooltip 都保留这一区分。C17.1 不引入阈值缓冲带或 near-threshold 状态。
 
 ### 帧级 vs 展示视图二分（重要）
 **帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）是两类东西。**

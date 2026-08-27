@@ -176,6 +176,13 @@ debt`；primary balance `= receipts - total outlays + net interest`（盈余为�
 residual，绝不强制为零。前端只读九项派生字段与 residual/status，不重算公式；缺失
 为“未知”。C17 不做 CBO 预测、不输出失控年份、不设置压力颜色或阈值评级。
 
+**Fiscal Gap 判决表达（C17.1）**：前端直接使用逐季 `trajectory_condition` 与
+`fiscal_gap_pct_gdp`。gap `<= 0` 显示“稳定条件满足/当前稳定缓冲”，gap `> 0`
+显示“稳定条件不满足/当前财政调整缺口”，unknown 显示“数据不足，暂不判断”；
+不在浏览器重算 `p* - actual`。实际初级余额图将 p* 明示为动态“判据线”，0% 只作
+区分盈余/赤字的参考线。tooltip 逐季显示 actual、p*、派生 gap 与派生判决；
+stock-flow residual 继续提醒“满足稳定算术条件不等于实际债务率当期必然下降”。
+
 ## 常见陷阱
 
 ### cwd 陷阱
