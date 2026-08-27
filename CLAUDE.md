@@ -60,8 +60,9 @@ fetch_treasury_debt.py  Treasury Debt to the Penny → data/treasury_debt_daily.
 derive_macro.py                         → macro_rates / macro_cpi / macro_debt
 fetch_treasury_fiscal.py  Treasury MTS Table 9 → data/treasury_mts_fiscal.json
 derive_fiscal_stress.py                 → data/derived/macro_fiscal_stress.json
+fetch_cbo_baseline.py  CBO Budget Baseline XLSX → immutable vintage + cbo_baseline_latest
 index.html        期限结构回放 + 各图表
-macro.html        利率 / CPI / 美国联邦债务 / 财政可持续性面板
+macro.html        利率 / CPI / 美国联邦债务 / 财政可持续性 / CBO baseline 面板
 term-3d.html      Plotly 3D 曲面页，**已从导航移除**（无运行时入口，见下方专节）
 trading_calendar.py  交易日历，采集层与派生层共用一份假日表
 data_envelope.py  统一落盘信封 + write_json 单点落盘
@@ -70,8 +71,8 @@ tools/*.mjs       Playwright 验证脚本
 
 **Cloudflare 静态发布（C16）**：仓库不是 Worker JS 项目，`wrangler.jsonc` 不设
 `main`，只将 `assets.directory` 指向 `./dist`。`node tools/build-static-site.mjs`
-每次删除旧 dist 后按 36 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
-24 个公开 JSON；quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
+每次删除旧 dist 后按 37 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
+25 个公开 JSON；CBO source/vintage、quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
 公开。Cloudflare Workers Builds 的 root 为 `/`，build command 为上述 Node 脚本，
 production deploy 为 `npx wrangler deploy`，preview deploy 为
 `npx wrangler versions upload`。`dist/` 与 `.wrangler/` 均为忽略的构建产物。
@@ -174,7 +175,7 @@ debt`；primary balance `= receipts - total outlays + net interest`（盈余为�
 `p* = (r-g) * public_debt_gdp_pct / 100`；`fiscal gap = p* - actual primary balance`。
 季度模型变化量用年度/TTM RHS `/4` 后与实际 QoQ `Δd` 比较，差额作为 stock-flow
 residual，绝不强制为零。前端只读九项派生字段与 residual/status，不重算公式；缺失
-为“未知”。C17 不做 CBO 预测、不输出失控年份、不设置压力颜色或阈值评级。
+为“未知”。C17 历史模块本身不做预测、不输出失控年份、不设置压力颜色或阈值评级。
 
 **Fiscal Gap 判决表达（C17.1）**：前端直接使用逐季 `trajectory_condition` 与
 `fiscal_gap_pct_gdp`。gap `<= 0` 显示“稳定条件满足/当前稳定缓冲”，gap `> 0`
@@ -184,6 +185,21 @@ residual，绝不强制为零。前端只读九项派生字段与 residual/statu
 stock-flow residual 继续提醒“满足稳定算术条件不等于实际债务率当期必然下降”。
 Fiscal Gap 另有一张直接读取逐季 `fiscal_gap_pct_gdp` 的独立图；该图的 0% 才是
 gap 正负判据线，null 保持缺口，tooltip 直接读取逐季 `trajectory_condition`。
+
+**CBO 官方基准路径（C18A）**：`fetch_cbo_baseline.py` 只解析经过人工审计并按
+SHA-256 锁定的 2026-02 Budget workbook（CBO 2026-02-11 发布，Table 1-1）。
+2025 是 actual，2026..2036 是 fiscal-year projection；primary balance 统一为盈余正、
+赤字负。vintage 记录本次人工 source artifact 的 `downloaded_at`；原始 XLSX 只存本地
+ignored `data/cbo/source/`。数据异常写 ignored `data/cbo/diagnostics/`，成功验证后同时发布不可覆盖的
+`data/cbo/baseline-2026-02.json` 与浏览器 latest 指针。每日 workflow 只跑离线 parser
+测试，不自动下载、替换 vintage 或提交 latest；新版本必须人工审计 source URL、sheet、
+单位、actual/projection 分界与 hash。静态站只公开 latest，不公开 source/vintage。
+
+`macro.html` 的 CBO 模块直接消费官方年度 debt held by public/GDP、primary balance、
+net interest、receipts、outlays，和 C17 历史 Q4 actual 分段展示；不由金额/GDP 重算官方
+比率，不把 baseline 冒充危机时点预测。CBO workbook 没有可严格桥接 C17
+`effective_r` 的利率，因此 C18A 明确不构造 forward Fiscal Gap；待未来拥有同口径
+forward `r/g/d/primary balance` 才能另行评估。
 
 ## 常见陷阱
 
@@ -796,6 +812,7 @@ python3 fetch_fred.py --test               # 采集校验（13 个 FRED 序列�
 python3 fetch_treasury_debt.py --test      # Treasury 日频债务（三态 + 幂等/隔离/workflow）
 python3 fetch_treasury_fiscal.py --test    # Treasury MTS 月度财政流量（三态/层级/修订）
 python3 derive_fiscal_stress.py --test     # 财政可持续性公式/频率/缺失/幂等
+python3 fetch_cbo_baseline.py --test       # CBO workbook schema/vintage/单位/发布安全
 python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘
 python3 tools/verify-io-utils.py           # 落盘骨架（含隔离区撞名断言）
 node tools/verify-ui-fixes.mjs             # UI 几何 / COT Index 单侧与双侧 null
@@ -816,6 +833,8 @@ node tools/verify-debt-overview-injection.mjs  # C15 tooltip/stack/文案/冗余
 node tools/verify-macro-page.mjs           # macro mixed-frequency + 真实 hover/drag/reset/移动端
 node tools/verify-fiscal-stress-page.mjs   # C17 九 KPI/两图/as-of/null/模块隔离
 node tools/verify-fiscal-stress-injection.mjs  # C17 八项跨 Python/前端破坏注入
+node tools/verify-cbo-baseline-page.mjs    # C18A 官方年度字段/分段/来源/隔离
+node tools/verify-cbo-baseline-injection.mjs  # C18A 符号/单位/vintage/前端直读注入
 node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
 node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
 node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红

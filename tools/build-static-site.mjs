@@ -40,6 +40,7 @@ const PUBLIC_FILES = [
   'data/derived/macro_debt.json',
   'data/derived/macro_rates.json',
   'data/derived/macro_fiscal_stress.json',
+  'data/derived/cbo_baseline_latest.json',
   'data/derived/term-structure-series.json',
 ];
 

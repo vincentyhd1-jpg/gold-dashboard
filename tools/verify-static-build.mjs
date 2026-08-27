@@ -17,11 +17,13 @@ const REQUIRED_PATHS = [
   'data/derived/macro_debt.json',
   'data/treasury_mts_fiscal.json',
   'data/derived/macro_fiscal_stress.json',
+  'data/derived/cbo_baseline_latest.json',
 ];
 const FORBIDDEN_PATHS = [
   'AGENTS.md', 'CLAUDE.md', 'README.md',
   'fetch_fred.py', 'fetch_treasury_debt.py', 'fetch_treasury_fiscal.py',
-  'tools', 'docs', '.github', '.git', 'data/quarantine',
+  'fetch_cbo_baseline.py', 'tools', 'docs', '.github', '.git',
+  'data/quarantine', 'data/cbo',
 ];
 
 let passed = 0;
@@ -72,6 +74,7 @@ function sourceManifest() {
   }
   files.push(...listFiles(path.join(ROOT, 'data'))
     .filter(file => !file.split('/').includes('quarantine')
+      && !file.startsWith('cbo/')
       && path.extname(file).toLowerCase() === '.json')
     .map(file => `data/${file}`));
   return files.sort();

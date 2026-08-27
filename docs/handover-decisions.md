@@ -177,8 +177,8 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - 观测 QoQ `Δd` 与模型 annual-rate RHS `/4` 后比较；差额保留为 stock-flow residual，
   不把 residual 强制归零，也不把它自动解释成模型失败。
 - 九项一致历史从 2016-Q1 开始，不向 1990 拼接其它财政流量。schema 保持 v0。
-  C17 只做实际历史/当前算术监测：`stress_level=unscored`、`threshold_version=null`，
-  不接 CBO、不输出失控年份、不拍 GREEN/YELLOW/ORANGE/RED 阈值。预测与校准属于 C18。
+  C17 历史模块只做实际历史/当前算术监测：`stress_level=unscored`、
+  `threshold_version=null`，不输出失控年份、不拍 GREEN/YELLOW/ORANGE/RED 阈值。
 - Fiscal Gap 的产品判决严格沿用 `gap = p* - actual`：`gap <= 0` 为“稳定条件满足”，
   `gap > 0` 为“稳定条件不满足”，unknown 不判断；前端只读逐季 gap/trajectory，禁止
   重算。负 gap 的绝对值称“当前稳定缓冲”，正 gap 的值称“当前财政调整缺口”，仅是
@@ -190,6 +190,27 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
   这条 0% 线的语义；Fiscal Gap 曲线仍只能读取派生字段，不在前端重算。
 - “稳定条件满足”不等于观测债务/GDP 当期必然下降；stock-flow residual 必须继续展示，
   且页面和 tooltip 都保留这一区分。C17.1 不引入阈值缓冲带或 near-threshold 状态。
+
+### CBO 官方 Baseline（C18A）
+
+- CBO forecast 是有版本含义的官方 baseline，不是滚动历史源。每个 workbook 以
+  publication month、官方 URL、完整 sheet 集和 SHA-256 固定为 immutable vintage；
+  旧 vintage 永不覆盖，latest 只在全量 schema/单位/范围验证成功后切换。
+- 当前 vintage 是 2026-02-11 的 *The Budget and Economic Outlook: 2026 to 2036*，
+  Table 1-1；2025 为 actual，2026..2036 为 projection。全链使用 CBO fiscal year，
+  不与 Economic workbook 的 calendar-year 表混用。
+- primary balance 统一采用 surplus-positive：官方 Primary Deficit 负值原样对应赤字。
+  debt/GDP、net interest/GDP、receipts/GDP、outlays/GDP 都直接消费官方百分比字段，
+  前端不得通过金额重新构造官方 baseline。
+- 页面必须把 C17 历史 actual 与 CBO projection 视觉分段，并标明 publication、vintage、
+  actual-through 与 projection horizon。baseline 是条件路径，不是确定性预测；不得输出
+  “危机年份”、压力颜色或伪精确概率。
+- CBO 当前 workbook 没有与 C17 `effective_r` 可严格桥接的 forward rate，市场利率不能
+  冒充有效利率。因此 C18A 不计算 forward p* / Fiscal Gap；缺严格共同口径时结论必须是
+  unavailable，而不是在前端拼公式。
+- 更新策略为人工审计新 vintage：每日 workflow 只运行离线 parser guard，不自动下载
+  或发布 CBO 文件。vintage 记录人工下载时间；解析异常写本地 diagnostics 且不切换
+  latest。原始 XLSX/diagnostics 不进 Git/静态站；版本 JSON 可追溯，浏览器只公开 latest。
 
 ### 帧级 vs 展示视图二分（重要）
 **帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）是两类东西。**
