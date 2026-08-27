@@ -32,12 +32,14 @@ const PUBLIC_FILES = [
   'data/oi.json',
   'data/stocks.json',
   'data/treasury_debt_daily.json',
+  'data/treasury_mts_fiscal.json',
   'data/ust_dgs10.json',
   'data/ust_dgs2.json',
   'data/ust_dgs30.json',
   'data/derived/macro_cpi.json',
   'data/derived/macro_debt.json',
   'data/derived/macro_rates.json',
+  'data/derived/macro_fiscal_stress.json',
   'data/derived/term-structure-series.json',
 ];
 

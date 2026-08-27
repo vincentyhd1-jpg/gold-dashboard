@@ -40,6 +40,8 @@ jobs:
           python fetch_fred.py --test
           python derive_macro.py --test
           python fetch_treasury_debt.py --test
+          python fetch_treasury_fiscal.py --test
+          python derive_fiscal_stress.py --test
         continue-on-error: true
 
       # 每个采集步骤互不连累：任一失败都不能让其余步骤被跳过，
@@ -110,6 +112,19 @@ jobs:
           exit 0
         continue-on-error: true
 
+      # Treasury MTS Table 9：月度 receipts / total net outlays / net interest。
+      # 每日只检查是否有新月报；相同业务数据幂等 exit 0。原始月报先于派生层独立
+      # 落盘，派生失败不能丢掉已经取得的官方财政流量。
+      - name: Run fetch_treasury_fiscal.py
+        id: treasury_fiscal
+        if: github.event.schedule != '0 18 * * 6'
+        run: |
+          set +e
+          python fetch_treasury_fiscal.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+        continue-on-error: true
+
       # FRED 十三个序列（UST 2Y/10Y/30Y、Fed 目标区间上下限、DFF、CPIAUCSL、CPILFESL，
       # 以及 GFDEBTN/FYGFDPUN/FDHBATN/FDHBFIN/GDP 五个债务与 GDP 序列）。
       # 逐序列独立下载/解析/校验/落盘，一个序列失败不影响其余，见 fetch_fred.py:188 process_one。
@@ -157,6 +172,17 @@ jobs:
           exit 0
         continue-on-error: true
 
+      # 财政可持续性派生独立于 rates/CPI/debt 页面链。只消费已落盘的 MTS、
+      # Treasury 日频公众债务与 macro_debt；失败保留旧派生文件，不影响任何原始源。
+      - name: Run derive_fiscal_stress.py
+        id: derive_fiscal_stress
+        run: |
+          set +e
+          python derive_fiscal_stress.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+        continue-on-error: true
+
       # 原始数据不可再生（CME 无历史归档），无条件落盘：
       # 上面任何一步失败都不能连累已经拿到的采集数据，隔离区同样要提交。
       - name: Commit and push if data changed
@@ -176,8 +202,10 @@ jobs:
                    data/debt_total.json data/debt_held_public.json \
                    data/debt_intragov.json data/debt_foreign.json \
                    data/gdp_nominal.json data/treasury_debt_daily.json \
+                   data/treasury_mts_fiscal.json \
                    data/derived/macro_rates.json data/derived/macro_cpi.json \
-                   data/derived/macro_debt.json; do
+                   data/derived/macro_debt.json \
+                   data/derived/macro_fiscal_stress.json; do
             git add "$f" 2>/dev/null || true
           done
           # 隔离区必须提交：CME 只提供当日文件，坏数据错过就永久拿不回来
@@ -209,7 +237,7 @@ jobs:
           }
 
           [ "${{ steps.tests.outcome }}"  = "failure" ] && \
-            fail "校验器自检" "八个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro / fetch_treasury_debt）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
+            fail "校验器自检" "十个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro / fetch_treasury_debt / fetch_treasury_fiscal / derive_fiscal_stress）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
           # COT 按真实 exit code 三态处理，不能只看 step outcome：
           # continue-on-error 会把 1/2 都折叠成 failure，丢失故障类别。
           case "${{ steps.cot.outputs.code }}" in
@@ -262,6 +290,14 @@ jobs:
             0|"") : ;;
             *) fail "采集层：Treasury debt" "fetch_treasury_debt.py 以未预期的 exit code ${{ steps.treasury_debt.outputs.code }} 退出（只应产生 0 / 1 / 2）" ;;
           esac
+          # Treasury MTS fiscal 与日频债务同为三态且彼此隔离：Table 9 新月报失败
+          # 不影响 Debt to the Penny，反之亦然。周六 COT 专场跳过时 output 为空。
+          case "${{ steps.treasury_fiscal.outputs.code }}" in
+            1) fail "采集层：Treasury fiscal" "fetch_treasury_fiscal.py 检测到 MTS Table 9 格式、层级或数据异常（exit 1）—— 证据已隔离，treasury_mts_fiscal.json 保持上一份" ;;
+            2) echo "::warning title=采集层：Treasury fiscal::Fiscal Data MTS 上游暂时不可达；treasury_mts_fiscal.json 保持上一份，等待下一次每日任务重试" ;;
+            0|"") : ;;
+            *) fail "采集层：Treasury fiscal" "fetch_treasury_fiscal.py 以未预期的 exit code ${{ steps.treasury_fiscal.outputs.code }} 退出（只应产生 0 / 1 / 2）" ;;
+          esac
           # FRED 按 exit code 四态处理，只看进程码即可 —— 汇总已按严重度取
           # （fetch_fred.py 的 EXIT_SEVERITY，1 > 3 > 2 > 0），同批的 2 不会再盖住 1，
           # 原先那条数 "c/d exit 1" 行的 grep 绕过已删。
@@ -287,6 +323,11 @@ jobs:
             1) fail "派生层：宏观" "derive_macro.py 至少一条派生链失败（上游缺失 / 非信封 / 空 / 全 null）—— 失败链保留上一版 macro_rates.json、macro_cpi.json 或 macro_debt.json，其他链照常产出。宏观页面对应模块停留在旧数据，原始采集已落盘，修好上游后重跑即可重算" ;;
             0|"") : ;;
             *) fail "派生层：宏观" "derive_macro.py 以未预期的 exit code ${{ steps.derive_macro.outputs.code }} 退出（derive_macro 只应产生 0 或 1）" ;;
+          esac
+          case "${{ steps.derive_fiscal_stress.outputs.code }}" in
+            1) fail "派生层：财政可持续性" "derive_fiscal_stress.py 输入不完整或契约失败（exit 1）—— macro_fiscal_stress.json 保持上一版；MTS 与其它原始采集结果仍已独立落盘" ;;
+            0|"") : ;;
+            *) fail "派生层：财政可持续性" "derive_fiscal_stress.py 以未预期的 exit code ${{ steps.derive_fiscal_stress.outputs.code }} 退出（只应产生 0 或 1）" ;;
           esac
           [ "${{ steps.commit.outcome }}" = "failure" ] && \
             fail "提交层" "commit/push 失败 —— 本次采集到的数据未能入库，需人工介入"

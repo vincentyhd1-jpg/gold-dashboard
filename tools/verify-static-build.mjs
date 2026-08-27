@@ -15,10 +15,12 @@ const REQUIRED_PATHS = [
   'js/data-helpers.js',
   'data/cot.json',
   'data/derived/macro_debt.json',
+  'data/treasury_mts_fiscal.json',
+  'data/derived/macro_fiscal_stress.json',
 ];
 const FORBIDDEN_PATHS = [
   'AGENTS.md', 'CLAUDE.md', 'README.md',
-  'fetch_fred.py', 'fetch_treasury_debt.py',
+  'fetch_fred.py', 'fetch_treasury_debt.py', 'fetch_treasury_fiscal.py',
   'tools', 'docs', '.github', '.git', 'data/quarantine',
 ];
 

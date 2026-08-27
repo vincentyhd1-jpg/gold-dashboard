@@ -58,8 +58,10 @@ derive_term_structure.py                → data/derived/term-structure-series.j
 fetch_fred.py      FRED 13 个序列        → rates / CPI / debt / GDP 原始信封
 fetch_treasury_debt.py  Treasury Debt to the Penny → data/treasury_debt_daily.json
 derive_macro.py                         → macro_rates / macro_cpi / macro_debt
+fetch_treasury_fiscal.py  Treasury MTS Table 9 → data/treasury_mts_fiscal.json
+derive_fiscal_stress.py                 → data/derived/macro_fiscal_stress.json
 index.html        期限结构回放 + 各图表
-macro.html        利率 / CPI / 美国联邦债务面板
+macro.html        利率 / CPI / 美国联邦债务 / 财政可持续性面板
 term-3d.html      Plotly 3D 曲面页，**已从导航移除**（无运行时入口，见下方专节）
 trading_calendar.py  交易日历，采集层与派生层共用一份假日表
 data_envelope.py  统一落盘信封 + write_json 单点落盘
@@ -68,13 +70,13 @@ tools/*.mjs       Playwright 验证脚本
 
 **Cloudflare 静态发布（C16）**：仓库不是 Worker JS 项目，`wrangler.jsonc` 不设
 `main`，只将 `assets.directory` 指向 `./dist`。`node tools/build-static-site.mjs`
-每次删除旧 dist 后按 34 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
-22 个公开 JSON；quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
+每次删除旧 dist 后按 36 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
+24 个公开 JSON；quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
 公开。Cloudflare Workers Builds 的 root 为 `/`，build command 为上述 Node 脚本，
 production deploy 为 `npx wrangler deploy`，preview deploy 为
 `npx wrangler versions upload`。`dist/` 与 `.wrangler/` 均为忽略的构建产物。
 
-**Playwright 启动方式（C9）**：`tools/` 下 11 个 browser-owning 脚本统一调用
+**Playwright 启动方式（C9/C17）**：`tools/` 下 browser-owning 脚本统一调用
 `tools/_browser.mjs` 的 `launchChromium()`。helper 使用当前项目 Playwright 的
 `chromium.executablePath()` 取得同版本完整 Chromium，再显式启动；不扫描缓存、
 不选择最大 revision、不绑定用户目录、不 fallback 或自动下载。解析、访问或启动失败
@@ -82,7 +84,7 @@ production deploy 为 `npx wrangler deploy`，preview deploy 为
 `tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
 不 fallback 与 EPERM 继续抛出。
 
-**前端破坏注入（C10-C15）**：六个 `verify-*-injection.mjs` 统一经
+**前端破坏注入（C10-C17）**：七个 `verify-*-injection.mjs` 统一经
 `tools/_injection.mjs` 执行 `baseline green → injection red → restore green`。
 每个 case 必须证明 patch 与业务锚点真实改变、目标 guard 非零且命中稳定 FAIL
 marker；备份只进系统临时目录，每 case 与最外层 `finally` 都按原始 bytes/SHA-256
@@ -159,6 +161,20 @@ hybrid 折线、季度 GDP 与季度 debt/GDP。结构柱只含三分量同时�
 固定 6px（上限 8px），缺口季度三项一起不画；不得恢复公众/政府内部日频独立线或
 “结构快照”技术标签。tooltip 以 hover 日期统一查询六项，但每项只读取不晚于该日期
 的真实观测并标明各自 as-of；查询结果不得写回 dataset，禁止日频填充、复制或插值。
+
+**财政可持续性监测（C17）**：`fetch_treasury_fiscal.py` 按 MTS Table 9 父子层级
+选择 Receipts/Total、Net Outlays/Total 与 Net Outlays/Net Interest，line/type 仅作
+schema 漂移 guard；只使用当月金额，USD 在采集层恰好除以 `1e9`。月度 net interest
+是净额，允许官方负值；不以 gross interest 替代。核心季度模型从 2016-Q1 开始：
+财政流量必须是截至季末 12 个连续日历月 TTM，公众债务分母是同窗口全部有效日频
+`public_bn` 的算术均值且每月必须至少有一个真实观测，周末/假日不填充。
+
+核心公式固定为：`g = GDP_t/GDP_t-4 - 1`；`r = TTM net interest / average public
+debt`；primary balance `= receipts - total outlays + net interest`（盈余为正）；
+`p* = (r-g) * public_debt_gdp_pct / 100`；`fiscal gap = p* - actual primary balance`。
+季度模型变化量用年度/TTM RHS `/4` 后与实际 QoQ `Δd` 比较，差额作为 stock-flow
+residual，绝不强制为零。前端只读九项派生字段与 residual/status，不重算公式；缺失
+为“未知”。C17 不做 CBO 预测、不输出失控年份、不设置压力颜色或阈值评级。
 
 ## 常见陷阱
 
@@ -769,6 +785,8 @@ python3 fetch_gold.py --test               # 采集校验（含退化边界）
 python3 fetch_stocks.py --test             # 采集校验（含缺字段 SKIP）
 python3 fetch_fred.py --test               # 采集校验（13 个 FRED 序列，四态 + 磁盘安全）
 python3 fetch_treasury_debt.py --test      # Treasury 日频债务（三态 + 幂等/隔离/workflow）
+python3 fetch_treasury_fiscal.py --test    # Treasury MTS 月度财政流量（三态/层级/修订）
+python3 derive_fiscal_stress.py --test     # 财政可持续性公式/频率/缺失/幂等
 python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘
 python3 tools/verify-io-utils.py           # 落盘骨架（含隔离区撞名断言）
 node tools/verify-ui-fixes.mjs             # UI 几何 / COT Index 单侧与双侧 null
@@ -787,6 +805,8 @@ node tools/verify-cot-index-null-injection.mjs  # 注入 COT null→50，验证 
 node tools/verify-injection-wrappers.mjs   # wrapper 状态机/恢复/退出码基础设施
 node tools/verify-debt-overview-injection.mjs  # C15 tooltip/stack/文案/冗余线 + C14 关键注入
 node tools/verify-macro-page.mjs           # macro mixed-frequency + 真实 hover/drag/reset/移动端
+node tools/verify-fiscal-stress-page.mjs   # C17 九 KPI/两图/as-of/null/模块隔离
+node tools/verify-fiscal-stress-injection.mjs  # C17 八项跨 Python/前端破坏注入
 node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
 node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
 node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红

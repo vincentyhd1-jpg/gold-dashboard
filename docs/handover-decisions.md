@@ -151,7 +151,7 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - 本项目是纯静态站点，不增加虚构的 Worker entry point；`wrangler.jsonc` 只配置
   `assets.directory = ./dist`，不设置 `main` 或 bindings。
 - 禁止直接把仓库根目录作为 assets。`dist/` 必须由跨平台 Node 脚本从显式文件白名单
-  重建：三个用户 HTML、当前 assets/css/js 文件和 22 个公开 JSON；不得按扩展名自动
+  重建：三个用户 HTML、当前 assets/css/js 文件和 24 个公开 JSON；不得按扩展名自动
   纳入未来新增文件。
 - Python、Markdown、PDF、AGENTS/CLAUDE/README、tools、docs、workflow、Git 元数据、
   quarantine 与临时文件均属于非公开开发面；构建 guard 同时锁 manifest、源/产物
@@ -159,6 +159,26 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
 - production/preview 都消费同一 dist；区别只在 deploy command：production 使用
   `wrangler deploy`，preview 使用 `wrangler versions upload`。本地验收只能 dry-run，
   不从开发机直接部署或改变 route/domain/traffic。
+
+### 财政可持续性口径（C17）
+
+- 核心债务口径是公众持有债务/GDP；总债务/GDP 只作背景，不能代替模型中的 `d`。
+- MTS Table 9 的 Receipts/Total、Net Outlays/Total、Net Outlays/Net Interest 必须按
+  hierarchy 先选、line/data/record type 再校验。使用 current-month cash amount，
+  不用 FYTD，不以 gross interest 或 DGS10 代替 net interest/effective `r`。
+- 所有财政流量按截至季度末的 12 个连续日历月 TTM 汇总；缺一月或任一字段缺失，
+  该季度整组财政 TTM 为 null。GDP 使用季度名义 GDP SAAR，不能除以 4。
+- `effective_r = TTM net interest / 同窗口有效日频 public debt 均值`。周末/假日不是
+  缺失点，不填充；但 12 个日历月各自必须至少有一个真实公众债务观测。
+- `g` 固定为名义 GDP 同比 `GDP_t/GDP_t-4 - 1`。primary balance 盈余为正：
+  `receipts - total_outlays + net_interest`。
+- `p* = (r-g)*d/100`；`fiscal_gap = p* - actual_primary_balance`。gap 正表示当前
+  观测组合需要额外初级调整；`r>g` 是放大因素，不是唯一判断门槛。
+- 观测 QoQ `Δd` 与模型 annual-rate RHS `/4` 后比较；差额保留为 stock-flow residual，
+  不把 residual 强制归零，也不把它自动解释成模型失败。
+- 九项一致历史从 2016-Q1 开始，不向 1990 拼接其它财政流量。schema 保持 v0。
+  C17 只做实际历史/当前算术监测：`stress_level=unscored`、`threshold_version=null`，
+  不接 CBO、不输出失控年份、不拍 GREEN/YELLOW/ORANGE/RED 阈值。预测与校准属于 C18。
 
 ### 帧级 vs 展示视图二分（重要）
 **帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）是两类东西。**

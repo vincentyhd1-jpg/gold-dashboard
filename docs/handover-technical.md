@@ -150,7 +150,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
-| `tools/verify-injection-wrappers.mjs` | 0 | 34 passed, 0 failed |
+| `tools/verify-injection-wrappers.mjs` | 0 | 37 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 38 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
@@ -160,11 +160,14 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-envelope-helper-raw-inputs.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-cot-sentinel-strict.mjs` | 0 | 4 passed, 0 failed |
 | `tools/verify-macro-page.mjs` | 0 | 86 passed, 0 failed；page errors: none |
-| `tools/verify-static-build.mjs` | 0 | 28 passed, 0 failed；34 个公开文件逐字节对账 |
+| `fetch_treasury_fiscal.py --test` | 0 | 28 passed, 0 failed |
+| `derive_fiscal_stress.py --test` | 0 | 34 passed, 0 failed |
+| `tools/verify-fiscal-stress-page.mjs` | 0 | 29 passed, 0 failed；page errors: none |
+| `tools/verify-static-build.mjs` | 0 | 31 passed, 0 failed；36 个公开文件逐字节对账 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
-macro-page(86)/static-build(28) 有计数；
+macro-page(86)/fiscal-stress-page(29)/static-build(31) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -172,7 +175,7 @@ playback/gapframe 无 passed/failed 累加器，
 `44aecf2` 反转了那条编码旧口径的断言（「JUN26 已到期已剔除」→「已到期合约仍保留
 X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案一致，断言未删。
 
-### 注入类护栏（九条，含 wrapper meta guard）
+### 注入类护栏（十条，含 wrapper meta guard）
 
 每条自身 exit 0 表示「注入→红、还原→绿」的完整序列成立。逐阶段实测：
 
@@ -185,10 +188,11 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-cot-index-null-injection.mjs` | 0 | wrapper 18/0；基线 38/0 → current null→50 为 31/7、chart null→50 为 36/2 → 恢复 38/0 + hash 一致 |
 | `tools/verify-debt-overview-injection.mjs` | 0 | wrapper 81/0；基线 86/0 → C15 四项及 C14 七项注入均真实变红 → 恢复 86/0 + hash 一致 |
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
-| `tools/verify-injection-wrappers.mjs` | 0 | 34/0；静态锁六 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
-| `tools/verify-static-build-injection.mjs` | 0 | 23/0；缺 assets.directory、缺 macro.html、泄漏 Python 均真实红 → 恢复 28/0 + config hash 一致 |
+| `tools/verify-injection-wrappers.mjs` | 0 | 37/0；静态锁七 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
+| `tools/verify-static-build-injection.mjs` | 0 | 缺 assets.directory、缺 macro.html、泄漏 Python 均真实红 → 恢复 31/0 + config hash 一致 |
+| `tools/verify-fiscal-stress-injection.mjs` | 0 | MTS 11/0 + derive 46/0 + frontend 11/0；八项注入均真实红，三个目标最终 hash 一致 |
 
-C10-C15 的六个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
+C10-C17 的七个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
 exit 0 已包含「未污染下一个 wrapper」的证据，不再需要在 wrapper 之间重跑 derive。
 `verify-noise-injection.py` 继续独立使用同等严格的 WSL/Python 恢复契约。
@@ -694,3 +698,42 @@ dependency 环境问题；在系统 TEMP 以 `--include=optional` 隔离安装�
 内部文件不公开。三项负向 wrapper 为 23/0：删除 `assets.directory` 使 26/2，删除
 `dist/macro.html` 使 26/2，将 `fetch_treasury_debt.py` 放入 dist 使 25/3；每案恢复，
 最终重新 28/0。`verify-macro-page.mjs --site-root dist` 对真实产物完整通过 86/0。
+
+## 18. C17 美国财政可持续性监测
+
+`fetch_treasury_fiscal.py` 采集 Fiscal Data MTS Table 9，原始 strict monthly envelope
+落 `data/treasury_mts_fiscal.json`。生产选择先按 `parent_id/classification_id` 找到
+Receipts 与 Net Outlays 两棵 hierarchy，再选择各自 Total 与 Net Interest；当前
+120/T/SL、320/D/F、340/T/SL 只作为 schema 漂移锚。只读取
+`current_month_rcpt_outly_amt`，USD `/1e9` 恰好一次；MTS 月度 net interest 是有符号
+净额，官方负月原样保留。当前覆盖 `2015-03-31..2026-07-31`，137 个月。
+
+`derive_fiscal_stress.py` 独立于 `derive_macro.py`，消费 MTS、Debt to the Penny 日频
+公众债务与 `macro_debt.json`。每个季度要求截至季末 12 个连续月完整财政字段；公众
+债务均值使用同窗口全部有效业务日观测，并要求 12 个月各有至少一个真实点，不填周末、
+假日或缺月。GDP YoY 严格用 t/t-4；GDP SAAR 不除以 4。季度输出从 2016-Q1 起，
+当前最新完整期 2026-Q1。
+
+核心字段为九项 KPI、实际/模型 QoQ `Δd`、stock-flow residual、完整性、trajectory 与
+连续正 gap 季数。模型 RHS 是年度/TTM rate，除以 4 后才与实际 QoQ percentage-point
+变化比较；residual 保留真实非零。`latest` 指向最新完整季度，meta 分别记录 MTS、
+日频公众债务、GDP、public debt/GDP 与完整模型 as-of。`stress_level=unscored`，
+`threshold_version=null`。
+
+`macro.html` 在联邦债务卡下新增独立财政可持续性卡：九 KPI 按 4/3/2 排列，两图只读
+派生的 r/g/r-g 与 actual primary balance/p*；null 显示“未知”。模块拥有独立 load/
+`_safeRender` 边界，fiscal 与 rates/CPI/debt 双向故障隔离。页面明确 2016-Q1 历史边界、
+四个独立 as-of 与 stock-flow residual 方法警告，不计算 r/g/primary/p*/gap/residual，
+不提供预测年份或颜色评级。
+
+workflow 每日检查 MTS 后再运行 fiscal derive，二者各自捕获真实进程码；raw MTS 与
+derived fiscal 分别进入 commit 清单。MTS exit 2 只告警，exit 1 报红并保留旧 raw；
+derive exit 1 保留旧 derived，均不短路现有采集/派生链。静态白名单增加 MTS raw 与
+fiscal derived 两个浏览器数据文件，当前 dist 共 36 文件（24 JSON），Python、测试、
+quarantine 仍不公开。
+
+`verify-fiscal-stress-injection.mjs` 通过公共 `_injection.mjs` 运行三个 suite、八案：
+Receipts/Outlays 选反、primary 符号反转、边际利率替代 effective r、缺月填充、GDP /4、
+p* 缺 /100、total debt 分母、前端重算 fiscal gap。每案真实非零并命中固定 marker，
+逐案与 finally 均恢复 bytes/SHA-256；Windows Node bridge 直接读取无 shell 的 `wsl.exe`
+进程码，避免 `$?`/管道假绿。
