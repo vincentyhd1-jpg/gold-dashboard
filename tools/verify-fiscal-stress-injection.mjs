@@ -110,6 +110,36 @@ const frontendCases = [
     changed: "      'Fiscal Gap：--',",
     marker: 'FAIL 最新季度真实 hover tooltip 包含 actual / p* / Fiscal Gap / 判决',
   },
+  {
+    name: 'fiscal gap chart null replaced by zero',
+    anchor: "rows.map(row => row.fiscal_gap_pct_gdp), COLORS.blue,",
+    changed: "rows.map(row => row.fiscal_gap_pct_gdp ?? 0), COLORS.blue,",
+    marker: 'FAIL 图表逐点保留派生 null/数值而不补点',
+  },
+  {
+    name: 'fiscal gap zero criterion mislabeled as reference',
+    anchor: "lineDataset('判据线（0% GDP）', rows.map(() => 0), COLORS.muted,",
+    changed: "lineDataset('0% GDP 参考线', rows.map(() => 0), COLORS.muted,",
+    marker: 'FAIL Fiscal Gap 0% GDP 判据线命名与虚线样式正确',
+  },
+  {
+    name: 'fiscal gap chart positive decision inverted',
+    anchor: "  if (condition === 'gap_positive') return '需要财政调整';",
+    changed: "  if (condition === 'gap_positive') return '稳定条件满足';",
+    marker: 'FAIL Fiscal Gap 图正 gap 历史季度真实 hover 显示需要财政调整',
+  },
+  {
+    name: 'fiscal gap chart tooltip value removed',
+    anchor: '    return `  Fiscal Gap：${_formatFiscalGap(row?.fiscal_gap_pct_gdp)}`;',
+    changed: "    return '  Fiscal Gap：--';",
+    marker: 'FAIL Fiscal Gap 图最新季度真实 hover 显示 gap / actual / p* / 稳定判决',
+  },
+  {
+    name: 'fiscal gap chart frontend arithmetic introduced',
+    anchor: "rows.map(row => row.fiscal_gap_pct_gdp), COLORS.blue,",
+    changed: "rows.map(row => row.stabilizing_primary_balance_pct_gdp - row.primary_balance_gdp_pct), COLORS.blue,",
+    marker: 'FAIL 前端没有 fiscal gap / p* / r / g 算术重算',
+  },
 ].map(item => ({
   name: item.name,
   patch: replacement(item.anchor, item.changed, item.name),

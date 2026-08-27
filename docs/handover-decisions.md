@@ -185,6 +185,9 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
   当期数学 adjustment gap，不转换成必须立即削减的美元金额。
 - p* 本身是动态判据线；0% GDP 只区分初级盈余/赤字，必须叫“参考线”，不能冒充稳定
   判据。判决颜色只表示 condition met/not met，不是 Fiscal Stress Score 或风险等级。
+- 上一条只针对 actual 与 p* 两线图。独立 Fiscal Gap 图中，0% GDP 正是 gap 的数学
+  判据线：曲线 `<= 0` 表示稳定条件满足，`> 0` 表示需要财政调整。两张图不得混淆
+  这条 0% 线的语义；Fiscal Gap 曲线仍只能读取派生字段，不在前端重算。
 - “稳定条件满足”不等于观测债务/GDP 当期必然下降；stock-flow residual 必须继续展示，
   且页面和 tooltip 都保留这一区分。C17.1 不引入阈值缓冲带或 near-threshold 状态。
 

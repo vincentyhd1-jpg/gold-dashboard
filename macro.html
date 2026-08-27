@@ -76,6 +76,9 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .fiscal-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .fiscal-chart{min-width:0}
 .fiscal-chart .chart-wrap{height:270px}
+.fiscal-gap-chart{min-width:0;margin-top:16px}
+.fiscal-gap-chart .chart-wrap{height:270px}
+.fiscal-gap-explainer{font-size:11px;color:#8b949e;line-height:1.55;margin-top:8px}
 .fiscal-method{font-size:11px;color:#8b949e;line-height:1.65;margin-top:14px}
 .fiscal-asof{display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:#8b949e}
 .fiscal-asof strong{color:#c9d1d9;font-weight:600}
@@ -188,6 +191,11 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
           <div class="card-sub" id="fiscalPrimaryCriterionNote">实际初级余额与稳定债务所需初级余额（% GDP）<br>判据：实际初级余额 ≥ p* 时 Fiscal Gap ≤ 0，稳定条件满足；低于 p* 时稳定条件不满足。</div>
           <div class="chart-wrap"><canvas id="fiscalPrimaryChart"></canvas></div>
         </div>
+      </div>
+      <div class="fiscal-gap-chart" aria-label="Fiscal Gap 历史图表">
+        <div class="card-sub" id="fiscalGapChartTitle"><strong>Fiscal Gap（% GDP）</strong><br>财政调整缺口（稳定债务所需初级余额 p* − 实际初级余额）</div>
+        <div class="chart-wrap"><canvas id="fiscalGapChart"></canvas></div>
+        <div class="fiscal-gap-explainer" id="fiscalGapChartNote">Fiscal Gap = p* − 实际初级余额；小于等于 0 表示当前观测下稳定条件满足，大于 0 表示仍需额外财政调整。</div>
       </div>
       <div class="fiscal-method" id="fiscalMethodNote">财政缺口为稳定初级余额减实际初级余额；正值表示在当前观测组合下需要额外初级调整。r&gt;g 不是唯一判断条件。模型是当期算术监测，不提供预测年份或压力颜色评级。</div>
       <div class="fiscal-asof" aria-label="财政可持续性数据截至时间">
@@ -400,6 +408,38 @@ function _fiscalPrimaryChartOptions(rows) {
   return options;
 }
 
+function _fiscalGapDecisionLabel(condition, fiscalGap) {
+  if (fiscalGap === null || fiscalGap === undefined || !Number.isFinite(Number(fiscalGap))) {
+    return '数据不足，暂不判断';
+  }
+  if (condition === 'stabilizing_condition_met') return '稳定条件满足';
+  if (condition === 'gap_positive') return '需要财政调整';
+  return '数据不足，暂不判断';
+}
+
+function _fiscalGapChartOptions(rows) {
+  const options = _fiscalChartOptions('% GDP');
+  options.plugins.tooltip.filter = ctx => !ctx.dataset.presentationOnly;
+  options.plugins.tooltip.callbacks.title = items => {
+    const row = rows[items[0]?.dataIndex];
+    return row ? `季度：${row.quarter}` : '季度：--';
+  };
+  options.plugins.tooltip.callbacks.label = ctx => {
+    const row = rows[ctx.dataIndex];
+    return `  Fiscal Gap：${_formatFiscalGap(row?.fiscal_gap_pct_gdp)}`;
+  };
+  options.plugins.tooltip.callbacks.afterBody = items => {
+    const row = rows[items[0]?.dataIndex];
+    if (!row) return ['判决：数据不足，暂不判断'];
+    return [
+      `实际初级余额：${_formatFiscalPercent(row.primary_balance_gdp_pct, '% GDP')}`,
+      `稳定所需 p*：${_formatFiscalPercent(row.stabilizing_primary_balance_pct_gdp, '% GDP')}`,
+      `判决：${_fiscalGapDecisionLabel(row.trajectory_condition, row.fiscal_gap_pct_gdp)}`,
+    ];
+  };
+  return options;
+}
+
 function renderFiscalStress(payload) {
   const rows = payload.quarterly || [];
   const latest = payload.latest || {};
@@ -471,6 +511,17 @@ function renderFiscalStress(payload) {
           presentationOnly: true, borderDash: [2, 4], borderWidth: 1 }),
     ]},
     options: _fiscalPrimaryChartOptions(rows),
+  });
+  new Chart(document.getElementById('fiscalGapChart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      lineDataset('Fiscal Gap', rows.map(row => row.fiscal_gap_pct_gdp), COLORS.blue,
+        { sourceField: 'fiscal_gap_pct_gdp', valueUnit: '% GDP' }),
+      lineDataset('判据线（0% GDP）', rows.map(() => 0), COLORS.muted,
+        { sourceField: 'presentation_fiscal_gap_zero_criterion', valueUnit: '% GDP',
+          presentationOnly: true, borderDash: [6, 5], borderWidth: 1.25 }),
+    ]},
+    options: _fiscalGapChartOptions(rows),
   });
 
   document.getElementById('fiscalCompleteAsOf').textContent = meta.complete_through || '--';

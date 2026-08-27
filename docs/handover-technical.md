@@ -162,12 +162,12 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-macro-page.mjs` | 0 | 86 passed, 0 failed；page errors: none |
 | `fetch_treasury_fiscal.py --test` | 0 | 28 passed, 0 failed |
 | `derive_fiscal_stress.py --test` | 0 | 34 passed, 0 failed |
-| `tools/verify-fiscal-stress-page.mjs` | 0 | 41 passed, 0 failed；page errors: none |
+| `tools/verify-fiscal-stress-page.mjs` | 0 | 46 passed, 0 failed；page errors: none |
 | `tools/verify-static-build.mjs` | 0 | 31 passed, 0 failed；36 个公开文件逐字节对账 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
-macro-page(86)/fiscal-stress-page(41)/static-build(31) 有计数；
+macro-page(86)/fiscal-stress-page(46)/static-build(31) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -190,7 +190,7 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-noise-injection.py` | 0 | 基线 21/0 → 3 种注入均 exit=1 且命中对应 NOISE 断言 → 恢复后 21/0；生产文件 hash 一致 |
 | `tools/verify-injection-wrappers.mjs` | 0 | 37/0；静态锁七 wrapper，动态覆盖成功、基线红、signal、假绿、no-op、restore mismatch、patch throw |
 | `tools/verify-static-build-injection.mjs` | 0 | 缺 assets.directory、缺 macro.html、泄漏 Python 均真实红 → 恢复 31/0 + config hash 一致 |
-| `tools/verify-fiscal-stress-injection.mjs` | 0 | MTS 11/0 + derive 46/0 + frontend 39/0；原八项及 C17.1 五项注入均真实红，三个目标最终 hash 一致 |
+| `tools/verify-fiscal-stress-injection.mjs` | 0 | MTS 11/0 + derive 46/0 + frontend 74/0；原八项、C17.1 五项及 Fiscal Gap 图五项注入均真实红，三个目标最终 hash 一致 |
 
 C10-C17 的七个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
@@ -752,9 +752,16 @@ actual、p*、派生 Fiscal Gap 和派生判决。前端没有 `p* - actual` 重
 派生 JSON 或 schema。stock-flow residual 与“稳定条件满足不等于实际债务率当期下降”
 警告继续显示。
 
-`verify-fiscal-stress-page.mjs` 为 **41 passed, 0 failed**：除 C17 基线外，真实 hover
+actual/p* 图下方另有独立 `Fiscal Gap（% GDP）` 图，时间轴与完整季度序列一致，曲线
+逐点直接读取 `quarterly[*].fiscal_gap_pct_gdp`，null 不补 0。该图的 0% dataset 明确
+命名为“判据线（0% GDP）”：与 actual/p* 图中的 0% 参考线不同，它直接区分 gap
+`<= 0` 与 `> 0`。真实 tooltip 同时显示季度、gap、actual、p* 与派生 trajectory 判决。
+
+`verify-fiscal-stress-page.mjs` 为 **46 passed, 0 failed**：除 C17 基线外，真实 hover
 验证 `2026-Q1` 负 gap 与真实 `2025-Q4` 正 gap，并覆盖 positive latest fixture、unknown、
-p* 样式、0% 参考线、presentation dataset 与无前端重算。C17.1 五项注入分别反转判决、
+p* 样式、两种 0% 线语义、三图布局、presentation dataset 与无前端重算。C17.1 五项注入分别反转判决、
 删除 p* 判据线标识、把 0% 错叫判据线、删除 tooltip gap、恢复前端 gap 重算；每项均
-使目标 guard 非零并命中固定 marker，恢复后重新 41/0，frontend wrapper **39/0**，
+使目标 guard 非零并命中固定 marker。Fiscal Gap 图另以五项注入覆盖 null→0、判据线
+误叫参考线、正 gap 判决反转、tooltip gap 删除与前端重算；恢复后重新 46/0，frontend
+wrapper **74/0**，
 最终 `macro.html` SHA-256 与注入前一致。

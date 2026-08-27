@@ -64,11 +64,11 @@ function expectedDecision(condition) {
   return '数据不足，暂不判断';
 }
 
-async function hoverFiscalQuarter(targetPage, quarter) {
-  await targetPage.locator('#fiscalPrimaryChart').scrollIntoViewIfNeeded();
+async function hoverFiscalQuarter(targetPage, quarter, chartId = 'fiscalPrimaryChart') {
+  await targetPage.locator(`#${chartId}`).scrollIntoViewIfNeeded();
   await targetPage.waitForTimeout(100);
-  const point = await targetPage.evaluate(targetQuarter => {
-    const canvas = document.getElementById('fiscalPrimaryChart');
+  const point = await targetPage.evaluate(({ targetQuarter, targetChartId }) => {
+    const canvas = document.getElementById(targetChartId);
     const chart = Chart.getChart(canvas);
     const index = chart.data.labels.indexOf(targetQuarter);
     if (index < 0) return null;
@@ -77,16 +77,16 @@ async function hoverFiscalQuarter(targetPage, quarter) {
     const props = element.getProps(['x', 'y'], true);
     const rect = canvas.getBoundingClientRect();
     return { x: rect.left + props.x, y: rect.top + props.y };
-  }, quarter);
+  }, { targetQuarter: quarter, targetChartId: chartId });
   if (!point) return { text: '', active: false };
   await targetPage.mouse.move(point.x, point.y);
-  await targetPage.waitForFunction(targetQuarter => {
-    const chart = Chart.getChart(document.getElementById('fiscalPrimaryChart'));
+  await targetPage.waitForFunction(({ targetQuarter, targetChartId }) => {
+    const chart = Chart.getChart(document.getElementById(targetChartId));
     return chart?.tooltip?.opacity > 0
       && (chart.tooltip.title || []).join(' ').includes(targetQuarter);
-  }, quarter, { timeout: 10000 });
-  return targetPage.evaluate(() => {
-    const tooltip = Chart.getChart(document.getElementById('fiscalPrimaryChart')).tooltip;
+  }, { targetQuarter: quarter, targetChartId: chartId }, { timeout: 10000 });
+  return targetPage.evaluate(targetChartId => {
+    const tooltip = Chart.getChart(document.getElementById(targetChartId)).tooltip;
     const lines = [
       ...(tooltip.title || []),
       ...(tooltip.beforeBody || []),
@@ -94,7 +94,7 @@ async function hoverFiscalQuarter(targetPage, quarter) {
       ...(tooltip.afterBody || []),
     ];
     return { text: lines.join(' | '), active: tooltip.opacity > 0 };
-  });
+  }, chartId);
 }
 
 const browser = await launchChromium();
@@ -137,6 +137,7 @@ const state = await page.evaluate(() => {
     kpis: Object.fromEntries(ids.map(id => [id, document.getElementById(id)?.textContent])),
     rates: chartState('fiscalRatesChart'),
     primary: chartState('fiscalPrimaryChart'),
+    gap: chartState('fiscalGapChart'),
     trajectory: document.getElementById('fiscalTrajectory')?.textContent || '',
     decision: {
       label: document.getElementById('fiscalDecisionLabel')?.textContent || '',
@@ -151,6 +152,8 @@ const state = await page.evaluate(() => {
       className: document.getElementById('fiscalTrajectory')?.className || '',
     },
     criterionNote: document.getElementById('fiscalPrimaryCriterionNote')?.textContent || '',
+    gapTitle: document.getElementById('fiscalGapChartTitle')?.textContent || '',
+    gapNote: document.getElementById('fiscalGapChartNote')?.textContent || '',
     method: document.getElementById('fiscalMethodNote')?.textContent || '',
     status: document.getElementById('fiscalStatus')?.textContent || '',
     asOf: {
@@ -241,21 +244,44 @@ check('图表副标题明确 actual >= p* 才是动态判据',
   state.criterionNote.includes('实际初级余额 ≥ p*')
     && state.criterionNote.includes('Fiscal Gap ≤ 0')
     && !state.criterionNote.includes('0% GDP 判据线'), state.criterionNote);
-check('两图 observation 数与派生季度数一致', state.rates?.labels.length === fiscal.quarterly.length
+check('Fiscal Gap 独立图表位于说明区且标题/口径文案正确',
+  state.gapTitle.includes('Fiscal Gap（% GDP）')
+    && state.gapTitle.includes('稳定债务所需初级余额 p* − 实际初级余额')
+    && state.gapNote.includes('Fiscal Gap = p* − 实际初级余额')
+    && state.gapNote.includes('小于等于 0')
+    && state.gapNote.includes('大于 0'),
+  `${state.gapTitle} | ${state.gapNote}`);
+check('Fiscal Gap 图只读派生 gap 并追加 0% presentation criterion',
+  state.gap?.datasets.map(item => item.sourceField).join(',')
+    === 'fiscal_gap_pct_gdp,presentation_fiscal_gap_zero_criterion');
+check('Fiscal Gap 0% GDP 判据线命名与虚线样式正确',
+  state.gap?.datasets[1]?.label === '判据线（0% GDP）'
+    && state.gap.datasets[1].presentationOnly
+    && state.gap.datasets[1].borderDash.length > 0
+    && state.gap.datasets[1].data.every(value => value === 0),
+  JSON.stringify(state.gap?.datasets[1]));
+check('三张财政历史图 observation 数与派生季度数一致', state.rates?.labels.length === fiscal.quarterly.length
   && state.primary?.labels.length === fiscal.quarterly.length
+  && state.gap?.labels.length === fiscal.quarterly.length
   && state.rates.datasets.every(dataset => dataset.data.length === fiscal.quarterly.length)
-  && state.primary.datasets.every(dataset => dataset.data.length === fiscal.quarterly.length));
+  && state.primary.datasets.every(dataset => dataset.data.length === fiscal.quarterly.length)
+  && state.gap.datasets.every(dataset => dataset.data.length === fiscal.quarterly.length));
 check('图表逐点保留派生 null/数值而不补点',
   JSON.stringify(state.rates.datasets[0].data)
     === JSON.stringify(fiscal.quarterly.map(row => row.effective_r_pct))
   && JSON.stringify(state.primary.datasets[0].data)
     === JSON.stringify(fiscal.quarterly.map(row => row.primary_balance_gdp_pct))
   && JSON.stringify(state.primary.datasets[1].data)
-    === JSON.stringify(fiscal.quarterly.map(row => row.stabilizing_primary_balance_pct_gdp)));
+    === JSON.stringify(fiscal.quarterly.map(row => row.stabilizing_primary_balance_pct_gdp))
+  && JSON.stringify(state.gap.labels)
+    === JSON.stringify(fiscal.quarterly.map(row => row.quarter))
+  && JSON.stringify(state.gap.datasets[0].data)
+    === JSON.stringify(fiscal.quarterly.map(row => row.fiscal_gap_pct_gdp)));
 check('前端没有 fiscal gap / p* / r / g 算术重算',
   !/latest\.(?:stabilizing_primary_balance_pct_gdp|effective_r_pct|nominal_g_pct)\s*[-+*/]/.test(source)
-  && !/(?:fiscalGap|fiscal_gap_pct_gdp)\s*=/.test(source)
+  && !/(?:fiscalGap|fiscal_gap_pct_gdp)\s*=(?!=)/.test(source)
   && !/stabilizing_primary_balance_pct_gdp\s*-\s*(?:latest\.)?primary_balance_gdp_pct/.test(source)
+  && !/rows\.map\(row\s*=>\s*row\.stabilizing_primary_balance_pct_gdp\s*-\s*row\.primary_balance_gdp_pct\)/.test(source)
   && source.includes("['fiscalGap', 'fiscal_gap_pct_gdp', '%']"));
 check('页面无 console/page errors', errors.length === 0, errors.join(' | '));
 check('桌面页面无横向溢出', state.scrollWidth <= state.innerWidth + 1,
@@ -271,6 +297,16 @@ check('最新季度真实 hover tooltip 包含 actual / p* / Fiscal Gap / 判决
     && latestTooltip.text.includes(`判决：${expectedDecision(fiscal.latest.trajectory_condition)}`),
   latestTooltip.text);
 
+const latestGapTooltip = await hoverFiscalQuarter(page, fiscal.latest.quarter, 'fiscalGapChart');
+check('Fiscal Gap 图最新季度真实 hover 显示 gap / actual / p* / 稳定判决',
+  latestGapTooltip.active
+    && latestGapTooltip.text.includes(`季度：${fiscal.latest.quarter}`)
+    && latestGapTooltip.text.includes(`Fiscal Gap：${expectedFiscalGap(fiscal.latest.fiscal_gap_pct_gdp)}`)
+    && latestGapTooltip.text.includes('实际初级余额')
+    && latestGapTooltip.text.includes('稳定所需 p*')
+    && latestGapTooltip.text.includes('判决：稳定条件满足'),
+  latestGapTooltip.text);
+
 const positiveRow = [...fiscal.quarterly].reverse().find(row =>
   row.fiscal_gap_pct_gdp > 0 && row.trajectory_condition === 'gap_positive');
 check('真实历史包含正 Fiscal Gap 季度供判决护栏', !!positiveRow,
@@ -285,6 +321,13 @@ if (positiveRow) {
       && positiveTooltip.text.includes(`Fiscal Gap：${expectedFiscalGap(positiveRow.fiscal_gap_pct_gdp)}`)
       && positiveTooltip.text.includes('判决：稳定条件不满足'),
     positiveTooltip.text);
+  const positiveGapTooltip = await hoverFiscalQuarter(page, positiveRow.quarter, 'fiscalGapChart');
+  check('Fiscal Gap 图正 gap 历史季度真实 hover 显示需要财政调整',
+    positiveGapTooltip.active
+      && positiveGapTooltip.text.includes(`季度：${positiveRow.quarter}`)
+      && positiveGapTooltip.text.includes(`Fiscal Gap：${expectedFiscalGap(positiveRow.fiscal_gap_pct_gdp)}`)
+      && positiveGapTooltip.text.includes('判决：需要财政调整'),
+    positiveGapTooltip.text);
 }
 
 // A real positive-gap historical row becomes the latest fixture. The page must
@@ -385,9 +428,10 @@ const otherFailState = await otherFailPage.evaluate(() => ({
   fiscalError: document.getElementById('fiscalStatus')?.classList.contains('err'),
   fiscalRates: !!Chart.getChart(document.getElementById('fiscalRatesChart')),
   fiscalPrimary: !!Chart.getChart(document.getElementById('fiscalPrimaryChart')),
+  fiscalGap: !!Chart.getChart(document.getElementById('fiscalGapChart')),
 }));
 check('rates/CPI/debt 失败不影响 fiscal', !otherFailState.fiscalError
-  && otherFailState.fiscalRates && otherFailState.fiscalPrimary,
+  && otherFailState.fiscalRates && otherFailState.fiscalPrimary && otherFailState.fiscalGap,
 JSON.stringify(otherFailState));
 await otherFailPage.close();
 
@@ -402,10 +446,10 @@ const mobileState = await mobile.evaluate(() => ({
   panelWidth: document.getElementById('fiscalStressPanel')?.getBoundingClientRect().width,
   chartCount: document.querySelectorAll('#fiscalStressPanel canvas').length,
 }));
-check('移动端 fiscal 面板无横向溢出且两图存活',
+check('移动端 fiscal 面板无横向溢出且三图存活',
   mobileState.scrollWidth <= mobileState.innerWidth + 1
     && mobileState.panelWidth <= mobileState.innerWidth
-    && mobileState.chartCount === 2, JSON.stringify(mobileState));
+    && mobileState.chartCount === 3, JSON.stringify(mobileState));
 await mobile.close();
 
 await browser.close();

@@ -182,6 +182,8 @@ residual，绝不强制为零。前端只读九项派生字段与 residual/statu
 不在浏览器重算 `p* - actual`。实际初级余额图将 p* 明示为动态“判据线”，0% 只作
 区分盈余/赤字的参考线。tooltip 逐季显示 actual、p*、派生 gap 与派生判决；
 stock-flow residual 继续提醒“满足稳定算术条件不等于实际债务率当期必然下降”。
+Fiscal Gap 另有一张直接读取逐季 `fiscal_gap_pct_gdp` 的独立图；该图的 0% 才是
+gap 正负判据线，null 保持缺口，tooltip 直接读取逐季 `trajectory_condition`。
 
 ## 常见陷阱
 
