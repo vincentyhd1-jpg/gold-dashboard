@@ -85,23 +85,55 @@ const frontendAnchor = "  for (const [id, field, suffix] of kpis) {";
 const frontendBroken = `  latest.fiscal_gap_pct_gdp = latest.stabilizing_primary_balance_pct_gdp
     - latest.primary_balance_gdp_pct;
   for (const [id, field, suffix] of kpis) {`;
+const frontendCases = [
+  {
+    name: 'fiscal gap decision sign inverted',
+    anchor: "      title: '稳定条件不满足',",
+    changed: "      title: '稳定条件满足',",
+    marker: 'FAIL gap_positive 历史 fixture 显示稳定条件不满足',
+  },
+  {
+    name: 'p-star criterion label removed',
+    anchor: "lineDataset('稳定债务所需初级余额 p*（判据线）',",
+    changed: "lineDataset('稳定债务所需初级余额 p*',",
+    marker: 'FAIL p* dataset 标记为判据线且使用独立虚线样式',
+  },
+  {
+    name: 'zero reference mislabeled as criterion',
+    anchor: "lineDataset('0% GDP 参考线', rows.map(() => 0), COLORS.muted,",
+    changed: "lineDataset('0% GDP 判据线', rows.map(() => 0), COLORS.muted,",
+    marker: 'FAIL 0% GDP 只命名为参考线而非判据线',
+  },
+  {
+    name: 'tooltip fiscal gap removed',
+    anchor: '      `Fiscal Gap：${_formatFiscalGap(row.fiscal_gap_pct_gdp)}`,',
+    changed: "      'Fiscal Gap：--',",
+    marker: 'FAIL 最新季度真实 hover tooltip 包含 actual / p* / Fiscal Gap / 判决',
+  },
+].map(item => ({
+  name: item.name,
+  patch: replacement(item.anchor, item.changed, item.name),
+  verifyPatch: changedAnchor(item.anchor, item.changed),
+  expectedFailureMarkers: [item.marker],
+}));
+frontendCases.push({
+  name: 'frontend fiscal gap arithmetic reintroduced',
+  patch: replacement(frontendAnchor, frontendBroken, 'frontend gap binding'),
+  verifyPatch: (original, patched) => {
+    const before = original.toString('utf8');
+    const after = patched.toString('utf8');
+    const arithmetic = 'latest.fiscal_gap_pct_gdp = latest.stabilizing_primary_balance_pct_gdp';
+    return { ok: !before.includes(arithmetic) && after.includes(arithmetic)
+      && after.includes(frontendAnchor), detail: arithmetic };
+  },
+  expectedFailureMarkers: ['FAIL 前端没有 fiscal gap / p* / r / g 算术重算'],
+});
 const frontendResult = await runInjectionSuite({
-  name: 'C17 frontend-derived-field injection',
+  name: 'C17.1 fiscal decision frontend injection',
   target: 'macro.html',
   guard: 'tools/verify-fiscal-stress-page.mjs',
   timeoutMs: 180_000,
-  cases: [{
-    name: 'frontend fiscal gap arithmetic reintroduced',
-    patch: replacement(frontendAnchor, frontendBroken, 'frontend gap binding'),
-    verifyPatch: (original, patched) => {
-      const before = original.toString('utf8');
-      const after = patched.toString('utf8');
-      const arithmetic = 'latest.fiscal_gap_pct_gdp = latest.stabilizing_primary_balance_pct_gdp';
-      return { ok: !before.includes(arithmetic) && after.includes(arithmetic)
-        && after.includes(frontendAnchor), detail: arithmetic };
-    },
-    expectedFailureMarkers: ['FAIL 前端没有 fiscal gap / p* / r / g 算术重算'],
-  }],
+  cases: frontendCases,
 });
 
 const result = { ok: fetchResult.ok && deriveResult.ok && frontendResult.ok };

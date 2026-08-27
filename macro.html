@@ -59,7 +59,20 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .fiscal-kpi:nth-child(n+8){grid-column:span 6}
 .fiscal-kpi-label{font-size:11px;color:#8b949e;line-height:1.35;min-height:30px}
 .fiscal-kpi-value{font-size:20px;color:#f0f6fc;font-weight:650;margin-top:6px;white-space:nowrap}
-.fiscal-status-box{background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px 14px;margin-bottom:18px;color:#c9d1d9;font-size:12px;line-height:1.65}
+.fiscal-decision{background:#0d1117;border:1px solid #484f58;border-radius:12px;padding:16px 18px;margin-bottom:18px;color:#c9d1d9;line-height:1.6}
+.fiscal-decision-met{border-color:#238636;box-shadow:inset 3px 0 0 #3fb950}
+.fiscal-decision-not-met{border-color:#da3633;box-shadow:inset 3px 0 0 #f85149}
+.fiscal-decision-unknown{border-color:#484f58;box-shadow:inset 3px 0 0 #6e7681}
+.fiscal-decision-label{font-size:11px;color:#8b949e;font-weight:650;letter-spacing:.04em;text-transform:uppercase}
+.fiscal-decision-title{font-size:22px;font-weight:700;margin-top:2px;color:#c9d1d9}
+.fiscal-decision-met .fiscal-decision-title{color:#3fb950}
+.fiscal-decision-not-met .fiscal-decision-title{color:#f85149}
+.fiscal-decision-explanation{font-size:13px;margin-top:5px;max-width:920px}
+.fiscal-decision-metric{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:12px;font-size:13px}
+.fiscal-decision-metric strong{font-size:20px;color:#f0f6fc}
+.fiscal-decision-values{display:flex;gap:8px 24px;flex-wrap:wrap;margin-top:9px;font-size:12px;color:#8b949e}
+.fiscal-decision-values strong{color:#c9d1d9;font-weight:600}
+.fiscal-decision-caveat{font-size:11px;color:#8b949e;margin-top:10px;padding-top:9px;border-top:1px solid #21262d}
 .fiscal-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .fiscal-chart{min-width:0}
 .fiscal-chart .chart-wrap{height:270px}
@@ -153,14 +166,26 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
         <div class="fiscal-kpi"><div class="fiscal-kpi-label">净利息 / GDP</div><div class="fiscal-kpi-value" id="fiscalInterestGdp">--</div></div>
         <div class="fiscal-kpi"><div class="fiscal-kpi-label">净利息 / 联邦收入</div><div class="fiscal-kpi-value" id="fiscalInterestReceipts">--</div></div>
       </div>
-      <div class="fiscal-status-box" id="fiscalTrajectory">正在判断最新完整季度…</div>
+      <section class="fiscal-decision fiscal-decision-unknown" id="fiscalTrajectory" aria-labelledby="fiscalDecisionLabel">
+        <div class="fiscal-decision-label" id="fiscalDecisionLabel">Fiscal Gap 判决</div>
+        <div class="fiscal-decision-title" id="fiscalDecisionTitle">数据不足，暂不判断</div>
+        <div class="fiscal-decision-explanation" id="fiscalDecisionExplanation">正在读取最新完整季度的派生判决…</div>
+        <div class="fiscal-decision-metric"><span id="fiscalDecisionMetricLabel">Fiscal Gap</span><strong id="fiscalDecisionMetric">--</strong></div>
+        <div class="fiscal-decision-values">
+          <span>Fiscal Gap：<strong id="fiscalDecisionGap">--</strong></span>
+          <span>实际初级余额：<strong id="fiscalDecisionActual">--</strong></span>
+          <span>稳定所需 p*：<strong id="fiscalDecisionRequired">--</strong></span>
+          <span>连续正缺口完整季度：<strong id="fiscalDecisionStreak">--</strong></span>
+        </div>
+        <div class="fiscal-decision-caveat" id="fiscalDecisionCaveat">稳定条件满足不代表实际债务/GDP 当期必然下降。</div>
+      </section>
       <div class="fiscal-charts">
         <div class="fiscal-chart">
           <div class="card-sub">有效利率 r、名义 GDP 增速 g 与 r−g（% / 百分点）</div>
           <div class="chart-wrap"><canvas id="fiscalRatesChart"></canvas></div>
         </div>
         <div class="fiscal-chart">
-          <div class="card-sub">实际初级余额与稳定债务所需初级余额（% GDP）</div>
+          <div class="card-sub" id="fiscalPrimaryCriterionNote">实际初级余额与稳定债务所需初级余额（% GDP）<br>判据：实际初级余额 ≥ p* 时 Fiscal Gap ≤ 0，稳定条件满足；低于 p* 时稳定条件不满足。</div>
           <div class="chart-wrap"><canvas id="fiscalPrimaryChart"></canvas></div>
         </div>
       </div>
@@ -292,6 +317,53 @@ function _formatFiscalPercent(value, suffix = '%') {
       }) + suffix;
 }
 
+function _formatFiscalGap(value) {
+  return value === null || value === undefined
+    ? '--'
+    : Number(value).toLocaleString('zh-CN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'always',
+      }) + '% GDP';
+}
+
+function _formatFiscalMagnitude(value) {
+  return value === null || value === undefined
+    ? '--'
+    : Math.abs(Number(value)).toLocaleString('zh-CN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2,
+      }) + '% GDP';
+}
+
+function _fiscalDecisionState(condition, fiscalGap) {
+  const gapKnown = fiscalGap !== null && fiscalGap !== undefined
+    && Number.isFinite(Number(fiscalGap));
+  if (!gapKnown) return {
+    className: 'fiscal-decision-unknown',
+    title: '数据不足，暂不判断',
+    explanation: '当前完整季度缺少可用 Fiscal Gap，不能判断债务稳定算术条件。',
+    metricLabel: 'Fiscal Gap',
+  };
+  const states = {
+    gap_positive: {
+      className: 'fiscal-decision-not-met',
+      title: '稳定条件不满足',
+      explanation: '当前实际初级余额低于稳定债务率所需初级余额。在当前 r、g 与财政余额组合下，公众持有债务/GDP 无法自行稳定。',
+      metricLabel: '当前财政调整缺口',
+    },
+    stabilizing_condition_met: {
+      className: 'fiscal-decision-met',
+      title: '稳定条件满足',
+      explanation: '当前实际初级余额不低于稳定债务率所需初级余额。按当前简化债务动力学，稳定公众持有债务/GDP 的条件暂时满足。',
+      metricLabel: '当前稳定缓冲',
+    },
+  };
+  return states[condition] || {
+    className: 'fiscal-decision-unknown',
+    title: '数据不足，暂不判断',
+    explanation: '当前派生数据没有可用的债务稳定判决。',
+    metricLabel: 'Fiscal Gap',
+  };
+}
+
 function _fiscalChartOptions(axisTitle) {
   const options = chartOptions();
   options.animation = false;
@@ -303,6 +375,28 @@ function _fiscalChartOptions(axisTitle) {
     ? '  ' + ctx.dataset.label + ': 未知'
     : '  ' + ctx.dataset.label + ': ' + Number(ctx.parsed.y).toFixed(2)
       + (ctx.dataset.valueUnit || '%');
+  return options;
+}
+
+function _fiscalPrimaryChartOptions(rows) {
+  const options = _fiscalChartOptions('% GDP');
+  options.plugins.tooltip.filter = ctx => !ctx.dataset.presentationOnly;
+  options.plugins.tooltip.callbacks.title = items => {
+    const row = rows[items[0]?.dataIndex];
+    return row ? `季度：${row.quarter}` : '季度：--';
+  };
+  options.plugins.tooltip.callbacks.label = ctx => ctx.parsed.y === null
+    ? `  ${ctx.dataset.label}：未知`
+    : `  ${ctx.dataset.label}：${Number(ctx.parsed.y).toFixed(2)}% GDP`;
+  options.plugins.tooltip.callbacks.afterBody = items => {
+    const row = rows[items[0]?.dataIndex];
+    if (!row) return ['Fiscal Gap：--', '判决：数据不足，暂不判断'];
+    const decision = _fiscalDecisionState(row.trajectory_condition, row.fiscal_gap_pct_gdp);
+    return [
+      `Fiscal Gap：${_formatFiscalGap(row.fiscal_gap_pct_gdp)}`,
+      `判决：${decision.title}`,
+    ];
+  };
   return options;
 }
 
@@ -325,17 +419,28 @@ function renderFiscalStress(payload) {
     document.getElementById(id).textContent = _formatFiscalPercent(latest[field], suffix);
   }
 
-  const trajectoryText = {
-    gap_positive: '最新完整季度的财政调整缺口为正：当前财政组合不足以稳定公众持有债务/GDP。',
-    stabilizing_condition_met: '最新完整季度的财政调整缺口不为正：按当前简化债务动力学，稳定条件暂时满足。',
-    unknown: '数据不足：当前无法判断债务稳定算术条件。',
-  };
   const condition = latest.trajectory_condition || 'unknown';
-  document.getElementById('fiscalTrajectory').textContent =
-    (trajectoryText[condition] || trajectoryText.unknown)
-    + ' 连续正缺口完整季度：'
-    + (latest.gap_positive_consecutive_complete_quarters ?? '未知')
-    + '；stock-flow residual：'
+  const decision = _fiscalDecisionState(condition, latest.fiscal_gap_pct_gdp);
+  const decisionBox = document.getElementById('fiscalTrajectory');
+  decisionBox.classList.remove('fiscal-decision-met', 'fiscal-decision-not-met',
+    'fiscal-decision-unknown');
+  decisionBox.classList.add(decision.className);
+  document.getElementById('fiscalDecisionTitle').textContent = decision.title;
+  document.getElementById('fiscalDecisionExplanation').textContent = decision.explanation;
+  document.getElementById('fiscalDecisionMetricLabel').textContent = decision.metricLabel;
+  document.getElementById('fiscalDecisionMetric').textContent =
+    decision.className === 'fiscal-decision-unknown'
+      ? '--' : _formatFiscalMagnitude(latest.fiscal_gap_pct_gdp);
+  document.getElementById('fiscalDecisionGap').textContent =
+    _formatFiscalGap(latest.fiscal_gap_pct_gdp);
+  document.getElementById('fiscalDecisionActual').textContent =
+    _formatFiscalPercent(latest.primary_balance_gdp_pct, '% GDP');
+  document.getElementById('fiscalDecisionRequired').textContent =
+    _formatFiscalPercent(latest.stabilizing_primary_balance_pct_gdp, '% GDP');
+  document.getElementById('fiscalDecisionStreak').textContent =
+    latest.gap_positive_consecutive_complete_quarters ?? '--';
+  document.getElementById('fiscalDecisionCaveat').textContent =
+    '该结论仅表示当前简化债务动力学的财政稳定条件。稳定条件满足 ≠ 实际债务/GDP 当期必然下降；stock-flow residual：'
     + _formatFiscalPercent(latest.stock_flow_residual_pct_gdp, ' pp')
     + '（诊断差异，不强制为零）。';
 
@@ -357,11 +462,15 @@ function renderFiscalStress(payload) {
     data: { labels, datasets: [
       lineDataset('实际初级余额', rows.map(row => row.primary_balance_gdp_pct), COLORS.blue,
         { sourceField: 'primary_balance_gdp_pct', valueUnit: '% GDP' }),
-      lineDataset('稳定债务所需初级余额 p*',
+      lineDataset('稳定债务所需初级余额 p*（判据线）',
         rows.map(row => row.stabilizing_primary_balance_pct_gdp), COLORS.gold,
-        { sourceField: 'stabilizing_primary_balance_pct_gdp', valueUnit: '% GDP' }),
+        { sourceField: 'stabilizing_primary_balance_pct_gdp', valueUnit: '% GDP',
+          borderDash: [8, 5], borderWidth: 2.5 }),
+      lineDataset('0% GDP 参考线', rows.map(() => 0), COLORS.muted,
+        { sourceField: 'presentation_zero_reference', valueUnit: '% GDP',
+          presentationOnly: true, borderDash: [2, 4], borderWidth: 1 }),
     ]},
-    options: _fiscalChartOptions('% GDP'),
+    options: _fiscalPrimaryChartOptions(rows),
   });
 
   document.getElementById('fiscalCompleteAsOf').textContent = meta.complete_through || '--';
