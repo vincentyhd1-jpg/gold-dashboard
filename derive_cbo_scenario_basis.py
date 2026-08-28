@@ -223,6 +223,37 @@ def run_tests() -> None:
           and built_output.get("source") == SOURCE)
     check("annual frequency", built_output.get("freq") == "annual"
           and built_output.get("date_field") == "year")
+
+    committed_exists = OUTPUT_PATH.is_file()
+    check("committed scenario basis exists", committed_exists)
+    committed_basis = {}
+    committed_strict = False
+    if committed_exists:
+        try:
+            committed_basis = json.loads(OUTPUT_PATH.read_text(encoding="utf-8"))
+            assert_envelope(committed_basis)
+            committed_strict = True
+        except (OSError, json.JSONDecodeError, ValueError):
+            pass
+    check("committed scenario basis is strict envelope", committed_strict)
+    check("committed scenario basis identity", committed_strict
+          and committed_basis.get("source") == SOURCE
+          and committed_basis.get("freq") == "annual"
+          and committed_basis.get("date_field") == "year")
+    current_vintage = payload.get("data", {}).get("vintage", {})
+    committed_vintage = committed_basis.get("data", {}).get("vintage", {})
+    check("committed scenario basis vintage_id matches current baseline",
+          bool(current_vintage.get("vintage_id"))
+          and committed_vintage.get("vintage_id") == current_vintage.get("vintage_id"))
+    check("committed scenario basis publication_date matches current baseline",
+          bool(current_vintage.get("publication_date"))
+          and committed_vintage.get("publication_date")
+          == current_vintage.get("publication_date"))
+    check("committed scenario basis derived_from matches current baseline",
+          committed_basis.get("derived_from") == built_output.get("derived_from"))
+    check("committed scenario basis is stale relative to current CBO baseline",
+          _comparable(committed_basis) == _comparable(built_output))
+
     check("2025 anchor", rows[0]["year"] == 2025 and rows[0]["kind"] == "actual")
     check("2026–2036 projection", [r["year"] for r in rows[1:]] == list(range(2026, 2037)))
     check("source field completeness", all(set(row) >= {

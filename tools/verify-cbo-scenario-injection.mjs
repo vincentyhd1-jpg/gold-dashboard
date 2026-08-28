@@ -1,4 +1,11 @@
-import { replaceExactly, runInjectionSuite } from './_injection.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { replaceExactly, runInjectionSuite, sha256 } from './_injection.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const basisPath = path.join(ROOT, 'data', 'derived', 'cbo_scenario_basis.json');
+const basisHash = sha256(fs.readFileSync(basisPath));
 
 function makeCase(name, anchor, changed, marker) {
   return {
@@ -54,6 +61,21 @@ const engineResult = await runInjectionSuite({
   cases: engineCases,
 });
 
+const staleBasisResult = await runInjectionSuite({
+  name: 'C18B committed scenario basis freshness injection',
+  target: 'data/derived/cbo_baseline_latest.json',
+  guard: 'tools/verify-cbo-scenario-python.mjs',
+  timeoutMs: 180_000,
+  cases: [makeCase(
+    'current CBO baseline changes without regenerating scenario basis',
+    '"debt_held_by_public_bn": 32095.165,',
+    '"debt_held_by_public_bn": 32095.166,',
+    'FAIL committed scenario basis is stale relative to current CBO baseline')],
+});
+const basisHashRestored = sha256(fs.readFileSync(basisPath)) === basisHash;
+console.log(`${basisHashRestored ? 'PASS' : 'FAIL'} stale basis injection: `
+  + 'committed scenario basis SHA-256 unchanged');
+
 const pageCases = [
   makeCase(
     'User Scenario mislabeled as CBO Projection',
@@ -75,5 +97,7 @@ const pageResult = await runInjectionSuite({
   cases: pageCases,
 });
 
-const result = { ok: engineResult.ok && pageResult.ok };
+const result = {
+  ok: engineResult.ok && staleBasisResult.ok && basisHashRestored && pageResult.ok,
+};
 process.exitCode = result.ok ? 0 : 1;
