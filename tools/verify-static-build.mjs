@@ -11,6 +11,7 @@ const PUBLIC_DIRS = ['assets', 'css', 'js'];
 const REQUIRED_PATHS = [
   ...ROOT_PAGES,
   'assets/favicon.svg',
+  'assets/js/cbo-scenario-engine.js',
   'css/chart.css',
   'js/data-helpers.js',
   'data/cot.json',
@@ -18,11 +19,12 @@ const REQUIRED_PATHS = [
   'data/treasury_mts_fiscal.json',
   'data/derived/macro_fiscal_stress.json',
   'data/derived/cbo_baseline_latest.json',
+  'data/derived/cbo_scenario_basis.json',
 ];
 const FORBIDDEN_PATHS = [
   'AGENTS.md', 'CLAUDE.md', 'README.md',
   'fetch_fred.py', 'fetch_treasury_debt.py', 'fetch_treasury_fiscal.py',
-  'fetch_cbo_baseline.py', 'tools', 'docs', '.github', '.git',
+  'fetch_cbo_baseline.py', 'derive_cbo_scenario_basis.py', 'tools', 'docs', '.github', '.git',
   'data/quarantine', 'data/cbo',
 ];
 
@@ -64,6 +66,10 @@ function listFiles(root) {
 
 function hash(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+function readJson(relativePath) {
+  return JSON.parse(fs.readFileSync(path.join(DIST, relativePath), 'utf8'));
 }
 
 function sourceManifest() {
@@ -115,6 +121,64 @@ const byteMismatches = expected.filter(file => fs.existsSync(path.join(DIST, fil
   && hash(path.join(ROOT, file)) !== hash(path.join(DIST, file)));
 check('dist 文件与源文件逐字节一致', byteMismatches.length === 0,
   byteMismatches.join(','));
+
+let cboBaseline;
+let cboBasis;
+try {
+  cboBaseline = readJson('data/derived/cbo_baseline_latest.json');
+  cboBasis = readJson('data/derived/cbo_scenario_basis.json');
+  check('dist CBO baseline / scenario basis 均为合法 JSON', true);
+} catch (error) {
+  check('dist CBO baseline / scenario basis 均为合法 JSON', false, error.message);
+}
+const baselineVintage = cboBaseline?.data?.vintage;
+const basisVintage = cboBasis?.data?.vintage;
+check('dist CBO scenario basis vintage 对应当前 baseline',
+  typeof baselineVintage?.vintage_id === 'string' && baselineVintage.vintage_id.length > 0
+  && typeof baselineVintage?.publication_date === 'string'
+  && baselineVintage.publication_date.length > 0
+  && basisVintage?.vintage_id === baselineVintage.vintage_id
+  && basisVintage?.publication_date === baselineVintage?.publication_date);
+const basisUpstream = cboBasis?.derived_from;
+check('dist CBO scenario basis derived_from 对应当前 baseline',
+  Array.isArray(basisUpstream) && basisUpstream.length === 1
+  && basisUpstream[0]?.source === cboBaseline?.source
+  && basisUpstream[0]?.generated_at === cboBaseline?.generated_at
+  && JSON.stringify(basisUpstream[0]?.coverage) === JSON.stringify(cboBaseline?.coverage)
+  && basisUpstream[0]?.envelope === true);
+const baselineRows = cboBaseline?.data?.annual;
+const basisRows = cboBasis?.data?.annual;
+const directFields = [
+  ['debt_held_by_public_bn', 'baseline_debt_bn'],
+  ['debt_held_by_public_pct_gdp', 'baseline_debt_pct_gdp'],
+  ['nominal_gdp_bn', 'baseline_gdp_bn'],
+  ['nominal_g_pct', 'baseline_nominal_g_pct'],
+  ['primary_balance_pct_gdp', 'baseline_primary_balance_pct_gdp'],
+  ['net_interest_pct_gdp', 'baseline_net_interest_pct_gdp'],
+  ['overall_balance_pct_gdp', 'baseline_overall_balance_pct_gdp'],
+];
+const basisMatchesBaseline = Array.isArray(baselineRows) && Array.isArray(basisRows)
+  && baselineRows.length === basisRows.length
+  && baselineRows.every((baselineRow, index) => {
+    const basisRow = basisRows[index];
+    if (!basisRow || basisRow.year !== baselineRow.year || basisRow.kind !== baselineRow.kind
+      || !directFields.every(([baselineField, basisField]) =>
+        Object.is(basisRow[basisField], baselineRow[baselineField]))) return false;
+    if (index === 0) {
+      return basisRow.baseline_sfa_bn === null
+        && basisRow.baseline_sfa_pct_gdp === null;
+    }
+    const previousDebt = baselineRows[index - 1].debt_held_by_public_bn;
+    const deficit = -baselineRow.overall_balance_pct_gdp / 100
+      * baselineRow.nominal_gdp_bn;
+    const expectedSfaBn = baselineRow.debt_held_by_public_bn - previousDebt - deficit;
+    const expectedSfaPct = expectedSfaBn / baselineRow.nominal_gdp_bn * 100;
+    return Number.isFinite(basisRow.baseline_sfa_bn)
+      && Number.isFinite(basisRow.baseline_sfa_pct_gdp)
+      && Math.abs(basisRow.baseline_sfa_bn - expectedSfaBn) <= 1e-9
+      && Math.abs(basisRow.baseline_sfa_pct_gdp - expectedSfaPct) <= 1e-12;
+  });
+check('dist CBO scenario basis 业务数据对应 baseline', basisMatchesBaseline);
 
 for (const forbidden of FORBIDDEN_PATHS) {
   check(`dist 不公开 ${forbidden}`, !fs.existsSync(path.join(DIST, forbidden)));

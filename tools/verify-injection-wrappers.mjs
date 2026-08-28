@@ -27,6 +27,7 @@ const wrappers = [
   'verify-debt-overview-injection.mjs',
   'verify-fiscal-stress-injection.mjs',
   'verify-cbo-baseline-injection.mjs',
+  'verify-cbo-scenario-injection.mjs',
 ];
 
 console.log('## static contract');
@@ -39,6 +40,15 @@ for (const name of wrappers) {
   check(`${name}: 不在仓库创建 backup`,
     !/copyFileSync|injection-backup|BACKUP\s*=/.test(source));
 }
+
+const scenarioBridgePath = path.join(__dirname, 'verify-cbo-scenario-python.mjs');
+const scenarioBridgeSource = fs.readFileSync(scenarioBridgePath, 'utf8');
+const legacyScenarioRoot = ['', 'mnt', 'd', 'VScode', 'test', 'gold-dashboard'].join('/');
+check('C18B Python bridge 不含旧仓库 absolute path',
+  !scenarioBridgeSource.includes(legacyScenarioRoot));
+check('C18B Python bridge 不硬编码 Windows/WSL repo absolute path',
+  !/(?:[A-Za-z]:[\\/]|\/mnt\/[a-z]\/)[^'"\r\n]*gold-dashboard/i
+    .test(scenarioBridgeSource));
 
 async function withFixture(execute) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gold-dashboard-meta-'));
@@ -73,6 +83,28 @@ const spawnError = await runNodeGuard('unused.mjs', { cwd: missingCwd });
 check('spawn error 返回结构化失败且不会挂起',
   spawnError.code === null && spawnError.error != null && spawnError.signal == null,
   spawnError.error?.message || 'missing error');
+
+const alternateCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'gold-dashboard-c18b-cwd-'));
+try {
+  const bridgeResult = await runNodeGuard(scenarioBridgePath, {
+    cwd: alternateCwd,
+    timeoutMs: 180_000,
+  });
+  const windowsRoot = bridgeResult.stdout.match(/^C18B_WINDOWS_ROOT=(.+)$/m)?.[1]?.trim();
+  const wslRoot = bridgeResult.stdout.match(/^C18B_WSL_ROOT=(.+)$/m)?.[1]?.trim();
+  const pythonCwd = bridgeResult.stdout.match(/^C18B_GUARD_CWD=(.+)$/m)?.[1]?.trim();
+  check('C18B Python bridge 从不同 Windows cwd 启动仍 exit 0',
+    bridgeResult.code === 0 && !bridgeResult.signal && !bridgeResult.error,
+    `exit=${bridgeResult.code} signal=${bridgeResult.signal || '-'} error=${bridgeResult.error?.message || '-'}`);
+  check('C18B Python bridge 由 verifier 位置解析当前 Windows repo root',
+    windowsRoot === path.resolve(__dirname, '..'),
+    `actual=${windowsRoot || '<missing>'}`);
+  check('C18B Python child 真实 cwd 等于动态 WSL repo root',
+    Boolean(wslRoot) && pythonCwd === wslRoot,
+    `cwd=${pythonCwd || '<missing>'} root=${wslRoot || '<missing>'}`);
+} finally {
+  fs.rmSync(alternateCwd, { recursive: true, force: true });
+}
 
 const happy = await withFixture(({ dir, target }) =>
   runInjectionSuite(baseConfig(dir), {

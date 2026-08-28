@@ -114,6 +114,20 @@ try {
   expectRed('C leaked Python', 'FAIL dist 不公开 fetch_treasury_debt.py');
   runBuildAndGuard('C restore');
 
+  console.log('\n--- D: dist baseline 更新但 scenario basis 未重建 ---');
+  run(BUILD);
+  const distBaselinePath = path.join(DIST, 'data', 'derived', 'cbo_baseline_latest.json');
+  const distBaseline = JSON.parse(fs.readFileSync(distBaselinePath, 'utf8'));
+  const originalDebt = distBaseline.data.annual[1].debt_held_by_public_bn;
+  distBaseline.data.annual[1].debt_held_by_public_bn = originalDebt + 0.001;
+  fs.writeFileSync(distBaselinePath, `${JSON.stringify(distBaseline, null, 2)}\n`);
+  check('D dist baseline 合法数值已真实改变',
+    JSON.parse(fs.readFileSync(distBaselinePath, 'utf8')).data.annual[1]
+      .debt_held_by_public_bn === originalDebt + 0.001);
+  expectRed('D stale scenario basis',
+    'FAIL dist CBO scenario basis 业务数据对应 baseline');
+  runBuildAndGuard('D restore');
+
   runBuildAndGuard('final restored');
   check('最终 wrangler.jsonc SHA-256 一致',
     sha256(fs.readFileSync(CONFIG)) === originalHash);

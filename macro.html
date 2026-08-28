@@ -95,10 +95,28 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .cbo-chart .chart-wrap{height:285px}
 .cbo-notes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
 .cbo-note{font-size:11px;color:#8b949e;line-height:1.55;background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:10px 12px}
+.scenario-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:4px 0 16px}
+.scenario-control{background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px;min-width:0}
+.scenario-control label{display:block;font-size:11px;color:#c9d1d9;font-weight:650;margin-bottom:8px;line-height:1.4}
+.scenario-control select,.scenario-control input[type=range]{width:100%;accent-color:#58a6ff}
+.scenario-control select{background:#161b22;color:#f0f6fc;border:1px solid #484f58;border-radius:6px;padding:6px}
+.scenario-control-value{font-size:13px;color:#58a6ff;font-weight:650;margin-top:7px}
+.scenario-control-note{font-size:10px;color:#8b949e;line-height:1.4;margin-top:4px}
+.scenario-actions{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.scenario-actions button{border:1px solid #484f58;background:#21262d;color:#c9d1d9;border-radius:7px;padding:7px 12px;cursor:pointer}
+.scenario-actions button:hover{border-color:#58a6ff;color:#f0f6fc}
+.scenario-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.scenario-kpi{background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px;min-width:0}
+.scenario-kpi-label{font-size:11px;color:#8b949e;line-height:1.35;min-height:30px}
+.scenario-kpi-value{font-size:19px;color:#f0f6fc;font-weight:650;margin-top:6px;white-space:nowrap}
+.scenario-chart{min-width:0}.scenario-chart .chart-wrap{height:320px}
+.scenario-disclaimer{font-size:11px;color:#8b949e;line-height:1.6;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:11px 13px;margin-top:12px}
 @media(max-width:800px){.fiscal-charts{grid-template-columns:1fr}.fiscal-kpi{grid-column:span 6!important}}
 @media(max-width:420px){.fiscal-kpis{grid-template-columns:1fr}.fiscal-kpi{grid-column:1!important}.fiscal-kpi-label{min-height:0}}
 @media(max-width:800px){.cbo-charts,.cbo-notes{grid-template-columns:1fr}.cbo-chart:first-child{grid-column:auto}.cbo-kpis{grid-template-columns:1fr 1fr}}
 @media(max-width:420px){.cbo-kpis{grid-template-columns:1fr}.cbo-kpi-label{min-height:0}}
+@media(max-width:900px){.scenario-controls{grid-template-columns:1fr 1fr}.scenario-kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.scenario-controls,.scenario-kpis{grid-template-columns:1fr}.scenario-kpi-label{min-height:0}}
 
 /* 状态行 */
 .status{font-size:12px;color:#8b949e;min-height:18px}
@@ -259,6 +277,52 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
       <div class="status" id="cboStatus" role="status">正在加载 CBO baseline…</div>
     </div>
 
+    <div class="card full" id="cboScenarioPanel">
+      <div class="card-title">CBO 财政情景实验室 / Fiscal Scenario Lab</div>
+      <div class="card-sub">相对官方 CBO Baseline 的确定性敏感性分析；所有冲击从所选财政年度起永久生效，官方 baseline 始终只读。</div>
+      <div class="scenario-controls" aria-label="CBO fiscal scenario controls">
+        <div class="scenario-control">
+          <label for="scenarioStartYear">Scenario start year</label>
+          <select id="scenarioStartYear"></select>
+          <div class="scenario-control-note">此前年度完全等于 CBO Baseline</div>
+        </div>
+        <div class="scenario-control">
+          <label for="scenarioGrowthShock">Nominal GDP growth shock</label>
+          <input id="scenarioGrowthShock" type="range" min="-3" max="3" step="0.25" value="0">
+          <div class="scenario-control-value" id="scenarioGrowthValue">0.00 pp</div>
+        </div>
+        <div class="scenario-control">
+          <label for="scenarioPrimaryShock">Primary balance shock</label>
+          <input id="scenarioPrimaryShock" type="range" min="-3" max="3" step="0.25" value="0">
+          <div class="scenario-control-value" id="scenarioPrimaryValue">0.00 pp</div>
+          <div class="scenario-control-note">正值 = 财政改善；负值 = 财政恶化</div>
+        </div>
+        <div class="scenario-control">
+          <label for="scenarioInterestShock">Net interest spending shock</label>
+          <input id="scenarioInterestShock" type="range" min="-2" max="2" step="0.25" value="0">
+          <div class="scenario-control-value" id="scenarioInterestValue">0.00 pp</div>
+          <div class="scenario-control-note">正值 = 利息支出增加；负值 = 利息支出下降</div>
+        </div>
+      </div>
+      <div class="scenario-actions">
+        <button type="button" id="scenarioReset">Reset to CBO Baseline</button>
+        <span class="status" id="scenarioControlStatus">默认零冲击：用户情景逐年等于官方 baseline。</span>
+      </div>
+      <div class="scenario-kpis" aria-label="CBO scenario endpoint summary">
+        <div class="scenario-kpi"><div class="scenario-kpi-label">2036 User Scenario 债务 / GDP</div><div class="scenario-kpi-value" id="scenarioTerminalDebt">--</div></div>
+        <div class="scenario-kpi"><div class="scenario-kpi-label">2036 CBO Baseline 债务 / GDP</div><div class="scenario-kpi-value" id="scenarioBaselineDebt">--</div></div>
+        <div class="scenario-kpi"><div class="scenario-kpi-label">Scenario − Baseline</div><div class="scenario-kpi-value" id="scenarioDebtDifference">--</div></div>
+        <div class="scenario-kpi"><div class="scenario-kpi-label">User Scenario 峰值债务 / GDP</div><div class="scenario-kpi-value" id="scenarioPeakDebt">--</div></div>
+        <div class="scenario-kpi"><div class="scenario-kpi-label">2036 User Scenario 总体余额 / GDP</div><div class="scenario-kpi-value" id="scenarioTerminalBalance">--</div></div>
+      </div>
+      <div class="scenario-chart">
+        <div class="card-sub">Public Debt / GDP：CBO Baseline 与 User Scenario / 用户情景（% GDP）</div>
+        <div class="chart-wrap"><canvas id="cboScenarioChart"></canvas></div>
+      </div>
+      <div class="scenario-disclaimer" id="scenarioDisclaimer">该工具是基于 CBO Baseline 的确定性敏感性分析。用户输入的情景不是 CBO 预测，也不是发生概率估计。结果不代表债务危机、违约或所谓“失控年份”。Stock-flow adjustment 仅用于会计闭合，不是风险指标。</div>
+      <div class="status" id="scenarioStatus" role="status">正在加载财政情景基础数据…</div>
+    </div>
+
   </div>
 
   <div class="status" id="status" role="status">正在加载宏观数据…</div>
@@ -267,6 +331,7 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
 
 <footer id="footerNote">数据来源：Federal Reserve Bank of St. Louis (FRED) · 每日自动更新 · zhangtongxue.com</footer>
 
+<script src="assets/js/cbo-scenario-engine.js"></script>
 <script>
 const COLORS = {
   gold:  '#f5c842',
@@ -723,6 +788,132 @@ function renderCboBaseline(payload, historicalQuarterly) {
   return { rows, projectionRows, actualRows, summary, vintage };
 }
 
+let cboScenarioBasis = null;
+let cboScenarioChart = null;
+
+function _scenarioConfigFromControls() {
+  return {
+    startYear: Number(document.getElementById('scenarioStartYear').value),
+    growthShockPp: Number(document.getElementById('scenarioGrowthShock').value),
+    primaryBalanceShockPp: Number(document.getElementById('scenarioPrimaryShock').value),
+    netInterestSpendingShockPp: Number(document.getElementById('scenarioInterestShock').value),
+  };
+}
+
+function _scenarioValue(value, suffix) {
+  return Number(value).toLocaleString('zh-CN', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'auto',
+  }) + suffix;
+}
+
+function _scenarioChartOptions() {
+  const options = chartOptions();
+  options.animation = false;
+  options.scales.y.title.text = '% GDP';
+  options.scales.y.ticks.callback = value => `${Number(value).toFixed(0)}%`;
+  options.plugins.tooltip.callbacks.label = context =>
+    `  ${context.dataset.label}：${Number(context.parsed.y).toFixed(2)}% GDP`;
+  options.plugins.tooltip.callbacks.afterBody = contexts => {
+    const index = contexts[0]?.dataIndex;
+    if (index === undefined || !cboScenarioChart) return [];
+    const baseline = Number(cboScenarioChart.data.datasets[0].data[index]);
+    const scenario = Number(cboScenarioChart.data.datasets[1].data[index]);
+    return [`Difference：${(scenario - baseline).toFixed(2)} pp`];
+  };
+  return options;
+}
+
+function _updateScenario() {
+  if (!cboScenarioBasis) return null;
+  const config = _scenarioConfigFromControls();
+  const result = CboScenarioEngine.runScenario(cboScenarioBasis, config);
+  const projection = result.rows.filter(row => row.kind === 'projection');
+  const labels = projection.map(row => String(row.year));
+  const baseline = projection.map(row => row.baselineDebtPctGdp);
+  const scenario = projection.map(row => row.scenarioDebtPctGdp);
+  document.getElementById('scenarioGrowthValue').textContent =
+    _scenarioValue(config.growthShockPp, ' pp');
+  document.getElementById('scenarioPrimaryValue').textContent =
+    _scenarioValue(config.primaryBalanceShockPp, ' pp');
+  document.getElementById('scenarioInterestValue').textContent =
+    _scenarioValue(config.netInterestSpendingShockPp, ' pp');
+  document.getElementById('scenarioTerminalDebt').textContent =
+    _scenarioValue(result.summary.terminalScenarioDebtPctGdp, '%');
+  document.getElementById('scenarioBaselineDebt').textContent =
+    _scenarioValue(result.summary.terminalBaselineDebtPctGdp, '%');
+  document.getElementById('scenarioDebtDifference').textContent =
+    _scenarioValue(result.summary.terminalDifferencePp, ' pp');
+  document.getElementById('scenarioPeakDebt').textContent =
+    _scenarioValue(result.summary.peakScenarioDebtPctGdp, '%');
+  document.getElementById('scenarioTerminalBalance').textContent =
+    _scenarioValue(result.summary.terminalScenarioOverallBalancePctGdp, '%');
+  document.getElementById('scenarioControlStatus').textContent =
+    config.growthShockPp === 0 && config.primaryBalanceShockPp === 0
+      && config.netInterestSpendingShockPp === 0
+      ? '零冲击：User Scenario 逐年精确等于官方 CBO Baseline。'
+      : `冲击从 ${config.startYear} 财政年度起永久生效。`;
+
+  if (!cboScenarioChart) {
+    cboScenarioChart = new Chart(document.getElementById('cboScenarioChart'), {
+      type: 'line',
+      data: { labels, datasets: [
+        lineDataset('CBO Baseline', baseline, COLORS.gold, {
+          sourceField: 'baseline_debt_pct_gdp', sourceKind: 'cbo_official_baseline',
+          borderDash: [8, 5], borderWidth: 2.5, tension: 0, pointRadius: 2,
+          pointHoverRadius: 4,
+        }),
+        lineDataset('User Scenario / 用户情景', scenario, COLORS.blue, {
+          sourceField: 'scenario_debt_pct_gdp', sourceKind: 'synthetic_user_scenario',
+          borderWidth: 2.5, tension: 0, pointRadius: 2, pointHoverRadius: 4,
+        }),
+      ]},
+      options: _scenarioChartOptions(),
+    });
+  } else {
+    cboScenarioChart.data.labels = labels;
+    cboScenarioChart.data.datasets[0].data = baseline;
+    cboScenarioChart.data.datasets[1].data = scenario;
+    cboScenarioChart.update('none');
+  }
+  return result;
+}
+
+function renderCboScenarioLab(basis) {
+  cboScenarioBasis = basis;
+  const start = document.getElementById('scenarioStartYear');
+  start.replaceChildren(...Array.from({ length: 11 }, (_, index) => {
+    const option = document.createElement('option');
+    option.value = String(2026 + index);
+    option.textContent = String(2026 + index);
+    return option;
+  }));
+  start.value = '2026';
+  return _updateScenario();
+}
+
+for (const id of ['scenarioStartYear', 'scenarioGrowthShock', 'scenarioPrimaryShock',
+  'scenarioInterestShock']) {
+  document.getElementById(id).addEventListener('input', () => {
+    try {
+      _updateScenario();
+    } catch (error) {
+      console.error('[render] CBO Fiscal Scenario Lab 更新失败：', error);
+      const status = document.getElementById('scenarioStatus');
+      status.textContent = '财政情景计算失败：' + error.message;
+      status.className = 'status err';
+    }
+  });
+}
+document.getElementById('scenarioReset').addEventListener('click', () => {
+  const config = CboScenarioEngine.resetConfig();
+  document.getElementById('scenarioStartYear').value = String(config.startYear);
+  document.getElementById('scenarioGrowthShock').value = String(config.growthShockPp);
+  document.getElementById('scenarioPrimaryShock').value = String(config.primaryBalanceShockPp);
+  document.getElementById('scenarioInterestShock').value =
+    String(config.netInterestSpendingShockPp);
+  _updateScenario();
+});
+
 function debtOverviewOptions(tooltipLookup) {
   const options = chartOptions();
   const yStyle = options.scales.y;
@@ -1138,6 +1329,29 @@ Promise.allSettled([
     const el = document.getElementById('cboStatus');
     el.textContent = 'CBO baseline 加载失败：' + err.message;
     el.className = 'status err';
+  });
+
+// The scenario lab is an independent synthetic browser calculation.  It reads
+// the audited basis but never writes or mutates the official CBO baseline.
+loadJson('data/derived/cbo_scenario_basis.json?_=' + Date.now(), {
+  name: 'cbo_scenario_basis.json',
+})
+  .then(basis => {
+    const rendered = _safeRender('CBO Fiscal Scenario Lab', () =>
+      renderCboScenarioLab(basis));
+    const status = document.getElementById('scenarioStatus');
+    if (rendered) {
+      status.textContent = '已加载确定性 sensitivity basis；用户情景仅在浏览器内计算且不回写。';
+    } else {
+      status.textContent = '财政情景实验室渲染失败，请查看控制台。';
+      status.className = 'status err';
+    }
+  })
+  .catch(err => {
+    console.error('[fetch] CBO scenario basis 加载失败：', err);
+    const status = document.getElementById('scenarioStatus');
+    status.textContent = '财政情景基础数据加载失败：' + err.message;
+    status.className = 'status err';
   });
 </script>
 </body>

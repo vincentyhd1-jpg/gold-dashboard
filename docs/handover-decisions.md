@@ -212,6 +212,24 @@ CONTANGO 用 AUG26−DEC26 主力−次主力，显示年化率。
   或发布 CBO 文件。vintage 记录人工下载时间；解析异常写本地 diagnostics 且不切换
   latest。原始 XLSX/diagnostics 不进 Git/静态站；版本 JSON 可追溯，浏览器只公开 latest。
 
+### CBO 财政情景实验室（C18B）
+
+- 官方 CBO Baseline 始终只读、单独标识；用户情景是 deterministic sensitivity，
+  不是 CBO forecast，不输出概率、危机/失控年份、风险颜色、presets 或 forward Fiscal Gap。
+- 会计 basis 以 2025 actual 为锚。2026..2036 每年保存
+  `deficit=-overall_balance_pct*GDP` 与
+  `SFA=official debt-prev official debt-deficit`；SFA 只负责闭合官方债务金额，不能解释成风险。
+- shock 从用户选择年度永久生效：名义 GDP 增速加 growth shock；官方 overall balance
+  加 primary-balance shock、减 interest-spending shock。正 primary shock 表示改善，
+  正 interest shock 表示利息支出增加。scenario SFA 维持 baseline SFA/GDP 比例并按情景
+  GDP 缩放，债务按 previous debt + deficit + SFA 递推。
+- zero shock 必须逐年精确返回官方 debt amount 与官方 debt/GDP。金额层先以 residual
+  验证闭合；官方百分比有发布舍入，零冲击不得以金额/GDP 重算出伪精度覆盖官方值。
+- C18B 不读取 C17 `effective_r`，也不由 net-interest/GDP 宣称有效利率。浏览器纯函数
+  是“生产 source/derived 前端只读”原则的窄例外：只生成内存中的 synthetic user
+  scenario，不 mutate 输入、不写 baseline/JSON/localStorage、不冒充官方 observation。
+- Scenario Lab、CBO Baseline 与 C17 各自故障隔离；任一数据链失败不拖掉另两块。
+
 ### 帧级 vs 展示视图二分（重要）
 **帧级取证字段（as-of-that-frame）与展示视图字段（as-of-now）是两类东西。**
 取证字段不得经任何**随时间移动的边界**过滤：
