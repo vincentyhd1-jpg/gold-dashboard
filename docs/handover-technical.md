@@ -162,14 +162,15 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-macro-page.mjs` | 0 | 86 passed, 0 failed；page errors: none |
 | `fetch_treasury_fiscal.py --test` | 0 | 28 passed, 0 failed |
 | `derive_fiscal_stress.py --test` | 0 | 34 passed, 0 failed |
-| `derive_fiscal_risk_monitor.py --test` | 0 | 50 passed, 0 failed |
+| `derive_fiscal_risk_monitor.py --test` | 0 | 52 passed, 0 failed |
 | `fetch_cbo_baseline.py --test` | 0 | 22 passed, 0 failed |
 | `derive_cbo_scenario_basis.py --test` | 0 | 26 passed, 0 failed |
 | `tools/verify-fiscal-stress-page.mjs` | 0 | 46 passed, 0 failed；page errors: none |
 | `tools/verify-cbo-baseline-page.mjs` | 0 | 24 passed, 0 failed；page errors: none |
 | `tools/verify-cbo-scenario-engine.mjs` | 0 | 20 passed, 0 failed |
 | `tools/verify-cbo-scenario-page.mjs` | 0 | 22 passed, 0 failed；page errors: none |
-| `tools/verify-fiscal-risk-monitor-page.mjs` | 0 | 40 passed, 0 failed；page errors: none |
+| `tools/verify-fiscal-risk-monitor-page.mjs` | 0 | 41 passed, 0 failed；page errors: none |
+| `tools/verify-fiscal-risk-monitor-snapshot-contract.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-static-build.mjs` | 0 | 46 passed, 0 failed；40 个公开文件逐字节对账 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
@@ -857,6 +858,13 @@ risk/composite score、概率、危机年份、动态风险颜色、forward-fill
 fresh derivation 比较（忽略顶层 generated_at）；固定 stale marker 防止新 C17 + 旧
 C18C 组合进入提交。
 
+production snapshot 测试不锁某个日期或当前正负状态：latest observed 从 source 最后一
+行取值，latest complete 从 complete 且核心字段有效的 source 行动态筛选，lag 用季度
+索引相减；latest complete 全行再与对应派生行逐字段比较。独立 rolling fixture 覆盖
+lag=0 与新增 incomplete 季度后的正 lag，condition fixture 覆盖与当前生产快照相反及
+零边界状态。页面 condition 由派生枚举动态映射，hover 以
+`latest_complete_quarter` 查 label index，禁止恢复数组倒数位置假设。
+
 `macro.html` 在 C17 与 CBO Baseline 之间增加独立 C18C 卡片：六项 current + 同比、
 四张季度小图，以及分源上下文。DGS2/10/30 各显示自身最后真实日期且仅作市场背景；
 CBO FY2026/FY2036 债务率、初级余额、净利息直接读取官方年度字段。C18B slider 与
@@ -866,7 +874,8 @@ scenario basis 不进入 C18C。monitor/rates/CBO/scenario 四类失败均有独
 且不连累原始数据；commit 清单含新 JSON。静态白名单现为 40 文件、27 JSON；static
 guard 同时核对 derived_from、逐字段复制和同季度 YoY，防止部署 stale 组合。
 
-C18C 定向结果：Python 50/0、页面 40/0；九项 injection 分为派生 39/0、页面
-25/0、stale source 11/0，所有 target/source/output SHA-256 恢复一致；wrapper meta
-56/0。static build 46/0，五项 static injection 33/0。Wrangler versions upload 与
+C18C 定向结果：Python 52/0、页面 41/0、snapshot contract 8/0；十一项 injection
+分为派生 39/0、页面 25/0、stale source 11/0、Python/page snapshot coupling 各
+11/0，所有 target/source/output SHA-256 恢复一致；wrapper meta 56/0。static build
+46/0，五项 static injection 33/0。Wrangler versions upload 与
 deploy dry-run 均 exit 0，未执行真实 production deploy。

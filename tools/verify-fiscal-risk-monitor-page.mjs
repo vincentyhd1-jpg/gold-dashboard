@@ -61,6 +61,41 @@ function formatYoy(value) {
   }) + ' pp';
 }
 
+const expectedConditionText = {
+  debt: {
+    rising: '较四个季度前上升', flat: '较四个季度前持平', falling: '较四个季度前下降',
+    unknown: '同比方向：未知',
+  },
+  gap: {
+    gap_positive: '稳定算术条件不满足；需要额外 primary adjustment',
+    gap_nonpositive: '当前稳定算术条件满足；不代表观测债务率必然下降',
+    unknown: '稳定算术条件：未知',
+  },
+  rMinusG: {
+    positive: 'snowball term 构成债务率上行力量（all else equal）',
+    zero: 'snowball term 为零（all else equal）',
+    negative: 'snowball term 提供债务率下行帮助（all else equal）',
+    unknown: 'snowball sign：未知',
+  },
+  primary: {
+    surplus: '余额状态：surplus', balanced: '余额状态：balanced',
+    deficit: '余额状态：deficit', unknown: '余额状态：未知',
+  },
+};
+
+function expectedConditions(latest) {
+  return {
+    riskDebtCondition: expectedConditionText.debt[latest.debt_yoy_direction]
+      || expectedConditionText.debt.unknown,
+    riskGapCondition: expectedConditionText.gap[latest.fiscal_gap_condition]
+      || expectedConditionText.gap.unknown,
+    riskRMinusGCondition: expectedConditionText.rMinusG[latest.r_minus_g_condition]
+      || expectedConditionText.rMinusG.unknown,
+    riskPrimaryCondition: expectedConditionText.primary[latest.primary_balance_condition]
+      || expectedConditionText.primary.unknown,
+  };
+}
+
 function latestObservation(field) {
   return [...rates.ust].reverse().find(row => row[field] != null
     && Number.isFinite(Number(row[field])));
@@ -179,13 +214,38 @@ check('历史/观测/滞后截至时间分开显示',
   state.asof.complete === monitor.latest_complete_quarter
   && state.asof.observed === monitor.latest_observed_quarter
   && state.asof.lag === `${monitor.complete_lag_quarters} 个季度`);
-check('四项 descriptive condition 直接表达派生状态且不评级',
-  state.values.riskDebtCondition.includes('较四个季度前上升')
-  && state.values.riskGapCondition.includes('当前稳定算术条件满足')
-  && state.values.riskGapCondition.includes('不代表观测债务率必然下降')
-  && state.values.riskRMinusGCondition.includes('下行帮助')
-  && state.values.riskRMinusGCondition.includes('all else equal')
-  && state.values.riskPrimaryCondition.includes('deficit'));
+check('四项 descriptive condition 按当前派生状态动态映射且不评级',
+  Object.entries(expectedConditions(latest)).every(
+    ([id, expectedText]) => state.values[id] === expectedText),
+  JSON.stringify(expectedConditions(latest)));
+
+const oppositeEnvelope = structuredClone(monitorEnvelope);
+Object.assign(oppositeEnvelope.data.latest_complete, {
+  debt_gdp_yoy_change_pp: -1,
+  debt_yoy_direction: 'falling',
+  fiscal_gap_pct_gdp: 0.5,
+  fiscal_gap_condition: 'gap_positive',
+  r_minus_g_pct_points: 1,
+  r_minus_g_condition: 'positive',
+  primary_balance_gdp_pct: 0.25,
+  primary_balance_condition: 'surplus',
+});
+const oppositePage = await openPage(browser, page => page.route(
+  '**/data/derived/fiscal_risk_monitor.json?*', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify(oppositeEnvelope),
+  })));
+const oppositeState = await oppositePage.page.evaluate(collectState);
+const oppositeExpected = expectedConditions(oppositeEnvelope.data.latest_complete);
+check('反向 condition fixture 证明页面映射不依赖当前 production snapshot',
+  oppositeEnvelope.data.latest_complete.debt_yoy_direction !== latest.debt_yoy_direction
+  && oppositeEnvelope.data.latest_complete.fiscal_gap_condition !== latest.fiscal_gap_condition
+  && oppositeEnvelope.data.latest_complete.r_minus_g_condition !== latest.r_minus_g_condition
+  && oppositeEnvelope.data.latest_complete.primary_balance_condition
+    !== latest.primary_balance_condition
+  && Object.entries(oppositeExpected).every(
+    ([id, expectedText]) => oppositeState.values[id] === expectedText),
+  JSON.stringify(oppositeExpected));
+await oppositePage.page.close();
 
 const chartContracts = [
   [state.charts.debt, 'public_debt_gdp_pct'],
@@ -259,14 +319,15 @@ check('baseline 无 console/page errors', baseline.errors.length === 0,
   baseline.errors.join(' | '));
 
 await baseline.page.locator('#riskDebtChart').scrollIntoViewIfNeeded();
-const hover = await baseline.page.evaluate(() => {
+const hover = await baseline.page.evaluate(latestCompleteQuarter => {
   const chart = Chart.getChart(document.getElementById('riskDebtChart'));
-  const index = chart.data.labels.length - 2;
+  const index = chart.data.labels.indexOf(latestCompleteQuarter);
+  if (index < 0) throw new Error('latest complete quarter is missing from risk chart labels');
   const point = chart.getDatasetMeta(0).data[index].getProps(['x', 'y'], true);
   const rect = chart.canvas.getBoundingClientRect();
   return { x: rect.left + point.x, y: rect.top + point.y,
     quarter: chart.data.labels[index] };
-});
+}, monitor.latest_complete_quarter);
 await baseline.page.mouse.move(hover.x, hover.y);
 await baseline.page.waitForFunction(quarter => {
   const tooltip = Chart.getChart(document.getElementById('riskDebtChart')).tooltip;

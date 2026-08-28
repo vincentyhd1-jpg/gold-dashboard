@@ -41,14 +41,20 @@ const pythonResult = await runInjectionSuite({
       'FAIL missing same-quarter prior produces null, never zero'),
     exactCase(
       'C r-minus-g sign condition inverted',
-      '            row["r_minus_g_pct_points"], "positive", "zero", "negative")',
-      '            row["r_minus_g_pct_points"], "negative", "zero", "positive")',
-      'FAIL r-minus-g sign'),
+      '        current["r_minus_g_condition"] = _condition(\n'
+        + '            row["r_minus_g_pct_points"], "positive", "zero", "negative")',
+      '        current["r_minus_g_condition"] = _condition(\n'
+        + '            row["r_minus_g_pct_points"], "negative", "zero", "positive")',
+      'FAIL production conditions dynamically follow current signs'),
     exactCase(
       'D fiscal-gap nonpositive condition mislabeled positive',
-      '            row["fiscal_gap_pct_gdp"], "gap_positive", "gap_nonpositive",\n            "gap_nonpositive")',
-      '            row["fiscal_gap_pct_gdp"], "gap_positive", "gap_positive",\n            "gap_positive")',
-      'FAIL fiscal-gap signs'),
+      '        current["fiscal_gap_condition"] = _condition(\n'
+        + '            row["fiscal_gap_pct_gdp"], "gap_positive", "gap_nonpositive",\n'
+        + '            "gap_nonpositive")',
+      '        current["fiscal_gap_condition"] = _condition(\n'
+        + '            row["fiscal_gap_pct_gdp"], "gap_positive", "gap_positive",\n'
+        + '            "gap_positive")',
+      'FAIL production conditions dynamically follow current signs'),
     exactCase(
       'E risk score injected into production rows',
       '        current = copy.deepcopy(row)\n        year, number = _quarter_parts(row["quarter"])',
@@ -90,20 +96,51 @@ const staleResult = await runInjectionSuite({
     name: 'I current fiscal source changes without regenerating monitor',
     patch: original => {
       const payload = JSON.parse(original.toString('utf8'));
-      const row = payload.data.quarterly.find(item => item.quarter === '2026-Q1');
+      const row = [...payload.data.quarterly].reverse().find(item =>
+        item.calculation_status === 'complete'
+        && Number.isFinite(item.net_interest_receipts_pct));
+      if (!row) throw new Error('no complete fiscal source row available for stale injection');
       row.net_interest_receipts_pct += 0.001;
       return Buffer.from(`${JSON.stringify(payload, null, 2)}\n`);
     },
-    verifyPatch: (_original, patched) => {
+    verifyPatch: (original, patched) => {
+      const before = JSON.parse(original.toString('utf8'));
       const payload = JSON.parse(patched.toString('utf8'));
-      const row = payload.data.quarterly.find(item => item.quarter === '2026-Q1');
-      return { ok: Number.isFinite(row.net_interest_receipts_pct),
-        detail: `2026-Q1=${row.net_interest_receipts_pct}` };
+      const row = [...payload.data.quarterly].reverse().find(item =>
+        item.calculation_status === 'complete'
+        && Number.isFinite(item.net_interest_receipts_pct));
+      const beforeRow = before.data.quarterly.find(item => item.quarter === row?.quarter);
+      return { ok: row && beforeRow
+          && Math.abs(row.net_interest_receipts_pct
+            - beforeRow.net_interest_receipts_pct - 0.001) < 1e-12,
+        detail: `${row?.quarter || '<missing>'}=${row?.net_interest_receipts_pct}` };
     },
     expectedFailureMarkers: [
       'FAIL committed fiscal risk monitor is stale relative to current fiscal stress source',
     ],
   }],
+});
+
+const snapshotPythonResult = await runInjectionSuite({
+  name: 'C18C Python snapshot-coupling injection',
+  target: 'derive_fiscal_risk_monitor.py',
+  guard: 'tools/verify-fiscal-risk-monitor-snapshot-contract.mjs',
+  cases: [exactCase(
+    'J production latest-observed test re-bound to a fixed quarter',
+    '    expected_latest_observed = source_rows[-1]["quarter"]',
+    '    expected_latest_observed = "2026-Q2"',
+    'FAIL C18C latest observed expectation comes from final source row')],
+});
+
+const snapshotPageResult = await runInjectionSuite({
+  name: 'C18C page hover snapshot-coupling injection',
+  target: 'tools/verify-fiscal-risk-monitor-page.mjs',
+  guard: 'tools/verify-fiscal-risk-monitor-snapshot-contract.mjs',
+  cases: [exactCase(
+    'K hover re-bound to current one-quarter lag by array position',
+    '  const index = chart.data.labels.indexOf(latestCompleteQuarter);',
+    '  const index = chart.data.labels.length - 2;',
+    'FAIL C18C hover locates latest complete quarter by label')],
 });
 
 const sourceRestored = sha256(fs.readFileSync(sourcePath)) === sourceHash;
@@ -112,5 +149,6 @@ console.log(`${sourceRestored ? 'PASS' : 'FAIL'} C18C source SHA-256 restored`);
 console.log(`${monitorRestored ? 'PASS' : 'FAIL'} C18C monitor SHA-256 unchanged`);
 
 const result = { ok: pythonResult.ok && pageResult.ok && staleResult.ok
+  && snapshotPythonResult.ok && snapshotPageResult.ok
   && sourceRestored && monitorRestored };
 process.exitCode = result.ok ? 0 : 1;

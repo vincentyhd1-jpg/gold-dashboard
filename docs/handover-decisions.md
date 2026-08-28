@@ -555,3 +555,7 @@ GitHub：`vincentyhd1-jpg/gold-dashboard`。
   任一上下文失败不能隐藏其他来源，C18B sliders 不能改变 C18C。
 - committed derived freshness 与 dist freshness 都必须比较当前 C17 source；新 source
   配旧 monitor 必须在测试或部署闸门变红。
+- C18C 每日生产测试只锁算法与映射，不锁某个季度、当前符号或固定 lag。latest
+  observed/complete/lag 必须从当期 source 动态推导；页面 condition 按派生枚举映射，
+  hover 按 `latest_complete_quarter` 找 label。rolling 与反向 condition fixture 防止测试
+  重新耦合某日生产快照。

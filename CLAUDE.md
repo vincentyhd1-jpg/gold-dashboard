@@ -859,7 +859,8 @@ node tools/verify-cbo-scenario-engine.mjs   # C18B zero-shock/符号/边界/纯�
 node tools/verify-cbo-scenario-page.mjs     # C18B controls/tooltip/reset/隔离/移动端
 node tools/verify-cbo-scenario-injection.mjs # C18B 八项破坏注入
 node tools/verify-fiscal-risk-monitor-page.mjs # C18C 六 KPI/四图/上下文/隔离
-node tools/verify-fiscal-risk-monitor-injection.mjs # C18C 九项破坏注入
+node tools/verify-fiscal-risk-monitor-snapshot-contract.mjs # C18C 禁止固定季度/lag/数组位置
+node tools/verify-fiscal-risk-monitor-injection.mjs # C18C 十一项破坏注入（含 snapshot coupling）
 node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
 node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
 node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红
@@ -940,6 +941,11 @@ tools/verify-noise-injection.py`。脚本已经在 WSL Python 内，子测试用
 三条 Treasury 各自 as-of 与 CBO FY2026/FY2036 官方上下文。0 线只表示 Fiscal Gap
 和 r-g 的数学符号边界；禁止 risk/composite score、概率、危机年份、动态风险颜色、
 前向填充和以 DGS10 替代 effective r。C18B scenario basis/sliders 与该模块隔离。
+
+production guard 不得把某次运行时的 latest quarter、condition 或 lag 固化为永久契约。
+latest observed/complete/lag 从当前 source 动态推导；rolling fixture 覆盖 lag=0 与正 lag，
+反向 condition fixture 覆盖状态翻转；页面按派生 condition 映射文案，hover 按
+`latest_complete_quarter` 找 label index，禁止使用数组倒数位置猜 lag。
 
 提交/部署 freshness 必须保持
 `fiscal_risk_monitor.json <- macro_fiscal_stress.json` 一致；固定失败 marker 为

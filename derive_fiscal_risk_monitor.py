@@ -325,32 +325,78 @@ def run_tests() -> None:
     check("quarterly source fields copied exactly", all(
         all(row.get(key) == source_row.get(key) for key in source_row)
         for row, source_row in zip(rows, source["data"]["quarterly"])))
-    check("latest observed quarter", data["latest_observed_quarter"] == "2026-Q2")
-    check("latest complete quarter", data["latest_complete_quarter"] == "2026-Q1")
-    check("complete lag is one quarter", data["complete_lag_quarters"] == 1)
-    check("latest complete is complete", latest["calculation_status"] == "complete"
+    source_rows = source["data"]["quarterly"]
+    expected_latest_observed = source_rows[-1]["quarter"]
+    expected_complete_source_rows = [
+        row for row in source_rows
+        if row.get("calculation_status") == "complete"
+        and all(row.get(field) is not None for field in CORE_FIELDS)
+    ]
+    expected_latest_complete = expected_complete_source_rows[-1]["quarter"]
+    expected_lag = (_quarter_index(expected_latest_observed)
+                    - _quarter_index(expected_latest_complete))
+    expected_latest_row = next(
+        row for row in rows if row["quarter"] == expected_latest_complete)
+    check("latest observed quarter dynamically follows source",
+          data["latest_observed_quarter"] == expected_latest_observed)
+    check("latest complete quarter dynamically follows source",
+          data["latest_complete_quarter"] == expected_latest_complete)
+    check("complete lag dynamically follows source",
+          data["complete_lag_quarters"] == expected_lag)
+    check("latest complete equals dynamically selected derived row",
+          latest == expected_latest_row
+          and latest["calculation_status"] == "complete"
           and all(latest[field] is not None for field in CORE_FIELDS))
 
     row_by_quarter = {row["quarter"]: row for row in rows}
-    current = row_by_quarter["2026-Q1"]
-    prior = row_by_quarter["2025-Q1"]
+    source_by_quarter = {row["quarter"]: row for row in source_rows}
+
+    def has_complete_same_quarter_prior(row):
+        year, number = _quarter_parts(row["quarter"])
+        return (row.get("calculation_status") == "complete"
+                and source_by_quarter.get(
+                    f"{year - 1}-Q{number}", {}).get(
+                        "calculation_status") == "complete")
+
+    yoy_anchor = next((row for row in rows
+                       if has_complete_same_quarter_prior(row)), None)
+    check("dynamic same-quarter YoY anchor exists", yoy_anchor is not None)
+    current = yoy_anchor
+    current_parts = _quarter_parts(current["quarter"])
+    prior = row_by_quarter[f"{current_parts[0] - 1}-Q{current_parts[1]}"]
     for output_field, source_field in YOY_FIELDS.items():
         check(f"{output_field} same-quarter YoY",
               abs(current[output_field]
                   - (current[source_field] - prior[source_field])) < 1e-12)
-    check("first year YoY remains null", all(
-        row_by_quarter["2016-Q1"][field] is None for field in YOY_FIELDS))
-    check("incomplete current YoY remains null", all(
-        row_by_quarter["2026-Q2"][field] is None for field in YOY_FIELDS))
+    current_index = rows.index(current)
+    previous_quarter = rows[current_index - 1] if current_index else None
+    check("same-quarter YoY is not previous-quarter change",
+          previous_quarter is not None and any(
+              abs((current[source_field] - prior[source_field])
+                  - (current[source_field] - previous_quarter[source_field])) > 1e-12
+              for source_field in YOY_FIELDS.values()))
+    no_prior_row = next(row for row in rows if (
+        f"{_quarter_parts(row['quarter'])[0] - 1}-Q"
+        f"{_quarter_parts(row['quarter'])[1]}" not in row_by_quarter))
+    check("missing-prior production row YoY remains null", all(
+        no_prior_row[field] is None for field in YOY_FIELDS))
 
-    check("fiscal-gap signs", current["fiscal_gap_condition"] == "gap_nonpositive"
-          and row_by_quarter["2025-Q1"]["fiscal_gap_condition"] == "gap_positive")
-    check("r-minus-g sign", current["r_minus_g_condition"] == "negative")
-    check("primary-balance sign", current["primary_balance_condition"] == "deficit")
-    check("debt YoY direction", current["debt_yoy_direction"] == "rising")
-    check("incomplete conditions remain unknown",
-          row_by_quarter["2026-Q2"]["fiscal_gap_condition"] == "unknown"
-          and row_by_quarter["2026-Q2"]["debt_yoy_direction"] == "unknown")
+    def expected_condition(value, positive, zero, negative):
+        if value is None:
+            return "unknown"
+        return positive if value > 0 else negative if value < 0 else zero
+
+    check("production conditions dynamically follow current signs", all(
+        row["fiscal_gap_condition"] == expected_condition(
+            row["fiscal_gap_pct_gdp"], "gap_positive", "gap_nonpositive",
+            "gap_nonpositive")
+        and row["r_minus_g_condition"] == expected_condition(
+            row["r_minus_g_pct_points"], "positive", "zero", "negative")
+        and row["primary_balance_condition"] == expected_condition(
+            row["primary_balance_gdp_pct"], "surplus", "balanced", "deficit")
+        and row["debt_yoy_direction"] == expected_condition(
+            row["debt_gdp_yoy_change_pp"], "rising", "flat", "falling")
+        for row in rows))
 
     bare_rejected = duplicate_rejected = chronology_rejected = False
     missing_rejected = nonfinite_rejected = identity_rejected = sign_rejected = False
@@ -404,23 +450,118 @@ def run_tests() -> None:
     check("trajectory sign enforced", sign_rejected)
 
     missing_prior = copy.deepcopy(source)
+    missing_prior_quarter = prior["quarter"]
+    current_quarter = current["quarter"]
     missing_prior["data"]["quarterly"] = [
-        row for row in missing_prior["data"]["quarterly"] if row["quarter"] != "2025-Q1"]
+        row for row in missing_prior["data"]["quarterly"]
+        if row["quarter"] != missing_prior_quarter]
     missing_monitor = build_monitor(missing_prior)
     missing_current = next(row for row in missing_monitor["quarterly"]
-                           if row["quarter"] == "2026-Q1")
+                           if row["quarter"] == current_quarter)
     check("missing same-quarter prior produces null, never zero", all(
         missing_current[field] is None for field in YOY_FIELDS))
 
-    zero_fixture = copy.deepcopy(source)
-    target = next(row for row in zero_fixture["data"]["quarterly"]
-                  if row["quarter"] == "2026-Q1")
-    target["fiscal_gap_pct_gdp"] = 0.0
-    target["stabilizing_primary_balance_pct_gdp"] = target["primary_balance_gdp_pct"]
-    target["trajectory_condition"] = "stabilizing_condition_met"
-    zero_row = next(row for row in build_monitor(zero_fixture)["quarterly"]
-                    if row["quarter"] == "2026-Q1")
-    check("zero fiscal gap is nonpositive", zero_row["fiscal_gap_condition"] == "gap_nonpositive")
+    incomplete_prior = copy.deepcopy(source)
+    incomplete_prior_row = next(
+        row for row in incomplete_prior["data"]["quarterly"]
+        if row["quarter"] == missing_prior_quarter)
+    incomplete_prior_row["calculation_status"] = "incomplete"
+    for field in CORE_FIELDS:
+        incomplete_prior_row[field] = None
+    incomplete_prior_row["trajectory_condition"] = "unknown"
+    incomplete_monitor = build_monitor(incomplete_prior)
+    incomplete_current = next(
+        row for row in incomplete_monitor["quarterly"]
+        if row["quarter"] == current_quarter)
+    check("incomplete or null same-quarter prior produces null, never zero", all(
+        incomplete_current[field] is None for field in YOY_FIELDS))
+
+    rolling_complete = copy.deepcopy(source)
+    rolling_rows = rolling_complete["data"]["quarterly"]
+    rolling_last = rolling_rows[-1]
+    rolling_template = next(
+        row for row in reversed(rolling_rows[:-1])
+        if row.get("calculation_status") == "complete"
+        and all(row.get(field) is not None for field in CORE_FIELDS))
+    for field in CORE_FIELDS:
+        rolling_last[field] = rolling_template[field]
+    rolling_last["calculation_status"] = "complete"
+    rolling_last["trajectory_condition"] = (
+        "gap_positive" if rolling_last["fiscal_gap_pct_gdp"] > 0
+        else "stabilizing_condition_met")
+    rolling_complete_data = build_monitor(rolling_complete)
+    check("rolling fixture latest observed equals latest complete with lag zero",
+          rolling_complete_data["latest_observed_quarter"] == rolling_last["quarter"]
+          and rolling_complete_data["latest_complete_quarter"] == rolling_last["quarter"]
+          and rolling_complete_data["complete_lag_quarters"] == 0
+          and rolling_complete_data["latest_complete"]
+              == rolling_complete_data["quarterly"][-1])
+
+    rolling_incomplete = copy.deepcopy(rolling_complete)
+    new_row = copy.deepcopy(rolling_incomplete["data"]["quarterly"][-1])
+    last_year, last_number = _quarter_parts(new_row["quarter"])
+    new_number = 1 if last_number == 4 else last_number + 1
+    new_year = last_year + 1 if last_number == 4 else last_year
+    new_row["quarter"] = f"{new_year}-Q{new_number}"
+    new_row["date"] = _quarter_date(new_row["quarter"])
+    new_row["calculation_status"] = "incomplete"
+    for field in CORE_FIELDS:
+        new_row[field] = None
+    new_row["trajectory_condition"] = "unknown"
+    rolling_incomplete["data"]["quarterly"].append(new_row)
+    rolling_incomplete_data = build_monitor(rolling_incomplete)
+    rolling_expected_lag = (_quarter_index(new_row["quarter"])
+                            - _quarter_index(rolling_last["quarter"]))
+    check("rolling fixture new incomplete quarter increases lag dynamically",
+          rolling_incomplete_data["latest_observed_quarter"] == new_row["quarter"]
+          and rolling_incomplete_data["latest_complete_quarter"] == rolling_last["quarter"]
+          and rolling_incomplete_data["complete_lag_quarters"] == rolling_expected_lag
+          and rolling_expected_lag > 0)
+
+    condition_target_quarter = expected_latest_complete
+    condition_year, condition_number = _quarter_parts(condition_target_quarter)
+    condition_prior_quarter = f"{condition_year - 1}-Q{condition_number}"
+
+    def condition_fixture(gap, r_minus_g, primary, debt_change):
+        fixture = copy.deepcopy(source)
+        fixture_rows = fixture["data"]["quarterly"]
+        target = next(
+            row for row in fixture_rows
+            if row["quarter"] == condition_target_quarter)
+        fixture_prior = next(
+            row for row in fixture_rows
+            if row["quarter"] == condition_prior_quarter)
+        target["r_minus_g_pct_points"] = r_minus_g
+        target["effective_r_pct"] = target["nominal_g_pct"] + r_minus_g
+        target["primary_balance_gdp_pct"] = primary
+        target["stabilizing_primary_balance_pct_gdp"] = primary + gap
+        target["fiscal_gap_pct_gdp"] = gap
+        target["trajectory_condition"] = (
+            "gap_positive" if gap > 0 else "stabilizing_condition_met")
+        target["public_debt_gdp_pct"] = (
+            fixture_prior["public_debt_gdp_pct"] + debt_change)
+        built = build_monitor(fixture)
+        return built["latest_complete"]
+
+    opposite_row = condition_fixture(0.5, 1.0, 0.25, -1.0)
+    zero_row = condition_fixture(0.0, 0.0, 0.0, 0.0)
+    negative_row = condition_fixture(-0.5, -1.0, -0.25, 1.0)
+    check("synthetic opposite conditions are independent of production snapshot",
+          opposite_row["quarter"] == condition_target_quarter
+          and opposite_row["fiscal_gap_condition"] == "gap_positive"
+          and opposite_row["r_minus_g_condition"] == "positive"
+          and opposite_row["primary_balance_condition"] == "surplus"
+          and opposite_row["debt_yoy_direction"] == "falling")
+    check("synthetic zero boundaries map exactly",
+          zero_row["fiscal_gap_condition"] == "gap_nonpositive"
+          and zero_row["r_minus_g_condition"] == "zero"
+          and zero_row["primary_balance_condition"] == "balanced"
+          and zero_row["debt_yoy_direction"] == "flat")
+    check("synthetic negative conditions map exactly",
+          negative_row["fiscal_gap_condition"] == "gap_nonpositive"
+          and negative_row["r_minus_g_condition"] == "negative"
+          and negative_row["primary_balance_condition"] == "deficit"
+          and negative_row["debt_yoy_direction"] == "rising")
 
     method = data["methodology"]
     check("methodology prohibits score/threshold/probability", method["no_risk_score"]
