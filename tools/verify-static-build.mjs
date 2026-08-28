@@ -18,6 +18,7 @@ const REQUIRED_PATHS = [
   'data/derived/macro_debt.json',
   'data/treasury_mts_fiscal.json',
   'data/derived/macro_fiscal_stress.json',
+  'data/derived/fiscal_risk_monitor.json',
   'data/derived/cbo_baseline_latest.json',
   'data/derived/cbo_scenario_basis.json',
 ];
@@ -25,6 +26,7 @@ const FORBIDDEN_PATHS = [
   'AGENTS.md', 'CLAUDE.md', 'README.md',
   'fetch_fred.py', 'fetch_treasury_debt.py', 'fetch_treasury_fiscal.py',
   'fetch_cbo_baseline.py', 'derive_cbo_scenario_basis.py', 'tools', 'docs', '.github', '.git',
+  'derive_fiscal_risk_monitor.py',
   'data/quarantine', 'data/cbo',
 ];
 
@@ -179,6 +181,54 @@ const basisMatchesBaseline = Array.isArray(baselineRows) && Array.isArray(basisR
       && Math.abs(basisRow.baseline_sfa_pct_gdp - expectedSfaPct) <= 1e-12;
   });
 check('dist CBO scenario basis 业务数据对应 baseline', basisMatchesBaseline);
+
+let fiscalSource;
+let fiscalMonitor;
+try {
+  fiscalSource = readJson('data/derived/macro_fiscal_stress.json');
+  fiscalMonitor = readJson('data/derived/fiscal_risk_monitor.json');
+  check('dist fiscal stress / risk monitor 均为合法 JSON', true);
+} catch (error) {
+  check('dist fiscal stress / risk monitor 均为合法 JSON', false, error.message);
+}
+const monitorUpstream = fiscalMonitor?.derived_from;
+check('dist fiscal risk monitor derived_from 对应当前 fiscal stress',
+  Array.isArray(monitorUpstream) && monitorUpstream.length === 1
+  && monitorUpstream[0]?.source === fiscalSource?.source
+  && monitorUpstream[0]?.generated_at === fiscalSource?.generated_at
+  && JSON.stringify(monitorUpstream[0]?.coverage) === JSON.stringify(fiscalSource?.coverage)
+  && monitorUpstream[0]?.envelope === true);
+const fiscalRows = fiscalSource?.data?.quarterly;
+const monitorRows = fiscalMonitor?.data?.quarterly;
+const monitorYoyFields = [
+  ['debt_gdp_yoy_change_pp', 'public_debt_gdp_pct'],
+  ['primary_balance_yoy_change_pp', 'primary_balance_gdp_pct'],
+  ['fiscal_gap_yoy_change_pp', 'fiscal_gap_pct_gdp'],
+  ['r_minus_g_yoy_change_pp', 'r_minus_g_pct_points'],
+  ['net_interest_gdp_yoy_change_pp', 'net_interest_gdp_pct'],
+  ['net_interest_receipts_yoy_change_pp', 'net_interest_receipts_pct'],
+];
+const fiscalByQuarter = new Map((fiscalRows || []).map(row => [row.quarter, row]));
+const monitorMatchesFiscal = Array.isArray(fiscalRows) && Array.isArray(monitorRows)
+  && fiscalRows.length === monitorRows.length
+  && fiscalRows.every((sourceRow, index) => {
+    const row = monitorRows[index];
+    if (!row || !Object.keys(sourceRow).every(field => Object.is(row[field], sourceRow[field]))) {
+      return false;
+    }
+    const match = /^(\d{4})-Q([1-4])$/.exec(sourceRow.quarter || '');
+    const prior = match
+      ? fiscalByQuarter.get(`${Number(match[1]) - 1}-Q${match[2]}`) : null;
+    return monitorYoyFields.every(([outputField, sourceField]) => {
+      const expectedYoy = sourceRow.calculation_status === 'complete'
+        && prior?.calculation_status === 'complete'
+        && sourceRow[sourceField] !== null && prior[sourceField] !== null
+        ? sourceRow[sourceField] - prior[sourceField] : null;
+      return Object.is(row[outputField], expectedYoy);
+    });
+  });
+check('dist fiscal risk monitor 业务数据与 YoY 对应当前 fiscal stress',
+  monitorMatchesFiscal);
 
 for (const forbidden of FORBIDDEN_PATHS) {
   check(`dist 不公开 ${forbidden}`, !fs.existsSync(path.join(DIST, forbidden)));

@@ -82,6 +82,23 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .fiscal-method{font-size:11px;color:#8b949e;line-height:1.65;margin-top:14px}
 .fiscal-asof{display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:#8b949e}
 .fiscal-asof strong{color:#c9d1d9;font-weight:600}
+.risk-monitor-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:4px 0 18px}
+.risk-monitor-kpi{background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px;min-width:0}
+.risk-monitor-kpi-label{font-size:11px;color:#8b949e;line-height:1.35;min-height:30px}
+.risk-monitor-kpi-value{font-size:20px;color:#f0f6fc;font-weight:650;margin-top:6px;white-space:nowrap}
+.risk-monitor-kpi-yoy{font-size:11px;color:#8b949e;margin-top:5px;white-space:nowrap}
+.risk-monitor-kpi-condition{font-size:10px;color:#8b949e;line-height:1.45;margin-top:5px;min-height:29px}
+.risk-monitor-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.risk-monitor-chart{min-width:0}.risk-monitor-chart .chart-wrap{height:250px}
+.risk-monitor-contexts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.risk-monitor-context{background:#0d1117;border:1px solid #30363d;border-radius:9px;padding:12px;min-width:0}
+.risk-monitor-context-title{font-size:12px;color:#c9d1d9;font-weight:650;margin-bottom:8px}
+.risk-monitor-context-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.risk-monitor-context-item{font-size:11px;color:#8b949e;line-height:1.5;min-width:0}
+.risk-monitor-context-item strong{display:block;color:#f0f6fc;font-size:14px;font-weight:600;white-space:nowrap}
+.risk-monitor-note{font-size:11px;color:#8b949e;line-height:1.6;margin-top:12px}
+.risk-monitor-asof{display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:#8b949e}
+.risk-monitor-asof strong{color:#c9d1d9;font-weight:600}
 .cbo-meta{display:flex;gap:8px 20px;flex-wrap:wrap;margin:2px 0 16px;font-size:12px;color:#8b949e}
 .cbo-meta strong,.cbo-meta a{color:#c9d1d9;font-weight:600}
 .cbo-meta a{text-decoration:none;border-bottom:1px dotted #6e7681}
@@ -113,6 +130,8 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .scenario-disclaimer{font-size:11px;color:#8b949e;line-height:1.6;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:11px 13px;margin-top:12px}
 @media(max-width:800px){.fiscal-charts{grid-template-columns:1fr}.fiscal-kpi{grid-column:span 6!important}}
 @media(max-width:420px){.fiscal-kpis{grid-template-columns:1fr}.fiscal-kpi{grid-column:1!important}.fiscal-kpi-label{min-height:0}}
+@media(max-width:800px){.risk-monitor-kpis{grid-template-columns:1fr 1fr}.risk-monitor-charts,.risk-monitor-contexts{grid-template-columns:1fr}}
+@media(max-width:480px){.risk-monitor-kpis,.risk-monitor-context-grid{grid-template-columns:1fr}.risk-monitor-kpi-label{min-height:0}}
 @media(max-width:800px){.cbo-charts,.cbo-notes{grid-template-columns:1fr}.cbo-chart:first-child{grid-column:auto}.cbo-kpis{grid-template-columns:1fr 1fr}}
 @media(max-width:420px){.cbo-kpis{grid-template-columns:1fr}.cbo-kpi-label{min-height:0}}
 @media(max-width:900px){.scenario-controls{grid-template-columns:1fr 1fr}.scenario-kpis{grid-template-columns:1fr 1fr}}
@@ -238,6 +257,57 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
         <span>GDP 截至：<strong id="fiscalGdpAsOf">--</strong></span>
       </div>
       <div class="status" id="fiscalStatus" role="status">正在加载财政可持续性数据…</div>
+    </div>
+
+    <div class="card full" id="fiscalRiskMonitorPanel">
+      <div class="card-title">美国财政风险监测 / U.S. Fiscal Risk Monitor</div>
+      <div class="card-sub" id="riskMonitorSubtitle">多指标描述性监测：展示财政结构、同比方向、市场利率与 CBO 官方基准背景；不提供风险评分、危机概率或所谓“失控年份”。</div>
+      <div class="risk-monitor-kpis" aria-label="财政风险监测六项结构指标">
+        <div class="risk-monitor-kpi"><div class="risk-monitor-kpi-label">公众持有债务 / GDP</div><div class="risk-monitor-kpi-value" id="riskDebtGdp">--</div><div class="risk-monitor-kpi-yoy" id="riskDebtGdpYoy">同比：--</div><div class="risk-monitor-kpi-condition" id="riskDebtCondition">同比方向：未知</div></div>
+        <div class="risk-monitor-kpi"><div class="risk-monitor-kpi-label">Fiscal Gap</div><div class="risk-monitor-kpi-value" id="riskFiscalGap">--</div><div class="risk-monitor-kpi-yoy" id="riskFiscalGapYoy">同比：--</div><div class="risk-monitor-kpi-condition" id="riskGapCondition">稳定算术条件：未知</div></div>
+        <div class="risk-monitor-kpi"><div class="risk-monitor-kpi-label">r − g</div><div class="risk-monitor-kpi-value" id="riskRMinusG">--</div><div class="risk-monitor-kpi-yoy" id="riskRMinusGYoy">同比：--</div><div class="risk-monitor-kpi-condition" id="riskRMinusGCondition">snowball sign：未知</div></div>
+        <div class="risk-monitor-kpi"><div class="risk-monitor-kpi-label">实际初级余额 / GDP</div><div class="risk-monitor-kpi-value" id="riskPrimaryBalance">--</div><div class="risk-monitor-kpi-yoy" id="riskPrimaryBalanceYoy">同比：--</div><div class="risk-monitor-kpi-condition" id="riskPrimaryCondition">余额状态：未知</div></div>
+        <div class="risk-monitor-kpi"><div class="risk-monitor-kpi-label">净利息 / GDP</div><div class="risk-monitor-kpi-value" id="riskInterestGdp">--</div><div class="risk-monitor-kpi-yoy" id="riskInterestGdpYoy">同比：--</div><div class="risk-monitor-kpi-condition">数值监测，不设人为阈值</div></div>
+        <div class="risk-monitor-kpi"><div class="risk-monitor-kpi-label">净利息 / 联邦收入</div><div class="risk-monitor-kpi-value" id="riskInterestReceipts">--</div><div class="risk-monitor-kpi-yoy" id="riskInterestReceiptsYoy">同比：--</div><div class="risk-monitor-kpi-condition">数值监测，不设人为阈值</div></div>
+      </div>
+      <div class="risk-monitor-charts">
+        <div class="risk-monitor-chart"><div class="card-sub">公众持有债务 / GDP（季度实际观测，% GDP）</div><div class="chart-wrap"><canvas id="riskDebtChart"></canvas></div></div>
+        <div class="risk-monitor-chart"><div class="card-sub">Fiscal Gap（季度，% GDP）· 0 仅为数学符号边界</div><div class="chart-wrap"><canvas id="riskGapChart"></canvas></div></div>
+        <div class="risk-monitor-chart"><div class="card-sub">r − g（季度，百分点）· 0 仅为正负号边界</div><div class="chart-wrap"><canvas id="riskRMinusGChart"></canvas></div></div>
+        <div class="risk-monitor-chart"><div class="card-sub">净利息 / 联邦收入（季度，%）· 不设政策阈值</div><div class="chart-wrap"><canvas id="riskInterestReceiptsChart"></canvas></div></div>
+      </div>
+      <div class="risk-monitor-contexts">
+        <section class="risk-monitor-context" id="riskMarketContext">
+          <div class="risk-monitor-context-title">Treasury 市场利率背景（不是 C17 effective r）</div>
+          <div class="risk-monitor-context-grid">
+            <div class="risk-monitor-context-item">DGS2<strong id="riskDgs2">--</strong><span id="riskDgs2Date">截至 --</span></div>
+            <div class="risk-monitor-context-item">DGS10<strong id="riskDgs10">--</strong><span id="riskDgs10Date">截至 --</span></div>
+            <div class="risk-monitor-context-item">DGS30<strong id="riskDgs30">--</strong><span id="riskDgs30Date">截至 --</span></div>
+          </div>
+          <div class="risk-monitor-note" id="riskMarketDisclaimer">DGS2 / DGS10 / DGS30 是 Treasury 二级市场边际收益率，仅作各自观测日的市场背景，不是 C17 effective r；不替代财政模型中以 TTM 净利息 / 平均公众债务计算的 effective r，也不得直接代入 C17 debt dynamics 或用于前向 Fiscal Gap。</div>
+        </section>
+        <section class="risk-monitor-context" id="riskCboContext">
+          <div class="risk-monitor-context-title">CBO Official Baseline Context（Federal Fiscal Year）</div>
+          <div class="risk-monitor-context-grid">
+            <div class="risk-monitor-context-item">FY2026 债务 / GDP<strong id="riskCbo2026Debt">--</strong></div>
+            <div class="risk-monitor-context-item">FY2026 初级余额<strong id="riskCbo2026Primary">--</strong></div>
+            <div class="risk-monitor-context-item">FY2026 净利息<strong id="riskCbo2026Interest">--</strong></div>
+            <div class="risk-monitor-context-item">FY2036 债务 / GDP<strong id="riskCbo2036Debt">--</strong></div>
+            <div class="risk-monitor-context-item">FY2036 初级余额<strong id="riskCbo2036Primary">--</strong></div>
+            <div class="risk-monitor-context-item">FY2036 净利息<strong id="riskCbo2036Interest">--</strong></div>
+          </div>
+          <div class="risk-monitor-note">以上均直接读取 CBO 官方财政年度 baseline，不由季度历史或 Scenario Lab 重算。</div>
+        </section>
+      </div>
+      <div class="risk-monitor-note" id="riskMonitorDisclaimer">本模块是多指标描述性监测，不是综合风险评分，不估计危机概率或危机年份。缺失数据保持未知，不补点、不插值、不归零。</div>
+      <div class="risk-monitor-asof" aria-label="财政风险监测数据截至时间">
+        <span>历史完整季度：<strong id="riskCompleteAsOf">--</strong></span>
+        <span>最新观测季度：<strong id="riskObservedAsOf">--</strong></span>
+        <span>完整季度滞后：<strong id="riskCompleteLag">--</strong></span>
+        <span>CBO 发布：<strong id="riskCboPublication">--</strong></span>
+        <span>CBO Vintage：<strong id="riskCboVintage">--</strong></span>
+      </div>
+      <div class="status" id="riskMonitorStatus" role="status">正在加载财政风险监测数据…</div>
     </div>
 
     <div class="card full" id="cboBaselinePanel">
@@ -647,6 +717,156 @@ function renderFiscalStress(payload) {
   document.getElementById('fiscalGdpAsOf').textContent = meta.gdp_as_of
     ? _quarterLabel(meta.gdp_as_of) : '--';
   return { rows, latest, meta };
+}
+
+function _formatRiskValue(value, suffix = '%') {
+  return value === null || value === undefined || !Number.isFinite(Number(value))
+    ? '--'
+    : Number(value).toLocaleString('zh-CN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'auto',
+      }) + suffix;
+}
+
+function _formatRiskYoy(value) {
+  return value === null || value === undefined || !Number.isFinite(Number(value))
+    ? '同比：未知'
+    : '同比：' + Number(value).toLocaleString('zh-CN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'always',
+      }) + ' pp';
+}
+
+function _riskMonitorChartOptions(rows, field, unit) {
+  const options = _fiscalChartOptions(unit);
+  options.animation = false;
+  options.plugins.tooltip.filter = context => !context.dataset.presentationOnly;
+  options.plugins.tooltip.callbacks.title = items => {
+    const row = rows[items[0]?.dataIndex];
+    return row ? `季度：${row.quarter}` : '季度：--';
+  };
+  options.plugins.tooltip.callbacks.label = context => {
+    const row = rows[context.dataIndex];
+    return `  ${context.dataset.label}：${_formatRiskValue(row?.[field], unit)}`;
+  };
+  return options;
+}
+
+function renderFiscalRiskMonitor(payload) {
+  const rows = payload.quarterly || [];
+  const latest = payload.latest_complete || {};
+  const kpis = [
+    ['riskDebtGdp', 'riskDebtGdpYoy', 'public_debt_gdp_pct',
+      'debt_gdp_yoy_change_pp', '%'],
+    ['riskFiscalGap', 'riskFiscalGapYoy', 'fiscal_gap_pct_gdp',
+      'fiscal_gap_yoy_change_pp', '% GDP'],
+    ['riskRMinusG', 'riskRMinusGYoy', 'r_minus_g_pct_points',
+      'r_minus_g_yoy_change_pp', ' pp'],
+    ['riskPrimaryBalance', 'riskPrimaryBalanceYoy', 'primary_balance_gdp_pct',
+      'primary_balance_yoy_change_pp', '% GDP'],
+    ['riskInterestGdp', 'riskInterestGdpYoy', 'net_interest_gdp_pct',
+      'net_interest_gdp_yoy_change_pp', '% GDP'],
+    ['riskInterestReceipts', 'riskInterestReceiptsYoy', 'net_interest_receipts_pct',
+      'net_interest_receipts_yoy_change_pp', '%'],
+  ];
+  for (const [valueId, yoyId, valueField, yoyField, suffix] of kpis) {
+    document.getElementById(valueId).textContent = _formatRiskValue(latest[valueField], suffix);
+    document.getElementById(yoyId).textContent = _formatRiskYoy(latest[yoyField]);
+  }
+  const debtDirections = {
+    rising: '较四个季度前上升', flat: '较四个季度前持平', falling: '较四个季度前下降',
+    unknown: '同比方向：未知',
+  };
+  const gapConditions = {
+    gap_positive: '稳定算术条件不满足；需要额外 primary adjustment',
+    gap_nonpositive: '当前稳定算术条件满足；不代表观测债务率必然下降',
+    unknown: '稳定算术条件：未知',
+  };
+  const snowballConditions = {
+    positive: 'snowball term 构成债务率上行力量（all else equal）',
+    zero: 'snowball term 为零（all else equal）',
+    negative: 'snowball term 提供债务率下行帮助（all else equal）',
+    unknown: 'snowball sign：未知',
+  };
+  const primaryConditions = {
+    surplus: '余额状态：surplus', balanced: '余额状态：balanced',
+    deficit: '余额状态：deficit', unknown: '余额状态：未知',
+  };
+  document.getElementById('riskDebtCondition').textContent =
+    debtDirections[latest.debt_yoy_direction] || debtDirections.unknown;
+  document.getElementById('riskGapCondition').textContent =
+    gapConditions[latest.fiscal_gap_condition] || gapConditions.unknown;
+  document.getElementById('riskRMinusGCondition').textContent =
+    snowballConditions[latest.r_minus_g_condition] || snowballConditions.unknown;
+  document.getElementById('riskPrimaryCondition').textContent =
+    primaryConditions[latest.primary_balance_condition] || primaryConditions.unknown;
+
+  const labels = rows.map(row => row.quarter);
+  const charts = [
+    ['riskDebtChart', '公众持有债务 / GDP', 'public_debt_gdp_pct', '% GDP', COLORS.blue],
+    ['riskGapChart', 'Fiscal Gap', 'fiscal_gap_pct_gdp', '% GDP', COLORS.gold],
+    ['riskRMinusGChart', 'r − g', 'r_minus_g_pct_points', ' pp', COLORS.red],
+    ['riskInterestReceiptsChart', '净利息 / 联邦收入',
+      'net_interest_receipts_pct', '%', COLORS.green],
+  ];
+  for (const [id, label, field, unit, color] of charts) {
+    const datasets = [lineDataset(label, rows.map(row => row[field]), color, {
+      sourceField: field, sourceKind: 'c17_derived_historical', valueUnit: unit,
+      pointRadius: 1.5, pointHoverRadius: 4, tension: 0,
+    })];
+    if (field === 'fiscal_gap_pct_gdp' || field === 'r_minus_g_pct_points') {
+      datasets.push(lineDataset('0 数学边界', rows.map(() => 0), COLORS.muted, {
+        sourceField: 'presentation_zero_mathematical_boundary', presentationOnly: true,
+        valueUnit: unit, borderDash: [6, 5], borderWidth: 1, tension: 0,
+      }));
+    }
+    new Chart(document.getElementById(id), {
+      type: 'line', data: { labels, datasets },
+      options: _riskMonitorChartOptions(rows, field, unit),
+    });
+  }
+  document.getElementById('riskCompleteAsOf').textContent =
+    payload.latest_complete_quarter || '--';
+  document.getElementById('riskObservedAsOf').textContent =
+    payload.latest_observed_quarter || '--';
+  document.getElementById('riskCompleteLag').textContent =
+    Number.isInteger(payload.complete_lag_quarters)
+      ? `${payload.complete_lag_quarters} 个季度` : '--';
+  return { rows, latest };
+}
+
+function renderFiscalRiskMarketContext(rates) {
+  const rows = rates.ust || [];
+  const fields = [
+    ['dgs2', 'riskDgs2', 'riskDgs2Date'],
+    ['dgs10', 'riskDgs10', 'riskDgs10Date'],
+    ['dgs30', 'riskDgs30', 'riskDgs30Date'],
+  ];
+  for (const [field, valueId, dateId] of fields) {
+    const observation = [...rows].reverse().find(row => row[field] !== null
+      && row[field] !== undefined && Number.isFinite(Number(row[field])));
+    document.getElementById(valueId).textContent =
+      observation ? _formatRiskValue(observation[field], '%') : '--';
+    document.getElementById(dateId).textContent =
+      observation ? `截至 ${observation.date}` : '截至 --';
+  }
+}
+
+function renderFiscalRiskCboContext(cbo) {
+  const rows = cbo.annual || [];
+  const vintage = cbo.vintage || {};
+  const byYear = new Map(rows.map(row => [Number(row.year), row]));
+  const fields = [
+    [2026, 'debt_held_by_public_pct_gdp', 'riskCbo2026Debt'],
+    [2026, 'primary_balance_pct_gdp', 'riskCbo2026Primary'],
+    [2026, 'net_interest_pct_gdp', 'riskCbo2026Interest'],
+    [2036, 'debt_held_by_public_pct_gdp', 'riskCbo2036Debt'],
+    [2036, 'primary_balance_pct_gdp', 'riskCbo2036Primary'],
+    [2036, 'net_interest_pct_gdp', 'riskCbo2036Interest'],
+  ];
+  for (const [year, field, id] of fields) {
+    document.getElementById(id).textContent = _formatRiskValue(byYear.get(year)?.[field], '%');
+  }
+  document.getElementById('riskCboPublication').textContent = vintage.publication_date || '--';
+  document.getElementById('riskCboVintage').textContent = vintage.vintage_id || '--';
 }
 
 const CBO_PROJECTION_MARKER = {
@@ -1295,6 +1515,51 @@ loadJson('data/derived/macro_fiscal_stress.json?_=' + Date.now(), {
     const el = document.getElementById('fiscalStatus');
     el.textContent = '财政可持续性数据加载失败：' + err.message;
     el.className = 'status err';
+  });
+
+// C18C has one required structural source and two optional context sources.
+// A rates/CBO failure leaves the historical monitor visible; a monitor failure
+// cannot affect C17, CBO baseline, or the independent Scenario Lab.
+Promise.allSettled([
+  loadJson('data/derived/fiscal_risk_monitor.json?_=' + Date.now(), {
+    name: 'fiscal_risk_monitor.json',
+  }),
+  loadJson('data/derived/macro_rates.json?_=' + Date.now(), {
+    name: 'macro_rates.json (C18C market context)',
+  }),
+  loadJson('data/derived/cbo_baseline_latest.json?_=' + Date.now(), {
+    name: 'cbo_baseline_latest.json (C18C official context)',
+  }),
+])
+  .then(results => {
+    if (results[0].status !== 'fulfilled') throw results[0].reason;
+    const rendered = _safeRender('美国财政风险监测', () => {
+      renderFiscalRiskMonitor(results[0].value);
+      if (results[1].status === 'fulfilled') {
+        renderFiscalRiskMarketContext(results[1].value);
+      }
+      if (results[2].status === 'fulfilled') {
+        renderFiscalRiskCboContext(results[2].value);
+      }
+    });
+    const status = document.getElementById('riskMonitorStatus');
+    if (!rendered) {
+      status.textContent = '财政风险监测模块渲染失败，请查看控制台。';
+      status.className = 'status err';
+      return;
+    }
+    const missing = [];
+    if (results[1].status !== 'fulfilled') missing.push('市场利率背景');
+    if (results[2].status !== 'fulfilled') missing.push('CBO baseline 背景');
+    status.textContent = missing.length
+      ? `结构监测已加载；${missing.join('、')}暂不可用，未用旧值或替代值补齐。`
+      : '结构、市场利率与 CBO 官方背景已加载；各来源保留自己的截至时间。';
+  })
+  .catch(err => {
+    console.error('[fetch] 财政风险监测数据加载失败：', err);
+    const status = document.getElementById('riskMonitorStatus');
+    status.textContent = '财政风险监测数据加载失败：' + err.message;
+    status.className = 'status err';
   });
 
 // CBO baseline has an independent required source and an optional historical

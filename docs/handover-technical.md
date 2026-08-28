@@ -150,7 +150,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
-| `tools/verify-injection-wrappers.mjs` | 0 | 37 passed, 0 failed |
+| `tools/verify-injection-wrappers.mjs` | 0 | 56 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 38 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
@@ -162,13 +162,16 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-macro-page.mjs` | 0 | 86 passed, 0 failed；page errors: none |
 | `fetch_treasury_fiscal.py --test` | 0 | 28 passed, 0 failed |
 | `derive_fiscal_stress.py --test` | 0 | 34 passed, 0 failed |
+| `derive_fiscal_risk_monitor.py --test` | 0 | 52 passed, 0 failed |
 | `fetch_cbo_baseline.py --test` | 0 | 22 passed, 0 failed |
-| `derive_cbo_scenario_basis.py --test` | 0 | 19 passed, 0 failed |
+| `derive_cbo_scenario_basis.py --test` | 0 | 26 passed, 0 failed |
 | `tools/verify-fiscal-stress-page.mjs` | 0 | 46 passed, 0 failed；page errors: none |
 | `tools/verify-cbo-baseline-page.mjs` | 0 | 24 passed, 0 failed；page errors: none |
 | `tools/verify-cbo-scenario-engine.mjs` | 0 | 20 passed, 0 failed |
 | `tools/verify-cbo-scenario-page.mjs` | 0 | 22 passed, 0 failed；page errors: none |
-| `tools/verify-static-build.mjs` | 0 | 37 passed, 0 failed；39 个公开文件逐字节对账 |
+| `tools/verify-fiscal-risk-monitor-page.mjs` | 0 | 41 passed, 0 failed；page errors: none |
+| `tools/verify-fiscal-risk-monitor-snapshot-contract.mjs` | 0 | 8 passed, 0 failed |
+| `tools/verify-static-build.mjs` | 0 | 46 passed, 0 failed；40 个公开文件逐字节对账 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
@@ -180,7 +183,7 @@ playback/gapframe 无 passed/failed 累加器，
 `44aecf2` 反转了那条编码旧口径的断言（「JUN26 已到期已剔除」→「已到期合约仍保留
 X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案一致，断言未删。
 
-### 注入类护栏（十一条，含 wrapper meta guard）
+### 注入类护栏（十二条，含 wrapper meta guard）
 
 每条自身 exit 0 表示「注入→红、还原→绿」的完整序列成立。逐阶段实测：
 
@@ -832,9 +835,47 @@ CBO Baseline/User Scenario 双线图。tooltip 显示 fiscal year、两条路径
 免责声明明确 deterministic、not CBO forecast、no probability、no crisis/default/loss-of-control
 claim。scenario basis/CBO/C17 三块互相故障隔离，移动端无横向溢出。
 
-定向 guard 为 basis Python 19/0、engine 20/0、page 22/0。八项 injection 覆盖 primary
+定向 guard 为 basis Python 26/0、engine 20/0、page 22/0。八项 injection 覆盖 primary
 符号、interest 符号、删除 SFA、引入 C17 effective_r、覆盖 baseline 字段、破坏 zero-shock、
 伪装 CBO Projection 标签与删除免责声明；每案真实红并命中 marker，恢复后 guard 全绿、
 源码 SHA-256 一致。静态白名单新增 basis JSON 与 engine JS，共 39 文件（26 JSON）；
 CBO source/vintage/diagnostics、Python、tests/docs 继续拒绝公开。每日 workflow 只运行离线
 `derive_cbo_scenario_basis.py --test`，不生成、commit 或保存用户 scenario。
+
+## 22. C18C U.S. Fiscal Risk Monitor v0
+
+`derive_fiscal_risk_monitor.py` 只 strict 读取 C17 的
+`macro_fiscal_stress.json`，输出 schema v0 quarterly
+`fiscal_risk_monitor.json`。所有 C17 指标逐字段复制；六项变化用
+`YYYY-Qn -> (YYYY-1)-Qn` 键匹配，当前或上年同季非 complete、缺失或 null 时保持
+null，不按数组位置、不补 0。输出另含财政缺口、r-g、初级余额和债务同比的描述性
+正负号字段；0 只是数学边界，不是政策阈值。
+
+`latest_complete` 是全部核心字段有效的最后季度；`latest_observed_quarter`、
+`latest_complete_quarter` 与 `complete_lag_quarters` 分开保存。methodology 明确禁止
+risk/composite score、概率、危机年份、动态风险颜色、forward-fill、插值和以市场
+收益率替代 C17 effective r。`--test` 会把提交的 production monitor 与当前 source
+fresh derivation 比较（忽略顶层 generated_at）；固定 stale marker 防止新 C17 + 旧
+C18C 组合进入提交。
+
+production snapshot 测试不锁某个日期或当前正负状态：latest observed 从 source 最后一
+行取值，latest complete 从 complete 且核心字段有效的 source 行动态筛选，lag 用季度
+索引相减；latest complete 全行再与对应派生行逐字段比较。独立 rolling fixture 覆盖
+lag=0 与新增 incomplete 季度后的正 lag，condition fixture 覆盖与当前生产快照相反及
+零边界状态。页面 condition 由派生枚举动态映射，hover 以
+`latest_complete_quarter` 查 label index，禁止恢复数组倒数位置假设。
+
+`macro.html` 在 C17 与 CBO Baseline 之间增加独立 C18C 卡片：六项 current + 同比、
+四张季度小图，以及分源上下文。DGS2/10/30 各显示自身最后真实日期且仅作市场背景；
+CBO FY2026/FY2036 债务率、初级余额、净利息直接读取官方年度字段。C18B slider 与
+scenario basis 不进入 C18C。monitor/rates/CBO/scenario 四类失败均有独立验证边界。
+
+每日 workflow 先产 C17 再产 C18C，真实 exit code 按 0/1/* 汇总，失败保留旧 monitor
+且不连累原始数据；commit 清单含新 JSON。静态白名单现为 40 文件、27 JSON；static
+guard 同时核对 derived_from、逐字段复制和同季度 YoY，防止部署 stale 组合。
+
+C18C 定向结果：Python 52/0、页面 41/0、snapshot contract 8/0；十一项 injection
+分为派生 39/0、页面 25/0、stale source 11/0、Python/page snapshot coupling 各
+11/0，所有 target/source/output SHA-256 恢复一致；wrapper meta 56/0。static build
+46/0，五项 static injection 33/0。Wrangler versions upload 与
+deploy dry-run 均 exit 0，未执行真实 production deploy。
