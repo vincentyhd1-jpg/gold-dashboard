@@ -540,3 +540,18 @@ GitHub：`vincentyhd1-jpg/gold-dashboard`。
 ## 8. 风格偏好
 
 - **中文回答，精简，不要开场白和铺垫。**
+
+## C18C 财政风险监测长期决策
+
+- C18C 是 descriptive multi-indicator monitor，不是 risk score；不定义综合分数、
+  概率、危机/违约/失控年份、交通灯或动态风险颜色。
+- 历史结构只消费 C17 已派生指标，前端不重算 Fiscal Gap、r-g、同比或债务率。
+- 同比必须按同季度上一年键匹配；缺少合法对照时为 null，禁止 index-4 猜测、补 0、
+  forward-fill 或插值。
+- Fiscal Gap=0 与 r-g=0 仅是数学符号边界；债务率和净利息/收入不增加人为阈值。
+- DGS2/10/30 是各自日期的市场背景，绝不替代 TTM effective r，也不进入 forward
+  debt dynamics。CBO 上下文只读官方 FY2026/FY2036 字段，不由金额重算。
+- C17 历史、市场 rates、CBO baseline、C18B scenario basis 的来源和截至时间分离；
+  任一上下文失败不能隐藏其他来源，C18B sliders 不能改变 C18C。
+- committed derived freshness 与 dist freshness 都必须比较当前 C17 source；新 source
+  配旧 monitor 必须在测试或部署闸门变红。

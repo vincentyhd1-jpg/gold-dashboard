@@ -28,6 +28,7 @@ const wrappers = [
   'verify-fiscal-stress-injection.mjs',
   'verify-cbo-baseline-injection.mjs',
   'verify-cbo-scenario-injection.mjs',
+  'verify-fiscal-risk-monitor-injection.mjs',
 ];
 
 console.log('## static contract');
@@ -49,6 +50,14 @@ check('C18B Python bridge 不含旧仓库 absolute path',
 check('C18B Python bridge 不硬编码 Windows/WSL repo absolute path',
   !/(?:[A-Za-z]:[\\/]|\/mnt\/[a-z]\/)[^'"\r\n]*gold-dashboard/i
     .test(scenarioBridgeSource));
+
+const riskBridgePath = path.join(__dirname, 'verify-fiscal-risk-monitor-python.mjs');
+const riskBridgeSource = fs.readFileSync(riskBridgePath, 'utf8');
+check('C18C Python bridge 不含旧仓库 absolute path',
+  !riskBridgeSource.includes(legacyScenarioRoot));
+check('C18C Python bridge 不硬编码 Windows/WSL repo absolute path',
+  !/(?:[A-Za-z]:[\\/]|\/mnt\/[a-z]\/)[^'"\r\n]*gold-dashboard/i
+    .test(riskBridgeSource));
 
 async function withFixture(execute) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gold-dashboard-meta-'));
@@ -104,6 +113,28 @@ try {
     `cwd=${pythonCwd || '<missing>'} root=${wslRoot || '<missing>'}`);
 } finally {
   fs.rmSync(alternateCwd, { recursive: true, force: true });
+}
+
+const riskAlternateCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'gold-dashboard-c18c-cwd-'));
+try {
+  const bridgeResult = await runNodeGuard(riskBridgePath, {
+    cwd: riskAlternateCwd,
+    timeoutMs: 180_000,
+  });
+  const windowsRoot = bridgeResult.stdout.match(/^C18C_WINDOWS_ROOT=(.+)$/m)?.[1]?.trim();
+  const wslRoot = bridgeResult.stdout.match(/^C18C_WSL_ROOT=(.+)$/m)?.[1]?.trim();
+  const pythonCwd = bridgeResult.stdout.match(/^C18C_GUARD_CWD=(.+)$/m)?.[1]?.trim();
+  check('C18C Python bridge 从不同 Windows cwd 启动仍 exit 0',
+    bridgeResult.code === 0 && !bridgeResult.signal && !bridgeResult.error,
+    `exit=${bridgeResult.code} signal=${bridgeResult.signal || '-'} error=${bridgeResult.error?.message || '-'}`);
+  check('C18C Python bridge 由 verifier 位置解析当前 Windows repo root',
+    windowsRoot === path.resolve(__dirname, '..'),
+    `actual=${windowsRoot || '<missing>'}`);
+  check('C18C Python child 真实 cwd 等于动态 WSL repo root',
+    Boolean(wslRoot) && pythonCwd === wslRoot,
+    `cwd=${pythonCwd || '<missing>'} root=${wslRoot || '<missing>'}`);
+} finally {
+  fs.rmSync(riskAlternateCwd, { recursive: true, force: true });
 }
 
 const happy = await withFixture(({ dir, target }) =>

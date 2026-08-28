@@ -128,6 +128,22 @@ try {
     'FAIL dist CBO scenario basis 业务数据对应 baseline');
   runBuildAndGuard('D restore');
 
+  console.log('\n--- E: dist fiscal stress 更新但 risk monitor 未重建 ---');
+  run(BUILD);
+  const distFiscalPath = path.join(DIST, 'data', 'derived', 'macro_fiscal_stress.json');
+  const distFiscal = JSON.parse(fs.readFileSync(distFiscalPath, 'utf8'));
+  const fiscalRow = distFiscal.data.quarterly.find(row => row.quarter === '2026-Q1');
+  const originalReceiptsRatio = fiscalRow.net_interest_receipts_pct;
+  fiscalRow.net_interest_receipts_pct = originalReceiptsRatio + 0.001;
+  fs.writeFileSync(distFiscalPath, `${JSON.stringify(distFiscal, null, 2)}\n`);
+  check('E dist fiscal stress 合法数值已真实改变',
+    JSON.parse(fs.readFileSync(distFiscalPath, 'utf8')).data.quarterly
+      .find(row => row.quarter === '2026-Q1').net_interest_receipts_pct
+      === originalReceiptsRatio + 0.001);
+  expectRed('E stale fiscal risk monitor',
+    'FAIL dist fiscal risk monitor 业务数据与 YoY 对应当前 fiscal stress');
+  runBuildAndGuard('E restore');
+
   runBuildAndGuard('final restored');
   check('最终 wrangler.jsonc SHA-256 一致',
     sha256(fs.readFileSync(CONFIG)) === originalHash);
