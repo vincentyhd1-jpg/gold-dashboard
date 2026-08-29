@@ -12,6 +12,10 @@ const REQUIRED_PATHS = [
   ...ROOT_PAGES,
   'assets/favicon.svg',
   'assets/js/cbo-scenario-engine.js',
+  'assets/vendor/hammerjs-2.0.8/hammer.min.js',
+  'assets/vendor/chartjs-plugin-zoom-2.2.0/chartjs-plugin-zoom.min.js',
+  'assets/vendor/licenses/hammerjs-2.0.8-MIT.txt',
+  'assets/vendor/licenses/chartjs-plugin-zoom-2.2.0-MIT.txt',
   'css/chart.css',
   'js/data-helpers.js',
   'data/cot.json',
@@ -125,6 +129,26 @@ const byteMismatches = expected.filter(file => fs.existsSync(path.join(DIST, fil
   && hash(path.join(ROOT, file)) !== hash(path.join(DIST, file)));
 check('dist 文件与源文件逐字节一致', byteMismatches.length === 0,
   byteMismatches.join(','));
+
+let distMacro = '';
+try {
+  distMacro = fs.readFileSync(path.join(DIST, 'macro.html'), 'utf8');
+  check('dist macro.html 可读取', true);
+} catch (error) {
+  check('dist macro.html 可读取', false, error.message);
+}
+check('dist UST zoom 只引用 vendored Hammer / zoom plugin',
+  distMacro.includes('assets/vendor/hammerjs-2.0.8/hammer.min.js')
+  && distMacro.includes('assets/vendor/chartjs-plugin-zoom-2.2.0/chartjs-plugin-zoom.min.js')
+  && !distMacro.includes('cdn.jsdelivr.net/npm/hammerjs')
+  && !distMacro.includes('cdn.jsdelivr.net/npm/chartjs-plugin-zoom'));
+check('dist Live Treasury 不包含受限 TradingView production symbols',
+  ['TVC:US02Y', 'TVC:US10Y', 'TVC:US30Y',
+    'CBOT:ZT1!', 'CBOT:ZN1!', 'CBOT:ZB1!']
+    .every(symbol => !distMacro.includes(symbol))
+  && !distMacro.includes('embed-widget-advanced-chart.js')
+  && distMacro.includes("status: 'unavailable'")
+  && distMacro.includes('symbols: Object.freeze([])'));
 
 let cboBaseline;
 let cboBasis;

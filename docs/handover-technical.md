@@ -150,7 +150,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
-| `tools/verify-injection-wrappers.mjs` | 0 | 64 passed, 0 failed |
+| `tools/verify-injection-wrappers.mjs` | 0 | 67 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 38 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
@@ -163,7 +163,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_treasury_fiscal.py --test` | 0 | 28 passed, 0 failed |
 | `derive_fiscal_stress.py --test` | 0 | 34 passed, 0 failed |
 | `derive_fiscal_risk_monitor.py --test` | 0 | 52 passed, 0 failed |
-| `derive_gold_vs_debt.py --test` | 0 | 23 passed, 0 failed |
+| `derive_gold_vs_debt.py --test` | 0 | 28 passed, 0 failed |
 | `fetch_cbo_baseline.py --test` | 0 | 22 passed, 0 failed |
 | `derive_cbo_scenario_basis.py --test` | 0 | 26 passed, 0 failed |
 | `tools/verify-fiscal-stress-page.mjs` | 0 | 46 passed, 0 failed；page errors: none |
@@ -172,14 +172,15 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-cbo-scenario-page.mjs` | 0 | 22 passed, 0 failed；page errors: none |
 | `tools/verify-fiscal-risk-monitor-page.mjs` | 0 | 41 passed, 0 failed；page errors: none |
 | `tools/verify-fiscal-risk-monitor-snapshot-contract.mjs` | 0 | 8 passed, 0 failed |
-| `tools/verify-gold-debt-python.mjs` | 0 | 23 passed, 0 failed；动态 WSL root/cwd 一致 |
-| `tools/verify-treasury-enhancements.mjs` | 0 | 30 passed, 0 failed；page errors: none |
-| `tools/verify-static-build.mjs` | 0 | 52 passed, 0 failed；41 个公开文件逐字节对账 |
-| `tools/verify-static-build-injection.mjs` | 0 | 38 passed, 0 failed；六项部署破坏均红且恢复 |
+| `tools/verify-gold-debt-python.mjs` | 0 | 28 passed, 0 failed；动态 WSL root/cwd 一致 |
+| `tools/verify-treasury-enhancements.mjs` | 0 | 40 passed, 0 failed；page errors: none |
+| `tools/verify-treasury-interaction-injection.mjs` | 0 | 67 passed, 0 failed；九项均真实红且恢复 |
+| `tools/verify-static-build.mjs` | 0 | 60 passed, 0 failed；45 个公开文件逐字节对账 |
+| `tools/verify-static-build-injection.mjs` | 0 | 43 passed, 0 failed；七项部署破坏均红且恢复 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
-macro-page(86)/fiscal-stress-page(46)/cbo-baseline-page(24)/static-build(52) 有计数；
+macro-page(86)/fiscal-stress-page(46)/cbo-baseline-page(24)/static-build(60) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -205,6 +206,8 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-fiscal-stress-injection.mjs` | 0 | MTS 11/0 + derive 46/0 + frontend 74/0；原八项、C17.1 五项及 Fiscal Gap 图五项注入均真实红，三个目标最终 hash 一致 |
 | `tools/verify-cbo-baseline-injection.mjs` | 0 | parser 32/0 + frontend 18/0；四项 parser/vintage 与两项 frontend 注入均真实红，两个目标最终 hash 一致 |
 | `tools/verify-cbo-scenario-injection.mjs` | 0 | engine 46/0 + page 18/0；八项 engine/page 注入均真实红，两个目标最终 hash 一致 |
+| `tools/verify-treasury-enhancements-injection.mjs` | 0 | page 39/0 + derive 18/0 + 两项 freshness 11/0；九项均真实红，四个目标 hash 一致 |
+| `tools/verify-treasury-interaction-injection.mjs` | 0 | wrapper 67/0；九项交互/第三方内容边界/方法学注入均真实红，恢复 46/0 + macro hash 一致 |
 
 C10-C18A 的八个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
@@ -902,15 +905,41 @@ COMEX gold futures，Stooq `XAUUSD` 映射为 XAUUSD gold spot proxy；无法识
 
 `macro.html` 在历史 UST 前增加独立黄金估值 vs 美债图；历史 UST 桌面左键框选后 X
 缩放并以窗口内全部真实 tenor 值自适应 Y，Reset 同时还原 X/Y，移动端 drag 关闭。
-其下增加 TradingView 官方 Advanced Real-Time Chart Widget：默认 `TVC:US10Y`，
-2Y/10Y/30Y 映射 `TVC:US02Y`/`US10Y`/`US30Y`；分时、1D、5D 分别配置
-5m/1D、15m/1D、60m/5D。该第三方图不需要 API key，不写 JSON、不替代 FRED，且
-不进入 C17 effective r、C18C 或 Fiscal Gap；CDN/widget 失败只显示本卡 unavailable。
+黄金历史的全部日期当前都使用固定 end-2025 220,700 t 存量，页面明确其是
+fixed-stock valuation proxy，主要反映价格变化，不是历史 stock reconstruction。
 
-C18C.1 定向结果：Python 28/0、动态 Windows→WSL bridge 28/0、页面 35/0；九项
-injection 覆盖 Y 自适应、分钟范围、第三方异常、attribution、Reset、黄金公式、债务
-口径、stale 数值源及 stale `price_source`，全部真实红、命中稳定 marker，恢复后全绿且
-四个目标 SHA-256 一致。wrapper meta 为 64/0。静态白名单为 41 文件、28 JSON，
-static guard 53/0；static injection 43/0，并分别阻止“新 gold 数值源 + 旧 comparison”与
+C18C.1 当前回归：Python 28/0、动态 Windows→WSL bridge 28/0、页面 40/0；九项
+injection 已随 C18C.2 的第三方 unavailable 边界更新，继续覆盖 Y 自适应、来源隔离、
+attribution、Reset、黄金公式、债务口径、stale 数值源及 stale `price_source`，全部真实红、
+命中稳定 marker，恢复后全绿且四个目标 SHA-256 一致。静态白名单原为 41 文件、28 JSON，并分别阻止“新 gold 数值源 + 旧 comparison”与
 “新 gold proxy metadata + 旧 methodology”。每日 workflow 的派生与 commit 清单加入
 comparison JSON，并保持每一步真实 exit code 与故障隔离。
+
+## 24. C18C.2 Treasury zoom reliability / restricted-symbol fix
+
+UST 缩放依赖已固定为仓库内 Hammer 2.0.8 与 chartjs-plugin-zoom 2.2.0，并随 static
+build 发布各自 MIT license。页面启动检查 `Chart.registry.plugins.get('zoom')`：缺失时
+Reset disabled，显示“缩放组件加载失败，请刷新重试。”，UST/Fed/CPI/debt/gold 等图
+仍可渲染且无未捕获异常。鼠标能力使用 `any-pointer:fine` + `any-hover:hover`，因此
+primary pointer 为 coarse 的触屏笔记本仍可用外接鼠标；touch-only 继续禁用。
+
+真实浏览器 guard 从 `chart.chartArea` 内部坐标发起左键拖框，验证 X 缩小、Y 等于当前
+窗口内启用数据的精确范围、Reset enabled。绘图区双击调用与按钮相同的
+`resetUSTZoom()`，完整恢复 X/Y；命中使用 `Chart.helpers.getRelativePosition()` 将真实
+mouse event 归一化到 Chart.js 坐标系。DPR 1/2、legend、canvas padding、touch double-tap、
+事件计数、tooltip 与 dataset toggle 均有真实动作覆盖。页面 guard 当前 46/0；C18C.2
+九项 injection 覆盖 pointer 退化、dblclick 删除、只恢复 X、plugin-missing 假可用、
+受限 TVC 回归、产品误标、Apple/Cboe/iframe 第三方内容泄漏、财政计算污染和 fixed-stock
+文案删除，结果 67/0，恢复后 `macro.html` SHA-256 一致。
+
+TradingView 官方 Advanced Widget 真实探测 `CBOT:ZT1!`、`CBOT:ZN1!`、`CBOT:ZB1!`
+均生成 iframe 但显示 “This symbol is only available on TradingView”；与 `TVC` yields
+相同，不能作为第三方嵌入。production 已移除 TVC/CBOT symbol 与 widget script 请求，
+只留明确 unavailable 卡。在没有 licensed market-data API 时不猜测其它 symbol、不把
+FRED 日频冒充 intraday；该卡继续不落盘、不进入 C17/C18B/C18C/Fiscal Gap。
+
+static build 现为 45 文件（新增两份 vendored JS 与两份 MIT license）、28 JSON；static
+guard 为 60/0，并显式拒绝 dist 中重新出现受限 symbol 或外部 widget 请求。未来独立
+TODO：Historical Global Gold Valuation v2 需官方逐年 above-ground stock 后再做，当前
+不插值历史库存。static injection 为 43/0，dist macro guard 为 86/0；Wrangler
+`versions upload --dry-run` 与 `deploy --dry-run` 均 exit 0，未执行真实部署。

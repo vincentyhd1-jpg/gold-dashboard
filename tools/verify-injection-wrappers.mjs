@@ -30,6 +30,7 @@ const wrappers = [
   'verify-cbo-scenario-injection.mjs',
   'verify-fiscal-risk-monitor-injection.mjs',
   'verify-treasury-enhancements-injection.mjs',
+  'verify-treasury-interaction-injection.mjs',
 ];
 
 console.log('## static contract');
