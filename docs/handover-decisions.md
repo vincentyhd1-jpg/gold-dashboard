@@ -573,7 +573,9 @@ GitHub：`vincentyhd1-jpg/gold-dashboard`。
   禁止最近值、forward-fill、插值或换用公众持有债务。
 - 历史 UST 仍以 FRED 为事实源；vendored Hammer/zoom plugin 保证缩放依赖不受 CDN
   抖动影响。hybrid input 用 `any-pointer`/`any-hover` 判断外接鼠标；框选按可见真实
-  观测自适应 Y，绘图区双击与按钮必须共同复原 X/Y。touch-only 关闭 drag/dblclick。
+  观测自适应 Y，绘图区双击与按钮必须共同复原 X/Y。dblclick hit-test 必须通过
+  Chart.js 标准 relative-position helper 进入 chart 坐标系，禁止直接假设 CSS pixel、
+  DPR 与 `chartArea` 同尺度；touch-only 关闭 drag/dblclick。
 - TradingView Advanced Widget 的真实第三方探测确认 `TVC` Treasury yields 及
   `CBOT:ZT1!`/`ZN1!`/`ZB1!` 均受限。production 不请求或隐藏这些 symbol，只展示
   unavailable 卡；没有 licensed market-data API 时不得继续换随机 symbol 或将 FRED

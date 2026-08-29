@@ -668,9 +668,7 @@ document.getElementById('ustResetZoom').addEventListener('click', resetUSTZoom);
 document.getElementById('ustChart').addEventListener('dblclick', event => {
   const health = getUSTZoomHealth();
   if (!health.enabled || !ustChart || event.sourceCapabilities?.firesTouchEvents) return;
-  const rect = event.currentTarget.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
+  const { x, y } = Chart.helpers.getRelativePosition(event, ustChart);
   const area = ustChart.chartArea;
   if (!area || x < area.left || x > area.right || y < area.top || y > area.bottom) return;
   resetUSTZoom();

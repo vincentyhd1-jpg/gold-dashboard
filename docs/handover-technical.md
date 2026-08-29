@@ -174,7 +174,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-fiscal-risk-monitor-snapshot-contract.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-gold-debt-python.mjs` | 0 | 28 passed, 0 failed；动态 WSL root/cwd 一致 |
 | `tools/verify-treasury-enhancements.mjs` | 0 | 40 passed, 0 failed；page errors: none |
-| `tools/verify-treasury-interaction-injection.mjs` | 0 | 60 passed, 0 failed；八项均真实红且恢复 |
+| `tools/verify-treasury-interaction-injection.mjs` | 0 | 67 passed, 0 failed；九项均真实红且恢复 |
 | `tools/verify-static-build.mjs` | 0 | 60 passed, 0 failed；45 个公开文件逐字节对账 |
 | `tools/verify-static-build-injection.mjs` | 0 | 43 passed, 0 failed；七项部署破坏均红且恢复 |
 
@@ -207,7 +207,7 @@ X 轴列位（末帧已不挂牌）」），措辞与 derive 的 `info` 文案�
 | `tools/verify-cbo-baseline-injection.mjs` | 0 | parser 32/0 + frontend 18/0；四项 parser/vintage 与两项 frontend 注入均真实红，两个目标最终 hash 一致 |
 | `tools/verify-cbo-scenario-injection.mjs` | 0 | engine 46/0 + page 18/0；八项 engine/page 注入均真实红，两个目标最终 hash 一致 |
 | `tools/verify-treasury-enhancements-injection.mjs` | 0 | page 39/0 + derive 18/0 + 两项 freshness 11/0；九项均真实红，四个目标 hash 一致 |
-| `tools/verify-treasury-interaction-injection.mjs` | 0 | wrapper 60/0；八项交互/受限 symbol/方法学注入均真实红，恢复 40/0 + macro hash 一致 |
+| `tools/verify-treasury-interaction-injection.mjs` | 0 | wrapper 67/0；九项交互/第三方内容边界/方法学注入均真实红，恢复 46/0 + macro hash 一致 |
 
 C10-C18A 的八个 Node wrapper 都从运行前同一份原始 bytes 为每个 case 重建，backup 位于
 系统临时目录；每 case、恢复后基线与最外层 `finally` 都校验 SHA-256。任一 wrapper
@@ -925,10 +925,12 @@ primary pointer 为 coarse 的触屏笔记本仍可用外接鼠标；touch-only 
 
 真实浏览器 guard 从 `chart.chartArea` 内部坐标发起左键拖框，验证 X 缩小、Y 等于当前
 窗口内启用数据的精确范围、Reset enabled。绘图区双击调用与按钮相同的
-`resetUSTZoom()`，完整恢复 X/Y；legend 外双击不触发，tooltip 与 dataset toggle 保持。
-页面 guard 当前 40/0；C18C.2 八项 injection 覆盖 pointer 退化、dblclick 删除、只恢复
-X、plugin-missing 假可用、受限 TVC 回归、产品误标、财政计算污染和 fixed-stock 文案
-删除，结果 60/0，恢复后 `macro.html` SHA-256 一致。
+`resetUSTZoom()`，完整恢复 X/Y；命中使用 `Chart.helpers.getRelativePosition()` 将真实
+mouse event 归一化到 Chart.js 坐标系。DPR 1/2、legend、canvas padding、touch double-tap、
+事件计数、tooltip 与 dataset toggle 均有真实动作覆盖。页面 guard 当前 46/0；C18C.2
+九项 injection 覆盖 pointer 退化、dblclick 删除、只恢复 X、plugin-missing 假可用、
+受限 TVC 回归、产品误标、Apple/Cboe/iframe 第三方内容泄漏、财政计算污染和 fixed-stock
+文案删除，结果 67/0，恢复后 `macro.html` SHA-256 一致。
 
 TradingView 官方 Advanced Widget 真实探测 `CBOT:ZT1!`、`CBOT:ZN1!`、`CBOT:ZB1!`
 均生成 iframe 但显示 “This symbol is only available on TradingView”；与 `TVC` yields

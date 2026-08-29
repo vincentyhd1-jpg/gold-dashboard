@@ -878,7 +878,7 @@ node tools/verify-fiscal-risk-monitor-injection.mjs # C18C 十一项破坏注入
 node tools/verify-gold-debt-python.mjs      # 动态 WSL root 下运行黄金 vs 美债 Python guard
 node tools/verify-treasury-enhancements.mjs # 黄金/UST zoom/TradingView 契约与隔离
 node tools/verify-treasury-enhancements-injection.mjs # C18C.1 九项破坏注入
-node tools/verify-treasury-interaction-injection.mjs # C18C.2 八项交互/受限 symbol 注入
+node tools/verify-treasury-interaction-injection.mjs # C18C.2 九项交互/第三方内容边界注入
 node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
 node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
 node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红
@@ -986,7 +986,9 @@ latest observed/complete/lag 从当前 source 动态推导；rolling fixture 覆
 历史 UST 卡使用本地 vendored Hammer/zoom plugin：`any-pointer:fine` 与
 `any-hover:hover` 允许 primary pointer 为 coarse 的 hybrid device 继续使用鼠标左键
 框选 X；完成后以窗口内启用 dataset 的真实 tenor 值重新定 Y。绘图区双击与 Reset
-按钮共用 `resetUSTZoom()` 还原 X/Y，legend/卡片外双击不触发；touch-only 禁用。
+按钮共用 `resetUSTZoom()` 还原 X/Y；dblclick 命中使用
+`Chart.helpers.getRelativePosition()` 归一化 CSS/DPR 坐标，legend/canvas padding 外双击
+不触发；touch-only 禁用。DPR 1 与 DPR 2 必须用真实 mouse action 覆盖。
 启动时显式检查 `Chart.registry.plugins.get('zoom')`，缺失时显示局部错误并保持其它图。
 
 TradingView 官方 Advanced Widget 的真实第三方探测确认 `TVC` Treasury yields 以及

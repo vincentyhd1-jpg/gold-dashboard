@@ -65,6 +65,7 @@ check('zoom plugin registry health guard 与固定 unavailable 文案存在',
 check('UST 双击只在 chartArea 内调用共同 resetUSTZoom',
   source.includes("getElementById('ustChart').addEventListener('dblclick'")
   && source.includes('event.sourceCapabilities?.firesTouchEvents')
+  && source.includes('Chart.helpers.getRelativePosition(event, ustChart)')
   && source.includes('x < area.left || x > area.right || y < area.top || y > area.bottom')
   && source.includes('  resetUSTZoom();'));
 
@@ -125,10 +126,14 @@ check('美债明确是 Total Public Debt Outstanding 且只做 exact-date',
 const browser = await launchChromium();
 
 async function preparePage({ blockZoomPlugin = false, failGold = false, mobile = false,
-  goldOverride = null, pointerMode = mobile ? 'touch' : 'hybrid' } = {}) {
+  goldOverride = null, pointerMode = mobile ? 'touch' : 'hybrid', deviceScaleFactor = 1 } = {}) {
   const context = await browser.newContext(mobile ? {
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
-  } : { viewport: { width: 1440, height: 1000 } });
+    deviceScaleFactor,
+  } : {
+    viewport: { width: 1440, height: 1000 },
+    hasTouch: pointerMode === 'touch', deviceScaleFactor,
+  });
   const page = await context.newPage();
   const pageErrors = [];
   const externalRequests = [];
@@ -182,11 +187,28 @@ async function chartAreaPoint(page, xFraction, yFraction) {
     const chart = Chart.getChart(canvas);
     const rect = canvas.getBoundingClientRect();
     const area = chart.chartArea;
+    const scaleX = rect.width / chart.width;
+    const scaleY = rect.height / chart.height;
     return {
-      x: rect.left + area.left + (area.right - area.left) * xFraction,
-      y: rect.top + area.top + (area.bottom - area.top) * yFraction,
+      x: rect.left + (area.left + (area.right - area.left) * xFraction) * scaleX,
+      y: rect.top + (area.top + (area.bottom - area.top) * yFraction) * scaleY,
     };
   }, { xFraction, yFraction });
+}
+
+async function canvasPaddingPoint(page) {
+  return page.evaluate(() => {
+    const canvas = document.getElementById('ustChart');
+    const chart = Chart.getChart(canvas);
+    const rect = canvas.getBoundingClientRect();
+    const area = chart.chartArea;
+    const scaleX = rect.width / chart.width;
+    const scaleY = rect.height / chart.height;
+    return {
+      x: rect.left + Math.max(2, area.left * 0.45) * scaleX,
+      y: rect.top + ((area.top + area.bottom) / 2) * scaleY,
+    };
+  });
 }
 
 async function dragUST(page) {
@@ -229,6 +251,8 @@ async function ustState(page) {
       dragEnabled: chart.options.plugins.zoom?.zoom?.drag?.enabled === true,
       hint: document.getElementById('ustZoomHint').textContent,
       health: window.__ustZoomHealth,
+      dblclickEventCount: window.__c18c2DblclickEventCount ?? null,
+      dpr: window.devicePixelRatio,
     };
   });
 }
@@ -254,6 +278,7 @@ try {
       live: window.__liveTreasuryWidgetContract,
       liveIframe: Boolean(document.querySelector('#liveTreasuryWidget iframe')),
       liveFallback: document.getElementById('liveTreasuryFallback')?.textContent,
+      livePanelContent: document.getElementById('liveTreasuryPanel')?.innerHTML || '',
       goldMethod: document.getElementById('goldDebtMethod')?.textContent,
     };
   });
@@ -279,6 +304,10 @@ try {
     /licensed market-data API/.test(initial.liveFallback || '')
     && /FRED 日频数据伪装成 intraday/.test(initial.liveFallback || ''),
   initial.liveFallback);
+  check('unavailable Live Treasury card rendered third-party market content',
+    !initial.liveIframe
+    && !/(?:Apple Inc|Cboe One|TVC:|CBOT:)/i.test(initial.livePanelContent),
+  initial.livePanelContent);
   check('页面公开 fixed-stock valuation proxy 与当前价格代理',
     initial.goldMethod?.includes(`黄金估值价格代理：${methodology.gold_price_source}`)
     && initial.goldMethod?.includes(methodology.gold_price_instrument)
@@ -319,7 +348,12 @@ try {
     const chart = Chart.getChart(canvas);
     const rect = canvas.getBoundingClientRect();
     const box = chart.legend.legendHitBoxes[0];
-    return { x: rect.left + box.left + box.width / 2, y: rect.top + box.top + box.height / 2 };
+    const scaleX = rect.width / chart.width;
+    const scaleY = rect.height / chart.height;
+    return {
+      x: rect.left + (box.left + box.width / 2) * scaleX,
+      y: rect.top + (box.top + box.height / 2) * scaleY,
+    };
   });
   await page.mouse.dblclick(legendPoint.x, legendPoint.y);
   await page.waitForTimeout(100);
@@ -328,7 +362,21 @@ try {
     zoomedForLegend.zoomed && afterLegendDblclick.zoomed,
   JSON.stringify({ before: zoomedForLegend, after: afterLegendDblclick }));
 
+  const paddingPoint = await canvasPaddingPoint(page);
+  await page.mouse.dblclick(paddingPoint.x, paddingPoint.y);
+  await page.waitForTimeout(100);
+  const afterPaddingDblclick = await ustState(page);
+  check('双击 canvas padding / chartArea 外不触发 UST reset',
+    afterLegendDblclick.zoomed && afterPaddingDblclick.zoomed,
+  JSON.stringify({ before: afterLegendDblclick, after: afterPaddingDblclick }));
+
   const inside = await chartAreaPoint(page, 0.5, 0.5);
+  await page.evaluate(() => {
+    window.__c18c2DblclickEventCount = 0;
+    document.getElementById('ustChart').addEventListener('dblclick', () => {
+      window.__c18c2DblclickEventCount += 1;
+    });
+  });
   await page.mouse.dblclick(inside.x, inside.y);
   await page.waitForTimeout(100);
   const dblclickReset = await ustState(page);
@@ -336,6 +384,8 @@ try {
     zoomedForLegend.zoomed && !dblclickReset.zoomed && dblclickReset.resetDisabled
     && sameAxisState(initialUST, dblclickReset),
   JSON.stringify({ initial: initialUST, reset: dblclickReset }));
+  check('真实 mouse.dblclick 只触发一个 canvas dblclick event',
+    dblclickReset.dblclickEventCount === 1, JSON.stringify(dblclickReset));
 
   await page.mouse.dblclick(inside.x, inside.y);
   const noOpReset = await ustState(page);
@@ -363,14 +413,49 @@ try {
     JSON.stringify(normal.pageErrors));
   await normal.context.close();
 
+  const highDpi = await preparePage({ deviceScaleFactor: 2 });
+  const highDpiInitial = await ustState(highDpi.page);
+  await highDpi.page.evaluate(() => {
+    window.__c18c2DblclickEventCount = 0;
+    document.getElementById('ustChart').addEventListener('dblclick', () => {
+      window.__c18c2DblclickEventCount += 1;
+    });
+  });
+  await dragUST(highDpi.page);
+  const highDpiZoomed = await ustState(highDpi.page);
+  const highDpiInside = await chartAreaPoint(highDpi.page, 0.5, 0.5);
+  await highDpi.page.mouse.dblclick(highDpiInside.x, highDpiInside.y);
+  await highDpi.page.waitForTimeout(100);
+  const highDpiDblclickReset = await ustState(highDpi.page);
+  await dragUST(highDpi.page);
+  await highDpi.page.click('#ustResetZoom');
+  const highDpiButtonReset = await ustState(highDpi.page);
+  check('DPR > 1 下真实 drag 与 dblclick 使用归一化 chart 坐标',
+    highDpiInitial.dpr === 2 && highDpiZoomed.zoomed
+    && highDpiDblclickReset.dblclickEventCount === 1
+    && !highDpiDblclickReset.zoomed && highDpiDblclickReset.resetDisabled
+    && sameAxisState(highDpiInitial, highDpiDblclickReset),
+  JSON.stringify({ highDpiInitial, highDpiZoomed, highDpiDblclickReset }));
+  check('DPR > 1 下 button reset 与 dblclick reset 最终轴状态一致',
+    !highDpiButtonReset.zoomed && highDpiButtonReset.resetDisabled
+    && sameAxisState(highDpiInitial, highDpiButtonReset)
+    && sameAxisState(highDpiDblclickReset, highDpiButtonReset),
+  JSON.stringify({ highDpiDblclickReset, highDpiButtonReset }));
+  check('DPR > 1 页面无未捕获 pageerror', highDpi.pageErrors.length === 0,
+    JSON.stringify(highDpi.pageErrors));
+  await highDpi.context.close();
+
   const touchOnly = await preparePage({ pointerMode: 'touch' });
   const touchInitial = await ustState(touchOnly.page);
   await dragUST(touchOnly.page);
   const touchAfterDrag = await ustState(touchOnly.page);
   const touchPoint = await chartAreaPoint(touchOnly.page, 0.5, 0.5);
-  await touchOnly.page.mouse.dblclick(touchPoint.x, touchPoint.y);
+  await touchOnly.page.touchscreen.tap(touchPoint.x, touchPoint.y);
+  await touchOnly.page.waitForTimeout(60);
+  await touchOnly.page.touchscreen.tap(touchPoint.x, touchPoint.y);
+  await touchOnly.page.waitForTimeout(100);
   const touchAfterDblclick = await ustState(touchOnly.page);
-  check('touch-only fixture 禁用 drag 与 desktop dblclick reset',
+  check('touch-only fixture 禁用 drag 且真实 double-tap 不触发 reset',
     touchInitial.health?.mouseCapable === false && !touchInitial.dragEnabled
     && !touchAfterDrag.zoomed && sameAxisState(touchInitial, touchAfterDrag)
     && sameAxisState(touchInitial, touchAfterDblclick),

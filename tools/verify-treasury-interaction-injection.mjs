@@ -88,6 +88,19 @@ function renderFed`),
       expectedFailureMarkers: ['FAIL Live Treasury unavailable card 存在且未伪装为实时收益率产品'],
     },
     {
+      name: 'unavailable card renders leaked third-party market content',
+      patch: bytes => replaceExactly(bytes.toString('utf8'),
+        '页面不会用 FRED 日频数据伪装成 intraday。</div>',
+        '页面不会用 FRED 日频数据伪装成 intraday。Apple Inc · Cboe One<iframe title="injected TradingView content"></iframe></div>'),
+      verifyPatch: (_, patched) => ({
+        ok: patched.toString('utf8').includes('Apple Inc · Cboe One<iframe'),
+        detail: 'unavailable card now leaks third-party market content',
+      }),
+      expectedFailureMarkers: [
+        'FAIL unavailable Live Treasury card rendered third-party market content',
+      ],
+    },
+    {
       name: 'Live market contract enters fiscal calculations',
       patch: bytes => replaceExactly(bytes.toString('utf8'),
         '  entersFiscalCalculations: false,',
@@ -119,6 +132,6 @@ function renderFed`),
 const restored = sha256(fs.readFileSync(targetPath)) === originalHash;
 console.log(`${restored ? 'PASS' : 'FAIL'} C18C.2 final macro.html SHA-256 restored`);
 const ok = result.ok && restored;
-console.log(`${ok ? 'PASS' : 'FAIL'} C18C.2 all eight injections detected and restored`);
+console.log(`${ok ? 'PASS' : 'FAIL'} C18C.2 all nine injections detected and restored`);
 process.exitCode = result.ok ? 0 : 1;
 if (!restored) process.exitCode = 1;
