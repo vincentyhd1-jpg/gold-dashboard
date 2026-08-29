@@ -41,11 +41,14 @@ function check(name, ok, detail = '') {
 const source = fs.readFileSync(path.join(ROOT, 'macro.html'), 'utf8');
 const derived = JSON.parse(fs.readFileSync(
   path.join(ROOT, 'data', 'derived', 'gold_vs_debt.json'), 'utf8'));
-const goldRows = JSON.parse(fs.readFileSync(
-  path.join(ROOT, 'data', 'gold_price.json'), 'utf8')).data;
+const goldEnvelope = JSON.parse(fs.readFileSync(
+  path.join(ROOT, 'data', 'gold_price.json'), 'utf8'));
+const goldRows = goldEnvelope.data;
 const debtRows = JSON.parse(fs.readFileSync(
   path.join(ROOT, 'data', 'treasury_debt_daily.json'), 'utf8')).data;
 const debtByDate = new Map(debtRows.map(row => [row.date, row.total_bn]));
+const upstreamPriceSource = goldEnvelope.info.find(item =>
+  typeof item === 'string' && item.startsWith('price_source='))?.slice('price_source='.length);
 
 check('Live Treasury card 与官方 Advanced widget source 存在',
   source.includes('id="liveTreasuryPanel"')
@@ -79,6 +82,14 @@ check('gold-vs-debt strict envelope 与方法学存在',
   && derived.source === 'derived_global_gold_value_vs_us_debt'
   && derived.freq === 'weekly' && derived.date_field === 'date'
   && methodology.gold_value_is_estimate === true);
+check('gold price proxy metadata 对应当前 upstream source',
+  methodology.gold_price_source === upstreamPriceSource
+  && methodology.gold_price_is_proxy === true
+  && ['GC=F', 'XAUUSD'].includes(methodology.gold_price_instrument)
+  && typeof methodology.gold_price_instrument_label === 'string');
+check('GC=F 不被固定描述为 spot gold',
+  methodology.gold_price_instrument !== 'GC=F'
+  || !/spot/i.test(methodology.gold_price_instrument_label));
 check('gold-vs-debt 一点对应一个真实周频 gold observation',
   observations.length === goldRows.length
   && observations.every((row, index) => row.date === goldRows[index].date
@@ -110,7 +121,8 @@ const MOCK_WIDGET = `(() => {
   }
 })();`;
 
-async function preparePage({ failWidget = false, failGold = false, mobile = false } = {}) {
+async function preparePage({ failWidget = false, failGold = false, mobile = false,
+  goldOverride = null } = {}) {
   const context = await browser.newContext(mobile ? {
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
   } : { viewport: { width: 1440, height: 1000 } });
@@ -124,6 +136,11 @@ async function preparePage({ failWidget = false, failGold = false, mobile = fals
   if (failGold) {
     await page.route('**/data/derived/gold_vs_debt.json?*', route => route.fulfill({
       status: 500, contentType: 'application/json', body: '{}',
+    }));
+  } else if (goldOverride) {
+    await page.route('**/data/derived/gold_vs_debt.json?*', route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify(goldOverride),
     }));
   }
   await page.goto(`${base}/macro.html`, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -156,6 +173,7 @@ try {
       },
       live: window.__liveTreasuryWidgetContract,
       attribution: document.querySelector('.tradingview-widget-copyright')?.textContent,
+      goldMethod: document.getElementById('goldDebtMethod')?.textContent,
       status: document.getElementById('liveTreasuryStatus')?.textContent,
     };
   });
@@ -176,6 +194,14 @@ try {
   JSON.stringify(initial.live));
   check('官方 TradingView attribution 保留',
     /by TradingView/.test(initial.attribution || ''));
+  check('页面公开实际黄金价格代理、估算口径与既定资产定义',
+    initial.goldMethod?.includes(`黄金估值价格代理：${methodology.gold_price_source}`)
+    && initial.goldMethod?.includes(methodology.gold_price_instrument)
+    && /估值代理/.test(initial.goldMethod)
+    && !/official spot price/i.test(initial.goldMethod)
+    && initial.goldMethod.includes('220,700')
+    && initial.goldMethod.includes('Total Public Debt Outstanding'),
+  initial.goldMethod);
 
   const canvas = page.locator('#ustChart');
   const box = await canvas.boundingBox();
@@ -250,6 +276,30 @@ try {
   check('正常页面无未捕获 pageerror', normal.pageErrors.length === 0,
     JSON.stringify(normal.pageErrors));
   await normal.context.close();
+
+  const alternateSource = methodology.gold_price_instrument === 'GC=F'
+    ? { source: 'Stooq (xauusd)', instrument: 'XAUUSD',
+      label: 'XAUUSD gold spot proxy' }
+    : { source: 'Yahoo Finance (GC=F)', instrument: 'GC=F',
+      label: 'COMEX gold futures' };
+  const switchedDerived = structuredClone(derived);
+  Object.assign(switchedDerived.data.methodology, {
+    gold_price_source: alternateSource.source,
+    gold_price_instrument: alternateSource.instrument,
+    gold_price_instrument_label: alternateSource.label,
+    gold_price_is_proxy: true,
+  });
+  const sourceSwitch = await preparePage({ goldOverride: switchedDerived });
+  await sourceSwitch.page.waitForFunction(() => !!Chart.getChart(
+    document.getElementById('goldDebtChart')), null, { timeout: 15000 });
+  const switchedMethod = await sourceSwitch.page.locator('#goldDebtMethod').textContent();
+  check('页面价格代理文案动态读取 derived methodology',
+    switchedMethod.includes(alternateSource.source)
+    && switchedMethod.includes(alternateSource.instrument)
+    && !switchedMethod.includes(methodology.gold_price_source), switchedMethod);
+  check('price source 切换页面无未捕获 pageerror',
+    sourceSwitch.pageErrors.length === 0, JSON.stringify(sourceSwitch.pageErrors));
+  await sourceSwitch.context.close();
 
   const widgetFailure = await preparePage({ failWidget: true });
   await widgetFailure.page.waitForFunction(() =>

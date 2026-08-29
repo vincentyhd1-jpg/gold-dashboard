@@ -24,6 +24,7 @@ GOLD_STOCK_VINTAGE = "end-2025"
 GOLD_STOCK_SOURCE_URL = "https://www.gold.org/goldhub/data/how-much-gold"
 TROY_OZ_PER_METRIC_TONNE = 32_150.74656862798
 STALE_MARKER = "committed gold-vs-debt output is stale relative to current sources"
+PRICE_SOURCE_PREFIX = "price_source="
 
 
 class GoldDebtFailure(RuntimeError):
@@ -55,6 +56,35 @@ def _finite_positive(value, field: str) -> float:
     return float(value)
 
 
+def _gold_price_proxy(payload: dict) -> dict:
+    """Return an explicit valuation-proxy contract from upstream metadata."""
+    if not isinstance(payload, dict):
+        raise GoldDebtFailure("gold_price must be an envelope object")
+    info = payload.get("info")
+    if not isinstance(info, list) or not all(isinstance(item, str) for item in info):
+        raise GoldDebtFailure("gold_price info must be a list of strings")
+    sources = [item[len(PRICE_SOURCE_PREFIX):].strip() for item in info
+               if item.startswith(PRICE_SOURCE_PREFIX)]
+    if len(sources) != 1 or not sources[0]:
+        raise GoldDebtFailure("gold_price requires exactly one recognizable price_source")
+    source = sources[0]
+    normalized = source.lower()
+    if "yahoo finance" in normalized and "gc=f" in normalized:
+        instrument = "GC=F"
+        instrument_label = "COMEX gold futures"
+    elif "stooq" in normalized and "xauusd" in normalized:
+        instrument = "XAUUSD"
+        instrument_label = "XAUUSD gold spot proxy"
+    else:
+        raise GoldDebtFailure(f"unrecognized gold price_source: {source}")
+    return {
+        "gold_price_source": source,
+        "gold_price_instrument": instrument,
+        "gold_price_instrument_label": instrument_label,
+        "gold_price_is_proxy": True,
+    }
+
+
 def _validated_rows(payload: dict, value_field: str,
                     allow_null: bool = False) -> list[dict]:
     rows = payload["data"]
@@ -79,6 +109,7 @@ def _validated_rows(payload: dict, value_field: str,
 
 
 def build_data(gold_payload: dict, debt_payload: dict) -> dict:
+    price_proxy = _gold_price_proxy(gold_payload)
     gold_rows = _validated_rows(gold_payload, "price", allow_null=True)
     debt_rows = _validated_rows(debt_payload, "total_bn")
     debt_by_date = {row["date"]: row["total_bn"] for row in debt_rows}
@@ -111,6 +142,7 @@ def build_data(gold_payload: dict, debt_payload: dict) -> dict:
             "troy_oz_per_metric_tonne": TROY_OZ_PER_METRIC_TONNE,
             "gold_value_is_estimate": True,
             "gold_price_frequency": "weekly",
+            **price_proxy,
             "debt_definition": "Total Public Debt Outstanding",
             "debt_source_field": "tot_pub_debt_out_amt",
             "debt_alignment": "exact_gold_observation_date_only",
@@ -236,6 +268,40 @@ def run_tests() -> None:
     methodology = expected["data"]["methodology"]
     check("gold estimate is explicitly labeled", methodology["gold_value_is_estimate"] is True
           and methodology["gold_stock_vintage"] == GOLD_STOCK_VINTAGE)
+    source_gold_payload = json.loads(GOLD_PATH.read_text(encoding="utf-8"))
+    source_proxy = _gold_price_proxy(source_gold_payload)
+    check("gold price source metadata propagates to methodology",
+          all(methodology.get(key) == value for key, value in source_proxy.items()))
+    check("gold price valuation is explicitly a proxy",
+          methodology.get("gold_price_is_proxy") is True)
+    if source_proxy["gold_price_instrument"] == "GC=F":
+        check("GC=F is never represented as a spot-price claim",
+              "spot" not in methodology.get("gold_price_instrument_label", "").lower())
+    else:
+        check("recognized non-GC instrument remains explicit",
+              methodology.get("gold_price_instrument") == "XAUUSD")
+
+    alternate_info = [item for item in source_gold_payload["info"]
+                      if not item.startswith(PRICE_SOURCE_PREFIX)]
+    if source_proxy["gold_price_instrument"] == "GC=F":
+        alternate_info.insert(0, "price_source=Stooq (xauusd)")
+        alternate_instrument = "XAUUSD"
+    else:
+        alternate_info.insert(0, "price_source=Yahoo Finance (GC=F)")
+        alternate_instrument = "GC=F"
+    alternate_gold = {**source_gold_payload, "info": alternate_info}
+    alternate_methodology = build_data(
+        alternate_gold, json.loads(DEBT_PATH.read_text(encoding="utf-8"))
+    )["methodology"]
+    check("fresh methodology follows upstream price_source switch",
+          alternate_methodology["gold_price_instrument"] == alternate_instrument
+          and alternate_methodology["gold_price_source"]
+          != methodology["gold_price_source"]
+          and alternate_methodology["gold_price_is_proxy"] is True)
+    alternate_expected = {**expected, "data": {
+        **expected["data"], "methodology": alternate_methodology}}
+    check("price_source switch makes committed comparison stale",
+          _comparable(alternate_expected) != _comparable(expected))
     check("debt definition is Total Public Debt Outstanding",
           methodology["debt_definition"] == "Total Public Debt Outstanding")
     check("alignment forbids fill", methodology["debt_alignment"]

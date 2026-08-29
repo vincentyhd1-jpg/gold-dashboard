@@ -894,6 +894,12 @@ USD tn；美债使用 Treasury Debt to the Penny 的 `Total Public Debt Outstand
 forward-fill 和插值。派生测试与 static guard 都按当前 gold/debt source 重算业务内容，
 忽略顶层 generated_at，阻止 stale comparison 发布。
 
+黄金 USD/oz 输入被明确视为 dashboard valuation proxy。派生层从当前
+`gold_price.info` 的唯一 `price_source=` 解析实际来源：Yahoo Finance `GC=F` 映射为
+COMEX gold futures，Stooq `XAUUSD` 映射为 XAUUSD gold spot proxy；无法识别时派生失败，
+不得默认为 spot。methodology 透传 source、instrument、显示标签及
+`gold_price_is_proxy=true`，页面据此动态显示实际代理，而不是写死某一数据商或品种。
+
 `macro.html` 在历史 UST 前增加独立黄金估值 vs 美债图；历史 UST 桌面左键框选后 X
 缩放并以窗口内全部真实 tenor 值自适应 Y，Reset 同时还原 X/Y，移动端 drag 关闭。
 其下增加 TradingView 官方 Advanced Real-Time Chart Widget：默认 `TVC:US10Y`，
@@ -901,9 +907,10 @@ forward-fill 和插值。派生测试与 static guard 都按当前 gold/debt sou
 5m/1D、15m/1D、60m/5D。该第三方图不需要 API key，不写 JSON、不替代 FRED，且
 不进入 C17 effective r、C18C 或 Fiscal Gap；CDN/widget 失败只显示本卡 unavailable。
 
-C18C.1 定向结果：Python 23/0、动态 Windows→WSL bridge 23/0、页面 30/0；八项
+C18C.1 定向结果：Python 28/0、动态 Windows→WSL bridge 28/0、页面 35/0；九项
 injection 覆盖 Y 自适应、分钟范围、第三方异常、attribution、Reset、黄金公式、债务
-口径和 stale source，全部真实红、命中稳定 marker，恢复后全绿且四个目标 SHA-256
-一致。wrapper meta 更新为 64/0。静态白名单为 41 文件、28 JSON，static guard 52/0；
-static injection 为 38/0，新增“新 gold source + 旧 comparison”失败路径。每日 workflow 的派生
-与 commit 清单加入 comparison JSON，并保持每一步真实 exit code 与故障隔离。
+口径、stale 数值源及 stale `price_source`，全部真实红、命中稳定 marker，恢复后全绿且
+四个目标 SHA-256 一致。wrapper meta 为 64/0。静态白名单为 41 文件、28 JSON，
+static guard 53/0；static injection 43/0，并分别阻止“新 gold 数值源 + 旧 comparison”与
+“新 gold proxy metadata + 旧 methodology”。每日 workflow 的派生与 commit 清单加入
+comparison JSON，并保持每一步真实 exit code 与故障隔离。

@@ -875,7 +875,7 @@ node tools/verify-fiscal-risk-monitor-snapshot-contract.mjs # C18C 禁止固定�
 node tools/verify-fiscal-risk-monitor-injection.mjs # C18C 十一项破坏注入（含 snapshot coupling）
 node tools/verify-gold-debt-python.mjs      # 动态 WSL root 下运行黄金 vs 美债 Python guard
 node tools/verify-treasury-enhancements.mjs # 黄金/UST zoom/TradingView 契约与隔离
-node tools/verify-treasury-enhancements-injection.mjs # C18C.1 八项破坏注入
+node tools/verify-treasury-enhancements-injection.mjs # C18C.1 九项破坏注入
 node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
 node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
 node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红
@@ -975,6 +975,10 @@ latest observed/complete/lag 从当前 source 动态推导；rolling fixture 覆
 保持 null；同日另一字段仍可观测，不使用前值、最近值或插值。production/static freshness guard 都必须
 拒绝“新 gold/debt source + 旧 comparison”，固定 marker 为
 `committed gold-vs-debt output is stale relative to current sources`。
+黄金价格不是固定声明为 spot：派生层必须从 `gold_price.info` 的 `price_source=` 解析
+实际 dashboard valuation proxy，当前允许 Yahoo Finance `GC=F`（COMEX gold futures）
+或 Stooq `XAUUSD`，并透传 source/instrument/`gold_price_is_proxy=true`。页面动态披露
+实际代理；source metadata 改变而 comparison 未重建时，production/static guard 必须变红。
 
 历史 UST 卡使用既有 Chart.js zoom plugin：桌面左键框选 X，框选完成后以窗口内全部
 真实 tenor 值重新定 Y；Reset 还原 X/Y，移动端不启用拖拽。Live Treasury 是独立的

@@ -564,6 +564,10 @@ GitHub：`vincentyhd1-jpg/gold-dashboard`。
 
 - 全球黄金总市值是 World Gold Council end-2025 地上存量 220,700 公吨乘当期周频
   USD/oz 的透明估值，不声称是每日库存普查；存量 vintage 与公式必须随输出披露。
+- 周频 USD/oz 输入是 dashboard valuation proxy，不是固定的 canonical spot 声明。
+  派生必须从 upstream `price_source=` 解析并透传实际 source/instrument/proxy flag；
+  Yahoo `GC=F` 必须明确为 COMEX gold futures，Stooq `XAUUSD` 才显示相应 XAUUSD
+  代理。无法识别时失败，页面不得写死数据商，source metadata 变化也属于 freshness。
 - 美债对比只使用 Treasury `Total Public Debt Outstanding`，并只在黄金观测日存在
   精确同日值时配对。任一源缺口只让对应字段保持 null，不隐藏同日另一真实字段；
   禁止最近值、forward-fill、插值或换用公众持有债务。

@@ -2,31 +2,31 @@
   "schema_version": 0,
   "source": "derived_global_gold_value_vs_us_debt",
   "freq": "weekly",
-  "generated_at": "2026-08-29T00:04:18Z",
+  "generated_at": "2026-08-29T05:16:40Z",
   "date_field": "date",
   "coverage": {
-    "first": "2025-08-26",
-    "last": "2026-08-18",
+    "first": "2025-09-02",
+    "last": "2026-08-25",
     "count": 52
   },
   "derived_from": [
     {
       "source": "gold_price",
-      "generated_at": "2026-08-22T07:42:39Z",
+      "generated_at": "2026-08-29T03:24:01Z",
       "coverage": {
-        "first": "2025-08-26",
-        "last": "2026-08-18",
+        "first": "2025-09-02",
+        "last": "2026-08-25",
         "count": 52
       },
       "envelope": true
     },
     {
       "source": "treasury_fiscal_data_debt_to_penny",
-      "generated_at": "2026-08-28T05:50:40Z",
+      "generated_at": "2026-08-29T03:24:04Z",
       "coverage": {
         "first": "1993-04-01",
-        "last": "2026-08-26",
-        "count": 8380
+        "last": "2026-08-27",
+        "count": 8381
       },
       "envelope": true
     }
@@ -42,12 +42,6 @@
   ],
   "data": {
     "observations": [
-      {
-        "date": "2025-08-26",
-        "gold_price_usd_oz": 3473.7,
-        "global_gold_value_usd_tn": 24.64822807204627,
-        "us_total_public_debt_usd_tn": 37.204886498253394
-      },
       {
         "date": "2025-09-02",
         "gold_price_usd_oz": 3613.2,
@@ -353,6 +347,12 @@
         "gold_price_usd_oz": 4624.1,
         "global_gold_value_usd_tn": 32.81108657280398,
         "us_total_public_debt_usd_tn": 40.04742576842022
+      },
+      {
+        "date": "2026-08-25",
+        "gold_price_usd_oz": 4609.7,
+        "global_gold_value_usd_tn": 32.70890892814915,
+        "us_total_public_debt_usd_tn": 40.09886415502757
       }
     ],
     "methodology": {
@@ -363,6 +363,10 @@
       "troy_oz_per_metric_tonne": 32150.74656862798,
       "gold_value_is_estimate": true,
       "gold_price_frequency": "weekly",
+      "gold_price_source": "Yahoo Finance (GC=F)",
+      "gold_price_instrument": "GC=F",
+      "gold_price_instrument_label": "COMEX gold futures",
+      "gold_price_is_proxy": true,
       "debt_definition": "Total Public Debt Outstanding",
       "debt_source_field": "tot_pub_debt_out_amt",
       "debt_alignment": "exact_gold_observation_date_only",

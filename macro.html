@@ -201,13 +201,13 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
 
     <div class="card full" id="goldDebtPanel">
       <div class="card-title">全球黄金总市值 vs 美债总额</div>
-      <div class="card-sub">Global Gold Value（固定 end-2025 地上黄金存量 × 周频金价估算）· U.S. Total Public Debt Outstanding（同一真实日期的官方值）— USD tn</div>
+      <div class="card-sub">Global Gold Value（固定 end-2025 地上黄金存量 × 周频价格代理估算）· U.S. Total Public Debt Outstanding（同一真实日期的官方值）— USD tn</div>
       <div class="chart-wrap gold-debt-chart-wrap"><canvas id="goldDebtChart"></canvas></div>
       <div class="gold-debt-asof" aria-label="黄金与美债比较数据截至时间">
         <span>周频黄金估值截至：<strong id="goldDebtGoldAsOf">--</strong></span>
         <span>同日美债总额截至：<strong id="goldDebtDebtAsOf">--</strong></span>
       </div>
-      <div class="gold-debt-method" id="goldDebtMethod">全球黄金总市值是固定 220,700 公吨地上黄金存量（World Gold Council，end-2025）乘以当期 USD/oz 金价的估算，并非每日库存普查。美债口径为 Total Public Debt Outstanding；只采用黄金观测日同日真实债务值，不前值填充、不插值。</div>
+      <div class="gold-debt-method" id="goldDebtMethod">全球黄金总市值是固定 220,700 公吨地上黄金存量（World Gold Council，end-2025）乘以本项目黄金价格代理的估算，并非官方每日全球黄金市值统计。实际价格代理将在数据加载后显示。美债口径为 Total Public Debt Outstanding；只采用黄金观测日同日真实债务值，不前值填充、不插值。</div>
       <div class="status" id="goldDebtStatus" role="status">正在加载黄金总市值与美债总额…</div>
     </div>
 
@@ -667,6 +667,13 @@ function renderGoldVsDebt(payload) {
   }
   if (methodology.debt_definition !== 'Total Public Debt Outstanding'
       || methodology.gold_value_is_estimate !== true
+      || methodology.gold_price_is_proxy !== true
+      || typeof methodology.gold_price_source !== 'string'
+      || !methodology.gold_price_source.trim()
+      || typeof methodology.gold_price_instrument !== 'string'
+      || !methodology.gold_price_instrument.trim()
+      || typeof methodology.gold_price_instrument_label !== 'string'
+      || !methodology.gold_price_instrument_label.trim()
       || methodology.no_forward_fill !== true
       || methodology.no_interpolation !== true) {
     throw new Error('gold-vs-debt methodology contract mismatch');
@@ -712,6 +719,13 @@ function renderGoldVsDebt(payload) {
   const lastDebt = debtPoints.at(-1)?.x || '--';
   document.getElementById('goldDebtGoldAsOf').textContent = lastGold;
   document.getElementById('goldDebtDebtAsOf').textContent = lastDebt;
+  document.getElementById('goldDebtMethod').textContent =
+    `全球黄金总市值是固定 220,700 公吨地上黄金存量（World Gold Council，end-2025）` +
+    `乘以本项目黄金价格代理的估算。黄金估值价格代理：${methodology.gold_price_source}` +
+    `（${methodology.gold_price_instrument_label}；${methodology.gold_price_instrument}）。` +
+    `因此该曲线是估值代理，并非官方每日全球黄金市值统计。` +
+    `美债口径为 Total Public Debt Outstanding；只采用黄金观测日同日真实债务值，` +
+    `不前值填充、不插值。`;
   return { goldPoints: goldPoints.length, debtPoints: debtPoints.length };
 }
 

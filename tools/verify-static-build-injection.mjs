@@ -158,6 +158,24 @@ try {
     'FAIL dist gold-vs-debt 业务数据对应当前 gold/debt sources');
   runBuildAndGuard('F restore');
 
+  console.log('\n--- G: dist gold price source metadata 更新但 gold-vs-debt 未重建 ---');
+  run(BUILD);
+  const distGoldMetadataPath = path.join(DIST, 'data', 'gold_price.json');
+  const distGoldMetadata = JSON.parse(fs.readFileSync(distGoldMetadataPath, 'utf8'));
+  const sourceIndex = distGoldMetadata.info.findIndex(item =>
+    typeof item === 'string' && item.startsWith('price_source='));
+  const oldSource = distGoldMetadata.info[sourceIndex];
+  distGoldMetadata.info[sourceIndex] = /GC=F/i.test(oldSource)
+    ? 'price_source=Stooq (xauusd)'
+    : 'price_source=Yahoo Finance (GC=F)';
+  fs.writeFileSync(distGoldMetadataPath,
+    `${JSON.stringify(distGoldMetadata, null, 2)}\n`);
+  check('G dist gold source metadata 已合法切换', sourceIndex >= 0
+    && distGoldMetadata.info[sourceIndex] !== oldSource);
+  expectRed('G stale gold-vs-debt proxy metadata',
+    'FAIL dist gold-vs-debt price proxy metadata 对应当前 gold source');
+  runBuildAndGuard('G restore');
+
   runBuildAndGuard('final restored');
   check('最终 wrangler.jsonc SHA-256 一致',
     sha256(fs.readFileSync(CONFIG)) === originalHash);

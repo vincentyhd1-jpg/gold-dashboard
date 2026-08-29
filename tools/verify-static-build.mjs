@@ -254,6 +254,24 @@ check('dist gold-vs-debt derived_from 对应当前两个 source',
   && goldDebtRefs[1]?.generated_at === debtSource?.generated_at
   && JSON.stringify(goldDebtRefs[1]?.coverage) === JSON.stringify(debtSource?.coverage)
   && goldDebtRefs[1]?.envelope === true);
+const goldPriceSource = goldSource?.info?.find(item =>
+  typeof item === 'string' && item.startsWith('price_source='))
+  ?.slice('price_source='.length).trim();
+const normalizedGoldPriceSource = goldPriceSource?.toLowerCase() || '';
+const expectedGoldInstrument = normalizedGoldPriceSource.includes('yahoo finance')
+  && normalizedGoldPriceSource.includes('gc=f') ? 'GC=F'
+  : normalizedGoldPriceSource.includes('stooq')
+    && normalizedGoldPriceSource.includes('xauusd') ? 'XAUUSD' : null;
+const expectedGoldInstrumentLabel = expectedGoldInstrument === 'GC=F'
+  ? 'COMEX gold futures'
+  : expectedGoldInstrument === 'XAUUSD' ? 'XAUUSD gold spot proxy' : null;
+check('dist gold-vs-debt price proxy metadata 对应当前 gold source',
+  expectedGoldInstrument !== null
+  && goldDebt?.data?.methodology?.gold_price_source === goldPriceSource
+  && goldDebt?.data?.methodology?.gold_price_instrument === expectedGoldInstrument
+  && goldDebt?.data?.methodology?.gold_price_instrument_label
+    === expectedGoldInstrumentLabel
+  && goldDebt?.data?.methodology?.gold_price_is_proxy === true);
 const goldRows = goldSource?.data;
 const debtByDate = new Map((debtSource?.data || []).map(row => [row.date, row.total_bn]));
 const comparisonRows = goldDebt?.data?.observations;
@@ -279,6 +297,7 @@ check('dist gold-vs-debt 业务数据对应当前 gold/debt sources',
   goldDebtMatchesSources);
 check('dist gold-vs-debt 方法学锁定估算、Total Public Debt 与不填充',
   goldDebt?.data?.methodology?.gold_value_is_estimate === true
+  && goldDebt?.data?.methodology?.gold_price_is_proxy === true
   && goldDebt?.data?.methodology?.gold_stock_tonnes === GOLD_STOCK_TONNES
   && goldDebt?.data?.methodology?.debt_definition === 'Total Public Debt Outstanding'
   && goldDebt?.data?.methodology?.debt_alignment === 'exact_gold_observation_date_only'

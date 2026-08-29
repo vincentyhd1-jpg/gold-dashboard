@@ -135,6 +135,42 @@ const staleResult = await runInjectionSuite({
   }],
 });
 
+const sourceSwitchResult = await runInjectionSuite({
+  name: 'C18C.1 gold price source metadata freshness injection',
+  target: 'data/gold_price.json',
+  guard: 'tools/verify-gold-debt-python.mjs',
+  timeoutMs: 120_000,
+  cases: [{
+    name: 'price_source switches without rebuilding comparison methodology',
+    patch: bytes => {
+      const payload = JSON.parse(bytes.toString('utf8'));
+      const index = payload.info.findIndex(item =>
+        typeof item === 'string' && item.startsWith('price_source='));
+      if (index < 0) throw new Error('production gold source has no price_source metadata');
+      payload.info[index] = /GC=F/i.test(payload.info[index])
+        ? 'price_source=Stooq (xauusd)'
+        : 'price_source=Yahoo Finance (GC=F)';
+      return `${JSON.stringify(payload, null, 2)}\n`;
+    },
+    verifyPatch: (original, patched) => {
+      const before = JSON.parse(original.toString('utf8'));
+      const after = JSON.parse(patched.toString('utf8'));
+      const source = payload => payload.info.find(item =>
+        typeof item === 'string' && item.startsWith('price_source='));
+      return {
+        ok: source(after) !== source(before)
+          && after.schema_version === before.schema_version
+          && after.source === before.source
+          && JSON.stringify(after.data) === JSON.stringify(before.data),
+        detail: `合法 price_source 切换：${source(before)} -> ${source(after)}，业务行未改变`,
+      };
+    },
+    expectedFailureMarkers: [
+      'FAIL committed gold-vs-debt output is stale relative to current sources',
+    ],
+  }],
+});
+
 let hashesRestored = true;
 for (const [file, hash] of Object.entries(originalHashes)) {
   const restored = sha256(fs.readFileSync(file)) === hash;
@@ -143,7 +179,8 @@ for (const [file, hash] of Object.entries(originalHashes)) {
 }
 
 const result = {
-  ok: pageResult.ok && deriveResult.ok && staleResult.ok && hashesRestored,
+  ok: pageResult.ok && deriveResult.ok && staleResult.ok
+    && sourceSwitchResult.ok && hashesRestored,
 };
-console.log(`${result.ok ? 'PASS' : 'FAIL'} C18C.1 all eight injections detected and restored`);
+console.log(`${result.ok ? 'PASS' : 'FAIL'} C18C.1 all nine injections detected and restored`);
 process.exitCode = result.ok ? 0 : 1;
