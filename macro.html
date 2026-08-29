@@ -53,6 +53,31 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .debt-freshness{display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#8b949e}
 .debt-freshness strong{color:#c9d1d9;font-weight:600}
 .fine-pointer #debtOverviewChart{cursor:crosshair}
+.treasury-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.treasury-toolbar button{appearance:none;border:1px solid #365f91;background:rgba(88,166,255,.08);color:#79c0ff;border-radius:7px;padding:7px 12px;font-size:12px;cursor:pointer}
+.treasury-toolbar button:hover:not(:disabled){background:rgba(88,166,255,.16)}
+.treasury-toolbar button:disabled{border-color:#30363d;color:#6e7681;background:#21262d;cursor:default}
+.treasury-zoom-hint{font-size:11px;color:#8b949e}
+.fine-pointer #ustChart{cursor:crosshair}
+.gold-debt-chart-wrap{height:320px!important}
+.gold-debt-method{font-size:11px;color:#8b949e;line-height:1.6;margin-top:10px}
+.gold-debt-asof{display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:#8b949e}
+.gold-debt-asof strong{color:#c9d1d9;font-weight:600}
+.live-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.live-control-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.live-control-label{font-size:11px;color:#8b949e;margin-right:2px}
+.live-toolbar button{appearance:none;border:1px solid #30363d;background:#0d1117;color:#8b949e;border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer}
+.live-toolbar button:hover,.live-toolbar button[aria-pressed="true"]{border-color:#58a6ff;color:#f0f6fc;background:rgba(88,166,255,.12)}
+.live-widget-shell{position:relative;min-height:440px;width:100%;overflow:hidden;border:1px solid #21262d;border-radius:9px;background:#0d1117}
+.live-widget-host{height:440px;width:100%}
+.tradingview-widget-container{height:100%;width:100%}
+.tradingview-widget-container__widget{height:calc(100% - 32px);width:100%}
+.tradingview-widget-copyright{font-size:11px;line-height:32px;text-align:center;color:#8b949e}
+.tradingview-widget-copyright a{color:#58a6ff;text-decoration:none}
+.live-widget-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#8b949e;background:#0d1117;z-index:2}
+.live-widget-fallback[hidden]{display:none}
+.live-note{font-size:11px;color:#8b949e;line-height:1.6;margin-top:10px}
+.live-status{margin-top:8px}
 .fiscal-kpis{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;margin:4px 0 18px}
 .fiscal-kpi{grid-column:span 3;background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px;min-width:0}
 .fiscal-kpi:nth-child(n+5):nth-child(-n+7){grid-column:span 4}
@@ -136,6 +161,7 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 @media(max-width:420px){.cbo-kpis{grid-template-columns:1fr}.cbo-kpi-label{min-height:0}}
 @media(max-width:900px){.scenario-controls{grid-template-columns:1fr 1fr}.scenario-kpis{grid-template-columns:1fr 1fr}}
 @media(max-width:480px){.scenario-controls,.scenario-kpis{grid-template-columns:1fr}.scenario-kpi-label{min-height:0}}
+@media(max-width:640px){.gold-debt-chart-wrap{height:280px!important}.live-widget-shell,.live-widget-host{min-height:360px;height:360px}.live-toolbar{align-items:flex-start}.live-control-group{width:100%}}
 
 /* 状态行 */
 .status{font-size:12px;color:#8b949e;min-height:18px}
@@ -173,10 +199,51 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
 
   <div class="charts-section">
 
+    <div class="card full" id="goldDebtPanel">
+      <div class="card-title">全球黄金总市值 vs 美债总额</div>
+      <div class="card-sub">Global Gold Value（固定 end-2025 地上黄金存量 × 周频金价估算）· U.S. Total Public Debt Outstanding（同一真实日期的官方值）— USD tn</div>
+      <div class="chart-wrap gold-debt-chart-wrap"><canvas id="goldDebtChart"></canvas></div>
+      <div class="gold-debt-asof" aria-label="黄金与美债比较数据截至时间">
+        <span>周频黄金估值截至：<strong id="goldDebtGoldAsOf">--</strong></span>
+        <span>同日美债总额截至：<strong id="goldDebtDebtAsOf">--</strong></span>
+      </div>
+      <div class="gold-debt-method" id="goldDebtMethod">全球黄金总市值是固定 220,700 公吨地上黄金存量（World Gold Council，end-2025）乘以当期 USD/oz 金价的估算，并非每日库存普查。美债口径为 Total Public Debt Outstanding；只采用黄金观测日同日真实债务值，不前值填充、不插值。</div>
+      <div class="status" id="goldDebtStatus" role="status">正在加载黄金总市值与美债总额…</div>
+    </div>
+
     <div class="card full">
       <div class="card-title">美国国债收益率</div>
       <div class="card-sub">2 年期（蓝）· 10 年期（金）· 30 年期（红）— 单位同为 %，共用一条 Y 轴</div>
+      <div class="treasury-toolbar">
+        <button type="button" id="ustResetZoom" disabled>重置缩放</button>
+        <span class="treasury-zoom-hint" id="ustZoomHint">鼠标左键拖框缩放时间轴；Y 轴按选区内真实观测自动重算</span>
+      </div>
       <div class="chart-wrap"><canvas id="ustChart"></canvas></div>
+    </div>
+
+    <div class="card full" id="liveTreasuryPanel">
+      <div class="card-title">实时国债收益率 / Live Treasury Market Context</div>
+      <div class="card-sub">TradingView Advanced Real-Time Chart · 默认 10Y；分钟级可用性及延迟取决于 TradingView 对相应市场符号的实际服务。</div>
+      <div class="live-toolbar" aria-label="实时国债收益率图表控制">
+        <div class="live-control-group" id="liveTenorControls">
+          <span class="live-control-label">期限</span>
+          <button type="button" data-live-symbol="TVC:US02Y" aria-pressed="false">2Y</button>
+          <button type="button" data-live-symbol="TVC:US10Y" aria-pressed="true">10Y</button>
+          <button type="button" data-live-symbol="TVC:US30Y" aria-pressed="false">30Y</button>
+        </div>
+        <div class="live-control-group" id="liveRangeControls">
+          <span class="live-control-label">范围</span>
+          <button type="button" data-live-view="intraday" aria-pressed="true">分时</button>
+          <button type="button" data-live-view="oneDay" aria-pressed="false">1D</button>
+          <button type="button" data-live-view="fiveDay" aria-pressed="false">5D</button>
+        </div>
+      </div>
+      <div class="live-widget-shell">
+        <div class="live-widget-host" id="liveTreasuryWidget" aria-label="TradingView 实时美国国债收益率图"></div>
+        <div class="live-widget-fallback" id="liveTreasuryFallback" hidden>实时市场图暂不可用，请稍后重试。</div>
+      </div>
+      <div class="live-note" id="liveTreasuryDisclaimer">Data / chart source: TradingView。该图使用 TradingView 市场数据，仅作实时/近实时 Treasury 市场背景；它与上方 FRED 历史收益率的数据来源和频率不同，也不是 C17 中美国政府存量债务的 effective_r，不进入 C17/C18C 债务动力学或 Fiscal Gap 计算。</div>
+      <div class="status live-status" id="liveTreasuryStatus" role="status">正在加载 TradingView 市场图…</div>
     </div>
 
     <div class="card">
@@ -472,13 +539,99 @@ function makeChart(id, labels, datasets) {
   });
 }
 
-function renderUST(ust) {
-  makeChart('ustChart', ust.map(r => r.date), [
-    lineDataset('UST 2Y',  ust.map(r => r.dgs2),  COLORS.blue),
-    lineDataset('UST 10Y', ust.map(r => r.dgs10), COLORS.gold),
-    lineDataset('UST 30Y', ust.map(r => r.dgs30), COLORS.red),
-  ]);
+let ustChart = null;
+
+function _ustVisibleValues(chart) {
+  const scale = chart?.scales?.x;
+  if (!scale) return [];
+  const left = Math.max(0, Math.ceil(Number.isFinite(scale.min) ? scale.min : 0));
+  const right = Math.min(
+    chart.data.labels.length - 1,
+    Math.floor(Number.isFinite(scale.max) ? scale.max : chart.data.labels.length - 1),
+  );
+  const values = [];
+  for (const dataset of chart.data.datasets) {
+    if (!chart.isDatasetVisible(chart.data.datasets.indexOf(dataset))) continue;
+    for (let index = left; index <= right; index++) {
+      const value = dataset.data[index];
+      if (Number.isFinite(value)) values.push(Number(value));
+    }
+  }
+  return values;
 }
+
+function autoscaleUSTY(chart) {
+  const values = _ustVisibleValues(chart);
+  if (!values.length) return false;
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const padding = Math.max((high - low) * 0.08, 0.05);
+  chart.options.scales.y.min = low - padding;
+  chart.options.scales.y.max = high + padding;
+  chart.update('none');
+  return true;
+}
+
+function syncUSTResetButton(chart) {
+  const button = document.getElementById('ustResetZoom');
+  if (!button || !chart) return;
+  button.disabled = !chart.isZoomedOrPanned();
+}
+
+function resetUSTZoom() {
+  if (!ustChart || typeof ustChart.resetZoom !== 'function') return;
+  ustChart.resetZoom('none');
+  delete ustChart.options.scales.y.min;
+  delete ustChart.options.scales.y.max;
+  ustChart.update('none');
+  syncUSTResetButton(ustChart);
+}
+
+function ustChartOptions() {
+  const options = chartOptions();
+  const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  options.plugins.zoom = {
+    pan: { enabled: false },
+    zoom: {
+      wheel: { enabled: false },
+      pinch: { enabled: false },
+      drag: {
+        enabled: finePointer,
+        threshold: 12,
+        backgroundColor: 'rgba(88,166,255,.18)',
+        borderColor: 'rgba(88,166,255,.85)',
+        borderWidth: 1,
+        drawTime: 'afterDatasetsDraw',
+      },
+      mode: 'x',
+      onZoomComplete: ({ chart }) => {
+        autoscaleUSTY(chart);
+        syncUSTResetButton(chart);
+      },
+    },
+  };
+  options.animation = false;
+  return options;
+}
+
+function renderUST(ust) {
+  ustChart?.destroy();
+  ustChart = new Chart(document.getElementById('ustChart'), {
+    type: 'line',
+    data: {
+      labels: ust.map(r => r.date),
+      datasets: [
+        lineDataset('UST 2Y',  ust.map(r => r.dgs2),  COLORS.blue),
+        lineDataset('UST 10Y', ust.map(r => r.dgs10), COLORS.gold),
+        lineDataset('UST 30Y', ust.map(r => r.dgs30), COLORS.red),
+      ],
+    },
+    options: ustChartOptions(),
+  });
+  syncUSTResetButton(ustChart);
+}
+
+document.getElementById('ustResetZoom').addEventListener('click', resetUSTZoom);
 
 function renderFed(fed) {
   makeChart('fedChart', fed.map(r => r.date), [
@@ -503,6 +656,209 @@ function renderCPI(rows) {
     lineDataset('核心 CPI 同比', rows.map(r => r.cpilfesl_yoy === null ? null : r.cpilfesl_yoy * 100), COLORS.blue),
   ]);
 }
+
+let goldDebtChart = null;
+
+function renderGoldVsDebt(payload) {
+  const observations = payload?.observations;
+  const methodology = payload?.methodology;
+  if (!Array.isArray(observations) || !observations.length || !methodology) {
+    throw new Error('gold-vs-debt observations/methodology missing');
+  }
+  if (methodology.debt_definition !== 'Total Public Debt Outstanding'
+      || methodology.gold_value_is_estimate !== true
+      || methodology.no_forward_fill !== true
+      || methodology.no_interpolation !== true) {
+    throw new Error('gold-vs-debt methodology contract mismatch');
+  }
+  const labels = observations.map(row => row.date);
+  const goldPoints = observations
+    .filter(row => Number.isFinite(row.global_gold_value_usd_tn))
+    .map(row => ({ x: row.date, y: row.global_gold_value_usd_tn }));
+  const debtPoints = observations
+    .filter(row => Number.isFinite(row.us_total_public_debt_usd_tn))
+    .map(row => ({ x: row.date, y: row.us_total_public_debt_usd_tn }));
+  if (!goldPoints.length || !debtPoints.length) {
+    throw new Error('gold-vs-debt has no visible observations');
+  }
+  const options = chartOptions();
+  options.plugins.tooltip.callbacks.label = ctx =>
+    `  ${ctx.dataset.label}: $${Number(ctx.parsed.y).toFixed(2)} tn`;
+  options.scales.y.ticks.callback = value => '$' + Number(value).toFixed(0) + ' tn';
+  options.scales.y.title = {
+    display: true, text: 'USD tn', color: COLORS.muted, font: { size: 10 },
+  };
+  options.animation = false;
+  goldDebtChart?.destroy();
+  goldDebtChart = new Chart(document.getElementById('goldDebtChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        lineDataset('Global Gold Value（估算）', goldPoints, COLORS.gold, {
+          pointRadius: 1.5, tension: 0, sourceField: 'global_gold_value_usd_tn',
+          sourceFrequency: 'weekly',
+        }),
+        lineDataset('U.S. Total Public Debt Outstanding', debtPoints, COLORS.blue, {
+          pointRadius: 1.5, tension: 0,
+          sourceField: 'us_total_public_debt_usd_tn',
+          sourceFrequency: 'exact_date_daily_observation',
+        }),
+      ],
+    },
+    options,
+  });
+  const lastGold = goldPoints.at(-1)?.x || '--';
+  const lastDebt = debtPoints.at(-1)?.x || '--';
+  document.getElementById('goldDebtGoldAsOf').textContent = lastGold;
+  document.getElementById('goldDebtDebtAsOf').textContent = lastDebt;
+  return { goldPoints: goldPoints.length, debtPoints: debtPoints.length };
+}
+
+const TRADINGVIEW_TENORS = Object.freeze({
+  'TVC:US02Y': '2Y',
+  'TVC:US10Y': '10Y',
+  'TVC:US30Y': '30Y',
+});
+const TRADINGVIEW_VIEWS = Object.freeze({
+  intraday: { label: '分时', interval: '5', range: '1D' },
+  oneDay: { label: '1D', interval: '15', range: '1D' },
+  fiveDay: { label: '5D', interval: '60', range: '5D' },
+});
+const TRADINGVIEW_WIDGET_SRC =
+  'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+let liveTreasuryState = { symbol: 'TVC:US10Y', view: 'intraday', token: 0 };
+let liveTreasuryTimer = null;
+
+function setLiveTreasuryUnavailable(message = '实时市场图暂不可用，请稍后重试。') {
+  const fallback = document.getElementById('liveTreasuryFallback');
+  const status = document.getElementById('liveTreasuryStatus');
+  fallback.textContent = message;
+  fallback.hidden = false;
+  status.textContent = message;
+  status.className = 'status err live-status';
+}
+
+function syncLiveTreasuryControls() {
+  for (const button of document.querySelectorAll('[data-live-symbol]')) {
+    button.setAttribute('aria-pressed', String(
+      button.dataset.liveSymbol === liveTreasuryState.symbol));
+  }
+  for (const button of document.querySelectorAll('[data-live-view]')) {
+    button.setAttribute('aria-pressed', String(
+      button.dataset.liveView === liveTreasuryState.view));
+  }
+}
+
+function waitForTradingViewFrame(token, attempts = 20) {
+  clearTimeout(liveTreasuryTimer);
+  const host = document.getElementById('liveTreasuryWidget');
+  const fallback = document.getElementById('liveTreasuryFallback');
+  const status = document.getElementById('liveTreasuryStatus');
+  const poll = remaining => {
+    if (token !== liveTreasuryState.token) return;
+    if (host.querySelector('iframe')) {
+      fallback.hidden = true;
+      status.textContent = `${TRADINGVIEW_TENORS[liveTreasuryState.symbol]} · `
+        + `${TRADINGVIEW_VIEWS[liveTreasuryState.view].label}；数据粒度与延迟由 TradingView 提供。`;
+      status.className = 'status live-status';
+      return;
+    }
+    if (remaining <= 0) {
+      setLiveTreasuryUnavailable();
+      return;
+    }
+    liveTreasuryTimer = setTimeout(() => poll(remaining - 1), 500);
+  };
+  poll(attempts);
+}
+
+function renderLiveTreasuryWidget() {
+  const host = document.getElementById('liveTreasuryWidget');
+  const fallback = document.getElementById('liveTreasuryFallback');
+  const status = document.getElementById('liveTreasuryStatus');
+  const view = TRADINGVIEW_VIEWS[liveTreasuryState.view];
+  if (!host || !view || !TRADINGVIEW_TENORS[liveTreasuryState.symbol]) {
+    setLiveTreasuryUnavailable('实时市场图配置无效，请稍后重试。');
+    return;
+  }
+  clearTimeout(liveTreasuryTimer);
+  liveTreasuryState.token += 1;
+  const token = liveTreasuryState.token;
+  host.replaceChildren();
+  fallback.hidden = true;
+  status.textContent = '正在加载 TradingView 市场图…';
+  status.className = 'status live-status';
+  syncLiveTreasuryControls();
+
+  const container = document.createElement('div');
+  container.className = 'tradingview-widget-container';
+  const mount = document.createElement('div');
+  mount.className = 'tradingview-widget-container__widget';
+  const attribution = document.createElement('div');
+  attribution.className = 'tradingview-widget-copyright';
+  const link = document.createElement('a');
+  link.href = `https://www.tradingview.com/symbols/${liveTreasuryState.symbol.replace(':', '-')}/`;
+  link.rel = 'noopener nofollow';
+  link.target = '_blank';
+  link.textContent = `${TRADINGVIEW_TENORS[liveTreasuryState.symbol]} U.S. Treasury yield chart`;
+  attribution.append(link, document.createTextNode(' by TradingView'));
+  const script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src = TRADINGVIEW_WIDGET_SRC;
+  script.async = true;
+  script.onerror = () => {
+    if (token === liveTreasuryState.token) setLiveTreasuryUnavailable();
+  };
+  const config = {
+    autosize: true,
+    symbol: liveTreasuryState.symbol,
+    interval: view.interval,
+    range: view.range,
+    timezone: 'exchange',
+    theme: 'dark',
+    backgroundColor: '#0d1117',
+    gridColor: 'rgba(139,148,158,0.12)',
+    style: '2',
+    locale: 'zh_CN',
+    withdateranges: true,
+    hide_side_toolbar: true,
+    hide_top_toolbar: false,
+    hide_legend: false,
+    hide_volume: true,
+    allow_symbol_change: false,
+    save_image: false,
+    calendar: false,
+    support_host: 'https://www.tradingview.com',
+  };
+  window.__liveTreasuryWidgetContract = Object.freeze({
+    type: 'TradingView Advanced Real-Time Chart',
+    source: TRADINGVIEW_WIDGET_SRC,
+    symbol: config.symbol,
+    interval: config.interval,
+    range: config.range,
+    writesDerivedJson: false,
+    entersFiscalCalculations: false,
+  });
+  script.textContent = JSON.stringify(config);
+  container.append(mount, attribution, script);
+  host.append(container);
+  waitForTradingViewFrame(token);
+}
+
+for (const button of document.querySelectorAll('[data-live-symbol]')) {
+  button.addEventListener('click', () => {
+    liveTreasuryState.symbol = button.dataset.liveSymbol;
+    renderLiveTreasuryWidget();
+  });
+}
+for (const button of document.querySelectorAll('[data-live-view]')) {
+  button.addEventListener('click', () => {
+    liveTreasuryState.view = button.dataset.liveView;
+    renderLiveTreasuryWidget();
+  });
+}
+renderLiveTreasuryWidget();
 
 function _formatFiscalPercent(value, suffix = '%') {
   return value === null || value === undefined
@@ -1432,6 +1788,32 @@ function _safeRender(name, fn) {
 window.addEventListener('unhandledrejection', e => {
   console.error('[unhandled] ', e.reason);
 });
+
+// Gold-vs-debt is an independent derived comparison.  Its weekly/exact-date
+// failure boundary cannot affect historical rates, Live Treasury, or fiscal modules.
+loadJson('data/derived/gold_vs_debt.json?_=' + Date.now(), {
+  name: 'gold_vs_debt.json',
+})
+  .then(payload => {
+    let summary;
+    const rendered = _safeRender('全球黄金总市值 vs 美债总额', () => {
+      summary = renderGoldVsDebt(payload);
+    });
+    const el = document.getElementById('goldDebtStatus');
+    if (rendered) {
+      el.textContent = `已加载 ${summary.goldPoints} 个真实周频黄金估值点与 `
+        + `${summary.debtPoints} 个同日官方美债总额点；未做填充或插值。`;
+    } else {
+      el.textContent = '黄金与美债比较图渲染失败，请查看控制台。';
+      el.className = 'status err';
+    }
+  })
+  .catch(err => {
+    console.error('[fetch] 黄金与美债比较数据加载失败：', err);
+    const el = document.getElementById('goldDebtStatus');
+    el.textContent = '黄金与美债比较数据加载失败：' + err.message;
+    el.className = 'status err';
+  });
 
 Promise.all([
   // 两个派生文件都已信封化：解包走 js/data-helpers.js 的 loadJson，

@@ -61,11 +61,12 @@ derive_macro.py                         → macro_rates / macro_cpi / macro_debt
 fetch_treasury_fiscal.py  Treasury MTS Table 9 → data/treasury_mts_fiscal.json
 derive_fiscal_stress.py                 → data/derived/macro_fiscal_stress.json
 derive_fiscal_risk_monitor.py            → data/derived/fiscal_risk_monitor.json
+derive_gold_vs_debt.py                    → data/derived/gold_vs_debt.json
 fetch_cbo_baseline.py  CBO Budget Baseline XLSX → immutable vintage + cbo_baseline_latest
 derive_cbo_scenario_basis.py             → audited CBO scenario accounting basis
 assets/js/cbo-scenario-engine.js         → browser-only deterministic user scenario
 index.html        期限结构回放 + 各图表
-macro.html        利率 / CPI / 美国联邦债务 / 财政可持续性 / Fiscal Risk Monitor / CBO 面板
+macro.html        黄金 vs 美债 / 历史与 Live Treasury / CPI / 联邦债务 / 财政可持续性 / CBO 面板
 term-3d.html      Plotly 3D 曲面页，**已从导航移除**（无运行时入口，见下方专节）
 trading_calendar.py  交易日历，采集层与派生层共用一份假日表
 data_envelope.py  统一落盘信封 + write_json 单点落盘
@@ -74,8 +75,8 @@ tools/*.mjs       Playwright 验证脚本
 
 **Cloudflare 静态发布（C16）**：仓库不是 Worker JS 项目，`wrangler.jsonc` 不设
 `main`，只将 `assets.directory` 指向 `./dist`。`node tools/build-static-site.mjs`
-每次删除旧 dist 后按 39 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
-26 个公开 JSON；CBO source/vintage、quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
+每次删除旧 dist 后按 41 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
+28 个公开 JSON；CBO source/vintage、quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
 公开。Cloudflare Workers Builds 的 root 为 `/`，build command 为上述 Node 脚本，
 production deploy 为 `npx wrangler deploy`，preview deploy 为
 `npx wrangler versions upload`。`dist/` 与 `.wrangler/` 均为忽略的构建产物。
@@ -88,7 +89,7 @@ production deploy 为 `npx wrangler deploy`，preview deploy 为
 `tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
 不 fallback 与 EPERM 继续抛出。
 
-**前端破坏注入（C10-C18B）**：九个 `verify-*-injection.mjs` 统一经
+**前端破坏注入（C10-C18C.1）**：十一个 `verify-*-injection.mjs` 统一经
 `tools/_injection.mjs` 执行 `baseline green → injection red → restore green`。
 每个 case 必须证明 patch 与业务锚点真实改变、目标 guard 非零且命中稳定 FAIL
 marker；备份只进系统临时目录，每 case 与最外层 `finally` 都按原始 bytes/SHA-256
@@ -798,6 +799,16 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
   `min-width:0`，否则桌面宽度初始化后缩到移动端会被 canvas 的 min-content 撑出
   横向页面溢出。
 - macro rates/CPI 与 debt 使用独立加载错误边界；任一组失败不得拖掉另一组。
+- 黄金总市值 vs 美债只消费 `gold_vs_debt.json`：黄金是 World Gold Council
+  end-2025 地上存量 220,700 公吨乘周频 USD/oz 金价的估算；美债只取同一黄金
+  观测日的 Treasury `Total Public Debt Outstanding`，无同日值保持 null，禁止
+  最近值、forward-fill 或插值。该模块与 UST、Live Treasury、C17/C18C 分别隔离。
+- Live Treasury 使用 TradingView 官方 Advanced Real-Time Chart Widget，默认
+  `TVC:US10Y`，可切 2Y/10Y/30Y 与分时/1D/5D；它是浏览器端第三方市场背景，
+  不需要 API key，不写项目 JSON，也不进入 C17 `effective_r`、Fiscal Gap 或 C18C。
+  CDN/widget 失败只显示本卡 unavailable，不能拖掉任何本地数据模块。
+- 历史 UST 图只在 fine pointer 启用左键框选 X zoom；完成框选后 Y 轴按可见真实
+  观测重新计算，Reset 同时还原 X/Y。移动端关闭 drag，不能造成横向溢出。
 - Y 轴 min/max 全部取自派生 JSON 的 `scale`，回放期间 Chart.js 不自动缩放，
   帧间柱高可直接比较
 - 升级 Chart.js 或改动 `_initCharts` 初始化路径时，必须复跑
@@ -831,6 +842,7 @@ python3 fetch_treasury_debt.py --test      # Treasury 日频债务（三态 + �
 python3 fetch_treasury_fiscal.py --test    # Treasury MTS 月度财政流量（三态/层级/修订）
 python3 derive_fiscal_stress.py --test     # 财政可持续性公式/频率/缺失/幂等
 python3 derive_fiscal_risk_monitor.py --test # C18C 同季度同比/符号/新鲜度/幂等
+python3 derive_gold_vs_debt.py --test       # C18C.1 黄金估值/同日债务/新鲜度/幂等
 python3 fetch_cbo_baseline.py --test       # CBO workbook schema/vintage/单位/发布安全
 python3 derive_cbo_scenario_basis.py --test # C18B SFA 闭合/幂等/baseline 只读
 python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘
@@ -861,6 +873,9 @@ node tools/verify-cbo-scenario-injection.mjs # C18B 八项破坏注入
 node tools/verify-fiscal-risk-monitor-page.mjs # C18C 六 KPI/四图/上下文/隔离
 node tools/verify-fiscal-risk-monitor-snapshot-contract.mjs # C18C 禁止固定季度/lag/数组位置
 node tools/verify-fiscal-risk-monitor-injection.mjs # C18C 十一项破坏注入（含 snapshot coupling）
+node tools/verify-gold-debt-python.mjs      # 动态 WSL root 下运行黄金 vs 美债 Python guard
+node tools/verify-treasury-enhancements.mjs # 黄金/UST zoom/TradingView 契约与隔离
+node tools/verify-treasury-enhancements-injection.mjs # C18C.1 八项破坏注入
 node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
 node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
 node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红
@@ -950,3 +965,20 @@ latest observed/complete/lag 从当前 source 动态推导；rolling fixture 覆
 提交/部署 freshness 必须保持
 `fiscal_risk_monitor.json <- macro_fiscal_stress.json` 一致；固定失败 marker 为
 `committed fiscal risk monitor is stale relative to current fiscal stress source`。
+
+## C18C.1 Treasury 图表增强
+
+`derive_gold_vs_debt.py` strict 读取周频 `gold_price.json` 与日频
+`treasury_debt_daily.json`。黄金估值固定使用 World Gold Council end-2025 的
+220,700 公吨地上存量，按 `32150.74656862798 oz/metric tonne` 乘当期 USD/oz；
+美债只读取黄金观测日同日 `Total Public Debt Outstanding`。任一源字段缺失时对应值
+保持 null；同日另一字段仍可观测，不使用前值、最近值或插值。production/static freshness guard 都必须
+拒绝“新 gold/debt source + 旧 comparison”，固定 marker 为
+`committed gold-vs-debt output is stale relative to current sources`。
+
+历史 UST 卡使用既有 Chart.js zoom plugin：桌面左键框选 X，框选完成后以窗口内全部
+真实 tenor 值重新定 Y；Reset 还原 X/Y，移动端不启用拖拽。Live Treasury 是独立的
+TradingView Advanced Real-Time Chart Widget：默认 `TVC:US10Y`，可切 US02Y/US10Y/
+US30Y；分时/1D/5D 分别请求 5m/1D、15m/1D、60m/5D，实际可用粒度与延迟以
+TradingView 对相应 symbol 的供给为准。它不需要 API key、不落盘、不替代 FRED，
+不进入 C17 effective r、C18C 或 Fiscal Gap；第三方失败只降级 Live card。

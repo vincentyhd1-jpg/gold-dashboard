@@ -34,8 +34,18 @@ const gdpDataset = `        lineDataset('美国名义 GDP', quarterlyPoints('gdp
           pointRadius: 2, pointHoverRadius: 4, pointStyle: 'circle',
         }),
 `;
-const dragAnchor = '        enabled: finePointer,';
-const dragDisabled = '        enabled: false,';
+const dragAnchor = `      drag: {
+        enabled: finePointer,
+        threshold: 12,
+        backgroundColor: 'rgba(88,166,255,.18)',
+        borderColor: 'rgba(88,166,255,.85)',
+        borderWidth: 1,
+        drawTime: 'afterDatasetsDraw',
+      },
+      mode: 'x',
+      onZoomComplete: ({ chart }) => syncDebtResetButton(chart),`;
+const dragDisabled = dragAnchor.replace(
+  '        enabled: finePointer,', '        enabled: false,');
 const resetHandler =
   "document.getElementById('debtResetZoom').addEventListener('click', resetDebtZoom);\n";
 

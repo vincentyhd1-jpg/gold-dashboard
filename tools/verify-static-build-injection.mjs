@@ -144,6 +144,20 @@ try {
     'FAIL dist fiscal risk monitor 业务数据与 YoY 对应当前 fiscal stress');
   runBuildAndGuard('E restore');
 
+  console.log('\n--- F: dist gold price 更新但 gold-vs-debt 未重建 ---');
+  run(BUILD);
+  const distGoldPath = path.join(DIST, 'data', 'gold_price.json');
+  const distGold = JSON.parse(fs.readFileSync(distGoldPath, 'utf8'));
+  const originalGoldPrice = distGold.data[0].price;
+  distGold.data[0].price = originalGoldPrice + 0.001;
+  fs.writeFileSync(distGoldPath, `${JSON.stringify(distGold, null, 2)}\n`);
+  check('F dist gold source 合法数值已真实改变',
+    JSON.parse(fs.readFileSync(distGoldPath, 'utf8')).data[0].price
+      === originalGoldPrice + 0.001);
+  expectRed('F stale gold-vs-debt',
+    'FAIL dist gold-vs-debt 业务数据对应当前 gold/debt sources');
+  runBuildAndGuard('F restore');
+
   runBuildAndGuard('final restored');
   check('最终 wrangler.jsonc SHA-256 一致',
     sha256(fs.readFileSync(CONFIG)) === originalHash);

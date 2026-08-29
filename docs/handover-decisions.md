@@ -559,3 +559,21 @@ GitHub：`vincentyhd1-jpg/gold-dashboard`。
   observed/complete/lag 必须从当期 source 动态推导；页面 condition 按派生枚举映射，
   hover 按 `latest_complete_quarter` 找 label。rolling 与反向 condition fixture 防止测试
   重新耦合某日生产快照。
+
+## C18C.1 Treasury 图表增强长期决策
+
+- 全球黄金总市值是 World Gold Council end-2025 地上存量 220,700 公吨乘当期周频
+  USD/oz 的透明估值，不声称是每日库存普查；存量 vintage 与公式必须随输出披露。
+- 美债对比只使用 Treasury `Total Public Debt Outstanding`，并只在黄金观测日存在
+  精确同日值时配对。任一源缺口只让对应字段保持 null，不隐藏同日另一真实字段；
+  禁止最近值、forward-fill、插值或换用公众持有债务。
+- 历史 UST 仍以 FRED 为事实源；桌面框选缩放可按可见真实观测自适应 Y，但不得改变、
+  补齐或重采样数据。移动端关闭 drag，Reset 必须同时复原 X/Y。
+- Live Treasury 只使用 TradingView 官方 Advanced Real-Time Chart Widget，默认
+  `TVC:US10Y`，允许 US02Y/US10Y/US30Y 与分钟范围切换；实际粒度、延迟和可用性由
+  TradingView 决定，项目不得伪造。
+- TradingView 不需要项目 API key，不落盘、不进入 derived JSON、不替代 FRED，也不
+  进入 C17 effective r、Fiscal Gap、C18B scenario 或 C18C monitor。第三方/CDN 失败
+  只降级 Live card，属于独立外部资源边界。
+- committed comparison 与 dist 必须耦合当前 gold/debt source；新源配旧派生必须在
+  derive 或 static 闸门变红。页面/公式/口径/fallback 的关键保护由真实 injection 证明。

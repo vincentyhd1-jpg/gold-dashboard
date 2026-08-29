@@ -1,0 +1,374 @@
+{
+  "schema_version": 0,
+  "source": "derived_global_gold_value_vs_us_debt",
+  "freq": "weekly",
+  "generated_at": "2026-08-29T00:04:18Z",
+  "date_field": "date",
+  "coverage": {
+    "first": "2025-08-26",
+    "last": "2026-08-18",
+    "count": 52
+  },
+  "derived_from": [
+    {
+      "source": "gold_price",
+      "generated_at": "2026-08-22T07:42:39Z",
+      "coverage": {
+        "first": "2025-08-26",
+        "last": "2026-08-18",
+        "count": 52
+      },
+      "envelope": true
+    },
+    {
+      "source": "treasury_fiscal_data_debt_to_penny",
+      "generated_at": "2026-08-28T05:50:40Z",
+      "coverage": {
+        "first": "1993-04-01",
+        "last": "2026-08-26",
+        "count": 8380
+      },
+      "envelope": true
+    }
+  ],
+  "warnings": [],
+  "info": [
+    "global_gold_value_is_fixed_stock_estimate_not_daily_inventory_census",
+    "gold_stock=end-2025_220700_metric_tonnes_world_gold_council",
+    "debt=Total_Public_Debt_Outstanding",
+    "mixed_frequency_alignment=weekly_gold_dates_exact_daily_debt_dates_only",
+    "no_forward_fill_no_interpolation_null_is_not_zero",
+    "units=USD_trillions"
+  ],
+  "data": {
+    "observations": [
+      {
+        "date": "2025-08-26",
+        "gold_price_usd_oz": 3473.7,
+        "global_gold_value_usd_tn": 24.64822807204627,
+        "us_total_public_debt_usd_tn": 37.204886498253394
+      },
+      {
+        "date": "2025-09-02",
+        "gold_price_usd_oz": 3613.2,
+        "global_gold_value_usd_tn": 25.63807400463989,
+        "us_total_public_debt_usd_tn": 37.413538427516194
+      },
+      {
+        "date": "2025-09-09",
+        "gold_price_usd_oz": 3649.4,
+        "global_gold_value_usd_tn": 25.89493725023049,
+        "us_total_public_debt_usd_tn": 37.47388718723777
+      },
+      {
+        "date": "2025-09-16",
+        "gold_price_usd_oz": 3671.5,
+        "global_gold_value_usd_tn": 26.05175155209658,
+        "us_total_public_debt_usd_tn": 37.50275815372595
+      },
+      {
+        "date": "2025-09-23",
+        "gold_price_usd_oz": 3775.3,
+        "global_gold_value_usd_tn": 26.788282073983446,
+        "us_total_public_debt_usd_tn": 37.46969559227939
+      },
+      {
+        "date": "2025-09-30",
+        "gold_price_usd_oz": 3880.8,
+        "global_gold_value_usd_tn": 27.536875234475396,
+        "us_total_public_debt_usd_tn": 37.63755349493561
+      },
+      {
+        "date": "2025-10-07",
+        "gold_price_usd_oz": 3975.9,
+        "global_gold_value_usd_tn": 28.2116734293833,
+        "us_total_public_debt_usd_tn": 37.88975657276044
+      },
+      {
+        "date": "2025-10-14",
+        "gold_price_usd_oz": 4189.9,
+        "global_gold_value_usd_tn": 29.730146759670284,
+        "us_total_public_debt_usd_tn": 37.91895604570385
+      },
+      {
+        "date": "2025-10-21",
+        "gold_price_usd_oz": 4118.4,
+        "global_gold_value_usd_tn": 29.222806371280004,
+        "us_total_public_debt_usd_tn": 38.01981335470026
+      },
+      {
+        "date": "2025-10-28",
+        "gold_price_usd_oz": 3982.2,
+        "global_gold_value_usd_tn": 28.256376148919784,
+        "us_total_public_debt_usd_tn": 38.07693422053156
+      },
+      {
+        "date": "2025-11-04",
+        "gold_price_usd_oz": 3999.4,
+        "global_gold_value_usd_tn": 28.37842166892416,
+        "us_total_public_debt_usd_tn": 38.04723975310302
+      },
+      {
+        "date": "2025-11-10",
+        "gold_price_usd_oz": 4087.6,
+        "global_gold_value_usd_tn": 29.004259742434964,
+        "us_total_public_debt_usd_tn": 38.12573168763103
+      },
+      {
+        "date": "2025-11-18",
+        "gold_price_usd_oz": 4076.7,
+        "global_gold_value_usd_tn": 28.926916941967075,
+        "us_total_public_debt_usd_tn": 38.26535558003502
+      },
+      {
+        "date": "2025-11-25",
+        "gold_price_usd_oz": 4218.3,
+        "global_gold_value_usd_tn": 29.93166378107286,
+        "us_total_public_debt_usd_tn": 38.360841844745785
+      },
+      {
+        "date": "2025-12-02",
+        "gold_price_usd_oz": 4212.9,
+        "global_gold_value_usd_tn": 29.893347164327295,
+        "us_total_public_debt_usd_tn": 38.423764679404016
+      },
+      {
+        "date": "2025-12-09",
+        "gold_price_usd_oz": 4300.1,
+        "global_gold_value_usd_tn": 30.51208956807041,
+        "us_total_public_debt_usd_tn": 38.377110471869656
+      },
+      {
+        "date": "2025-12-16",
+        "gold_price_usd_oz": 4361.4,
+        "global_gold_value_usd_tn": 30.94705412483018,
+        "us_total_public_debt_usd_tn": 38.396179577012106
+      },
+      {
+        "date": "2025-12-23",
+        "gold_price_usd_oz": 4529.1,
+        "global_gold_value_usd_tn": 32.13699794487284,
+        "us_total_public_debt_usd_tn": 38.37534959693058
+      },
+      {
+        "date": "2025-12-30",
+        "gold_price_usd_oz": 4314.4,
+        "global_gold_value_usd_tn": 30.61355764574846,
+        "us_total_public_debt_usd_tn": 38.37215371762109
+      },
+      {
+        "date": "2026-01-06",
+        "gold_price_usd_oz": 4490.3,
+        "global_gold_value_usd_tn": 31.861685957886223,
+        "us_total_public_debt_usd_tn": 38.430410089259844
+      },
+      {
+        "date": "2026-01-13",
+        "gold_price_usd_oz": 4588.4,
+        "global_gold_value_usd_tn": 32.55777116209722,
+        "us_total_public_debt_usd_tn": 38.43385275368003
+      },
+      {
+        "date": "2026-01-20",
+        "gold_price_usd_oz": 4976.2,
+        "global_gold_value_usd_tn": 35.309471898009804,
+        "us_total_public_debt_usd_tn": 38.48470510239533
+      },
+      {
+        "date": "2026-01-27",
+        "gold_price_usd_oz": 4713.9,
+        "global_gold_value_usd_tn": 33.44827771794309,
+        "us_total_public_debt_usd_tn": 38.5671142076557
+      },
+      {
+        "date": "2026-02-03",
+        "gold_price_usd_oz": 4951.2,
+        "global_gold_value_usd_tn": 35.1320801538174,
+        "us_total_public_debt_usd_tn": 38.5642780202146
+      },
+      {
+        "date": "2026-02-10",
+        "gold_price_usd_oz": 5022.0,
+        "global_gold_value_usd_tn": 35.63445357337029,
+        "us_total_public_debt_usd_tn": 38.64572976496798
+      },
+      {
+        "date": "2026-02-17",
+        "gold_price_usd_oz": 5059.3,
+        "global_gold_value_usd_tn": 35.89912205570536,
+        "us_total_public_debt_usd_tn": 38.72032782235087
+      },
+      {
+        "date": "2026-02-24",
+        "gold_price_usd_oz": 5230.5,
+        "global_gold_value_usd_tn": 37.113900719934946,
+        "us_total_public_debt_usd_tn": 38.787781432126216
+      },
+      {
+        "date": "2026-03-03",
+        "gold_price_usd_oz": 5146.1,
+        "global_gold_value_usd_tn": 36.51502619154139,
+        "us_total_public_debt_usd_tn": 38.85335239988018
+      },
+      {
+        "date": "2026-03-10",
+        "gold_price_usd_oz": 5052.5,
+        "global_gold_value_usd_tn": 35.85087150128502,
+        "us_total_public_debt_usd_tn": 38.91886205767691
+      },
+      {
+        "date": "2026-03-17",
+        "gold_price_usd_oz": 4570.4,
+        "global_gold_value_usd_tn": 32.43004910627868,
+        "us_total_public_debt_usd_tn": 39.01676291024514
+      },
+      {
+        "date": "2026-03-24",
+        "gold_price_usd_oz": 4492.0,
+        "global_gold_value_usd_tn": 31.873748596491303,
+        "us_total_public_debt_usd_tn": 38.99985570042449
+      },
+      {
+        "date": "2026-03-31",
+        "gold_price_usd_oz": 4651.5,
+        "global_gold_value_usd_tn": 33.005507924438845,
+        "us_total_public_debt_usd_tn": 39.06542139364082
+      },
+      {
+        "date": "2026-04-07",
+        "gold_price_usd_oz": 4761.9,
+        "global_gold_value_usd_tn": 33.78886986679251,
+        "us_total_public_debt_usd_tn": 38.969941867504026
+      },
+      {
+        "date": "2026-04-14",
+        "gold_price_usd_oz": 4857.6,
+        "global_gold_value_usd_tn": 34.46792546356104,
+        "us_total_public_debt_usd_tn": 38.93340410046329
+      },
+      {
+        "date": "2026-04-21",
+        "gold_price_usd_oz": 4722.3,
+        "global_gold_value_usd_tn": 33.50788134399174,
+        "us_total_public_debt_usd_tn": 38.97926104149082
+      },
+      {
+        "date": "2026-04-28",
+        "gold_price_usd_oz": 4629.9,
+        "global_gold_value_usd_tn": 32.85224145745661,
+        "us_total_public_debt_usd_tn": 38.951791901141796
+      },
+      {
+        "date": "2026-05-05",
+        "gold_price_usd_oz": 4720.4,
+        "global_gold_value_usd_tn": 33.494399571433114,
+        "us_total_public_debt_usd_tn": 38.9106195502781
+      },
+      {
+        "date": "2026-05-12",
+        "gold_price_usd_oz": 4555.8,
+        "global_gold_value_usd_tn": 32.326452327670324,
+        "us_total_public_debt_usd_tn": 38.96829505980535
+      },
+      {
+        "date": "2026-05-19",
+        "gold_price_usd_oz": 4521.0,
+        "global_gold_value_usd_tn": 32.0795230197545,
+        "us_total_public_debt_usd_tn": 39.07075262699413
+      },
+      {
+        "date": "2026-05-26",
+        "gold_price_usd_oz": 4560.5,
+        "global_gold_value_usd_tn": 32.3598019755785,
+        "us_total_public_debt_usd_tn": 39.17115494666759
+      },
+      {
+        "date": "2026-06-02",
+        "gold_price_usd_oz": 4337.1,
+        "global_gold_value_usd_tn": 30.77462934947517,
+        "us_total_public_debt_usd_tn": 39.2219845862853
+      },
+      {
+        "date": "2026-06-09",
+        "gold_price_usd_oz": 4215.0,
+        "global_gold_value_usd_tn": 29.908248070839463,
+        "us_total_public_debt_usd_tn": 39.24172284879866
+      },
+      {
+        "date": "2026-06-16",
+        "gold_price_usd_oz": 4145.3,
+        "global_gold_value_usd_tn": 29.413679888031034,
+        "us_total_public_debt_usd_tn": 39.28986516756898
+      },
+      {
+        "date": "2026-06-23",
+        "gold_price_usd_oz": 4078.7,
+        "global_gold_value_usd_tn": 28.94110828150247,
+        "us_total_public_debt_usd_tn": 39.32060787588932
+      },
+      {
+        "date": "2026-06-30",
+        "gold_price_usd_oz": 4174.6,
+        "global_gold_value_usd_tn": 29.621583012224534,
+        "us_total_public_debt_usd_tn": 39.462398380774374
+      },
+      {
+        "date": "2026-07-07",
+        "gold_price_usd_oz": 4104.1,
+        "global_gold_value_usd_tn": 29.12133829360195,
+        "us_total_public_debt_usd_tn": 39.414977491738775
+      },
+      {
+        "date": "2026-07-14",
+        "gold_price_usd_oz": 4012.7,
+        "global_gold_value_usd_tn": 28.472794076834518,
+        "us_total_public_debt_usd_tn": 39.47015221859901
+      },
+      {
+        "date": "2026-07-21",
+        "gold_price_usd_oz": 4067.6,
+        "global_gold_value_usd_tn": 28.86234634708104,
+        "us_total_public_debt_usd_tn": 39.660369665133466
+      },
+      {
+        "date": "2026-07-28",
+        "gold_price_usd_oz": 4049.1,
+        "global_gold_value_usd_tn": 28.73107645637866,
+        "us_total_public_debt_usd_tn": 39.797152899275204
+      },
+      {
+        "date": "2026-08-04",
+        "gold_price_usd_oz": 4340.7,
+        "global_gold_value_usd_tn": 30.80017376063887,
+        "us_total_public_debt_usd_tn": 39.82843539089155
+      },
+      {
+        "date": "2026-08-11",
+        "gold_price_usd_oz": 4380.4,
+        "global_gold_value_usd_tn": 31.08187185041641,
+        "us_total_public_debt_usd_tn": 39.94192983207077
+      },
+      {
+        "date": "2026-08-18",
+        "gold_price_usd_oz": 4624.1,
+        "global_gold_value_usd_tn": 32.81108657280398,
+        "us_total_public_debt_usd_tn": 40.04742576842022
+      }
+    ],
+    "methodology": {
+      "global_gold_value_formula": "fixed_above_ground_gold_stock_tonnes * troy_oz_per_metric_tonne * gold_price_usd_oz / 1e12",
+      "gold_stock_tonnes": 220700.0,
+      "gold_stock_vintage": "end-2025",
+      "gold_stock_source_url": "https://www.gold.org/goldhub/data/how-much-gold",
+      "troy_oz_per_metric_tonne": 32150.74656862798,
+      "gold_value_is_estimate": true,
+      "gold_price_frequency": "weekly",
+      "debt_definition": "Total Public Debt Outstanding",
+      "debt_source_field": "tot_pub_debt_out_amt",
+      "debt_alignment": "exact_gold_observation_date_only",
+      "no_forward_fill": true,
+      "no_interpolation": true,
+      "missing_exact_date_debt_remains_null": true
+    }
+  }
+}
