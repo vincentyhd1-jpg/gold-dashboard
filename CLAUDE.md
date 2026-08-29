@@ -89,7 +89,7 @@ production deploy 为 `npx wrangler deploy`，preview deploy 为
 `tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
 不 fallback 与 EPERM 继续抛出。
 
-**前端破坏注入（C10-C18C.1）**：十一个 `verify-*-injection.mjs` 统一经
+**前端破坏注入（C10-C18C.2）**：十二个 `verify-*-injection.mjs` 统一经
 `tools/_injection.mjs` 执行 `baseline green → injection red → restore green`。
 每个 case 必须证明 patch 与业务锚点真实改变、目标 guard 非零且命中稳定 FAIL
 marker；备份只进系统临时目录，每 case 与最外层 `finally` 都按原始 bytes/SHA-256
@@ -803,12 +803,14 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
   end-2025 地上存量 220,700 公吨乘周频 USD/oz 金价的估算；美债只取同一黄金
   观测日的 Treasury `Total Public Debt Outstanding`，无同日值保持 null，禁止
   最近值、forward-fill 或插值。该模块与 UST、Live Treasury、C17/C18C 分别隔离。
-- Live Treasury 使用 TradingView 官方 Advanced Real-Time Chart Widget，默认
-  `TVC:US10Y`，可切 2Y/10Y/30Y 与分时/1D/5D；它是浏览器端第三方市场背景，
-  不需要 API key，不写项目 JSON，也不进入 C17 `effective_r`、Fiscal Gap 或 C18C。
-  CDN/widget 失败只显示本卡 unavailable，不能拖掉任何本地数据模块。
-- 历史 UST 图只在 fine pointer 启用左键框选 X zoom；完成框选后 Y 轴按可见真实
-  观测重新计算，Reset 同时还原 X/Y。移动端关闭 drag，不能造成横向溢出。
+- TradingView 官方 Advanced Widget 对 `TVC` Treasury yields 和实测的 CBOT Treasury
+  futures 连续合约都返回 third-party restricted；production 不再请求这些 symbol，Live
+  Treasury 卡明确 unavailable。没有 licensed market-data API 时不得换随机 symbol，
+  更不得把 FRED 日频冒充 intraday；本卡仍不写 JSON、不进入任何财政计算。
+- 历史 UST 图使用 vendored Hammer 2.0.8 / chartjs-plugin-zoom 2.2.0；通过
+  `any-pointer:fine` + `any-hover:hover` 识别 hybrid device 的外接鼠标。左键框选 X 后
+  Y 按可见真实观测重算；绘图区双击和 Reset 按钮共用同一 X/Y 恢复函数。插件缺失时
+  只禁用本卡缩放并显示固定提示，其余图继续渲染；touch-only 关闭 drag/dblclick。
 - Y 轴 min/max 全部取自派生 JSON 的 `scale`，回放期间 Chart.js 不自动缩放，
   帧间柱高可直接比较
 - 升级 Chart.js 或改动 `_initCharts` 初始化路径时，必须复跑
@@ -876,6 +878,7 @@ node tools/verify-fiscal-risk-monitor-injection.mjs # C18C 十一项破坏注入
 node tools/verify-gold-debt-python.mjs      # 动态 WSL root 下运行黄金 vs 美债 Python guard
 node tools/verify-treasury-enhancements.mjs # 黄金/UST zoom/TradingView 契约与隔离
 node tools/verify-treasury-enhancements-injection.mjs # C18C.1 九项破坏注入
+node tools/verify-treasury-interaction-injection.mjs # C18C.2 八项交互/受限 symbol 注入
 node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
 node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
 node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红
@@ -980,9 +983,19 @@ latest observed/complete/lag 从当前 source 动态推导；rolling fixture 覆
 或 Stooq `XAUUSD`，并透传 source/instrument/`gold_price_is_proxy=true`。页面动态披露
 实际代理；source metadata 改变而 comparison 未重建时，production/static guard 必须变红。
 
-历史 UST 卡使用既有 Chart.js zoom plugin：桌面左键框选 X，框选完成后以窗口内全部
-真实 tenor 值重新定 Y；Reset 还原 X/Y，移动端不启用拖拽。Live Treasury 是独立的
-TradingView Advanced Real-Time Chart Widget：默认 `TVC:US10Y`，可切 US02Y/US10Y/
-US30Y；分时/1D/5D 分别请求 5m/1D、15m/1D、60m/5D，实际可用粒度与延迟以
-TradingView 对相应 symbol 的供给为准。它不需要 API key、不落盘、不替代 FRED，
-不进入 C17 effective r、C18C 或 Fiscal Gap；第三方失败只降级 Live card。
+历史 UST 卡使用本地 vendored Hammer/zoom plugin：`any-pointer:fine` 与
+`any-hover:hover` 允许 primary pointer 为 coarse 的 hybrid device 继续使用鼠标左键
+框选 X；完成后以窗口内启用 dataset 的真实 tenor 值重新定 Y。绘图区双击与 Reset
+按钮共用 `resetUSTZoom()` 还原 X/Y，legend/卡片外双击不触发；touch-only 禁用。
+启动时显式检查 `Chart.registry.plugins.get('zoom')`，缺失时显示局部错误并保持其它图。
+
+TradingView 官方 Advanced Widget 的真实第三方探测确认 `TVC` Treasury yields 以及
+`CBOT:ZT1!`/`ZN1!`/`ZB1!` 都被限制嵌入。production 已移除所有这些 symbol 与 widget
+请求，只保留 unavailable 卡；没有 licensed market-data API 时不再猜测替代代码，
+也不把 FRED 日频伪装成 intraday。该边界不写 JSON、不替代 FRED、不进入 C17
+effective r、C18B/C18C 或 Fiscal Gap。
+
+黄金历史继续使用固定 end-2025 的 220,700 t 存量，因此只是 fixed-stock valuation
+proxy，主要反映价格变化，并非历史各时点真实 above-ground stock reconstruction。
+TODO（独立未来任务）：Historical Global Gold Valuation v2 仅在取得官方逐年地上存量
+后实现；不得在本阶段插值或倒推历史存量。

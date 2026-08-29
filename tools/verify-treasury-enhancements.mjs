@@ -50,30 +50,43 @@ const debtByDate = new Map(debtRows.map(row => [row.date, row.total_bn]));
 const upstreamPriceSource = goldEnvelope.info.find(item =>
   typeof item === 'string' && item.startsWith('price_source='))?.slice('price_source='.length);
 
-check('Live Treasury card 与官方 Advanced widget source 存在',
+check('UST zoom 使用 vendored Hammer 与 zoom plugin',
+  source.includes('assets/vendor/hammerjs-2.0.8/hammer.min.js')
+  && source.includes('assets/vendor/chartjs-plugin-zoom-2.2.0/chartjs-plugin-zoom.min.js')
+  && !source.includes('cdn.jsdelivr.net/npm/hammerjs')
+  && !source.includes('cdn.jsdelivr.net/npm/chartjs-plugin-zoom'));
+check('hybrid pointer contract 使用 any-pointer / any-hover',
+  source.includes("matchMedia('(any-pointer: fine)')")
+  && source.includes("matchMedia('(any-hover: hover)')")
+  && !source.includes("matchMedia('(hover: hover) and (pointer: fine)').matches;\n  const zoomEnabled"));
+check('zoom plugin registry health guard 与固定 unavailable 文案存在',
+  source.includes("Chart.registry?.plugins?.get('zoom')")
+  && source.includes('缩放组件加载失败，请刷新重试。'));
+check('UST 双击只在 chartArea 内调用共同 resetUSTZoom',
+  source.includes("getElementById('ustChart').addEventListener('dblclick'")
+  && source.includes('event.sourceCapabilities?.firesTouchEvents')
+  && source.includes('x < area.left || x > area.right || y < area.top || y > area.bottom')
+  && source.includes('  resetUSTZoom();'));
+
+const forbiddenSymbols = ['TVC:US02Y', 'TVC:US10Y', 'TVC:US30Y',
+  'CBOT:ZT1!', 'CBOT:ZN1!', 'CBOT:ZB1!'];
+check('Live Treasury unavailable card 存在且未伪装为实时收益率产品',
   source.includes('id="liveTreasuryPanel"')
-  && source.includes('embed-widget-advanced-chart.js'));
-check('默认 TradingView symbol 为 TVC:US10Y',
-  source.includes("liveTreasuryState = { symbol: 'TVC:US10Y'"));
-check('2Y / 10Y / 30Y symbol contract 锁定',
-  ['TVC:US02Y', 'TVC:US10Y', 'TVC:US30Y'].every(symbol =>
-    source.includes(`data-live-symbol="${symbol}"`)
-    && source.includes(`'${symbol}'`)));
-check('分时 / 1D / 5D 是分钟 interval + 真实 range contract',
-  source.includes("intraday: { label: '分时', interval: '5', range: '1D' }")
-  && source.includes("oneDay: { label: '1D', interval: '15', range: '1D' }")
-  && source.includes("fiveDay: { label: '5D', interval: '60', range: '5D' }"));
-check('TradingView attribution 与 C17 effective_r 隔离文案存在',
-  source.includes('Data / chart source: TradingView')
-  && source.includes('不是 C17 中美国政府存量债务的 effective_r')
-  && source.includes('不进入 C17/C18C 债务动力学或 Fiscal Gap 计算'));
-check('TradingView 数据不写 derived JSON 或财政模型',
-  source.includes('writesDerivedJson: false')
-  && source.includes('entersFiscalCalculations: false')
-  && !/fetch\([^)]*tradingview[^)]*\).*atomic|localStorage\.setItem/i.test(source));
-check('Live fallback 文案与错误边界存在',
-  source.includes('实时市场图暂不可用，请稍后重试。')
-  && source.includes('script.onerror'));
+  && source.includes('实时美债市场（暂不可用）')
+  && source.includes('当前无法可靠提供嵌入式实时 Treasury yield')
+  && !source.includes('实时国债收益率'));
+check('production 不再请求任何受限 TVC / CBOT symbol',
+  forbiddenSymbols.every(symbol => !source.includes(symbol))
+  && !source.includes('embed-widget-advanced-chart.js'));
+check('Live unavailable contract 不写 JSON 或进入财政计算',
+  source.includes("status: 'unavailable'")
+  && source.includes('symbols: Object.freeze([])')
+  && source.includes('writesDerivedJson: false')
+  && source.includes('entersFiscalCalculations: false'));
+check('TradingView compatibility 与 C17 effective_r 隔离说明存在',
+  source.includes('Compatibility source: TradingView Advanced Chart Widget')
+  && source.includes('不是 C17 effective_r')
+  && source.includes('不进入 Fiscal Gap、C18B 或 C18C 计算'));
 
 const methodology = derived.data.methodology;
 const observations = derived.data.observations;
@@ -110,73 +123,141 @@ check('美债明确是 Total Public Debt Outstanding 且只做 exact-date',
     debtByDate.has(row.date) ? debtByDate.get(row.date) / 1000 : null)));
 
 const browser = await launchChromium();
-const MOCK_WIDGET = `(() => {
-  const script = document.currentScript;
-  const mount = script?.parentElement?.querySelector('.tradingview-widget-container__widget');
-  if (mount) {
-    const frame = document.createElement('iframe');
-    frame.title = 'Mock TradingView Advanced Real-Time Chart';
-    frame.src = 'about:blank';
-    mount.append(frame);
-  }
-})();`;
 
-async function preparePage({ failWidget = false, failGold = false, mobile = false,
-  goldOverride = null } = {}) {
+async function preparePage({ blockZoomPlugin = false, failGold = false, mobile = false,
+  goldOverride = null, pointerMode = mobile ? 'touch' : 'hybrid' } = {}) {
   const context = await browser.newContext(mobile ? {
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
   } : { viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   const pageErrors = [];
+  const externalRequests = [];
   page.on('pageerror', error => pageErrors.push(error.message));
-  await page.route('https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js',
-    route => failWidget ? route.abort('failed') : route.fulfill({
-      status: 200, contentType: 'text/javascript', body: MOCK_WIDGET,
-    }));
+  page.on('request', request => {
+    const url = request.url();
+    if (!url.startsWith(base) && /tradingview/i.test(url)) externalRequests.push(url);
+  });
+  await page.addInitScript(mode => {
+    const original = window.matchMedia.bind(window);
+    window.matchMedia = query => {
+      const overrides = {
+        '(pointer: fine)': false,
+        '(hover: hover)': false,
+        '(any-pointer: fine)': mode === 'hybrid',
+        '(any-hover: hover)': mode === 'hybrid',
+      };
+      if (!(query in overrides)) return original(query);
+      const matches = overrides[query];
+      return {
+        matches, media: query, onchange: null,
+        addListener() {}, removeListener() {}, addEventListener() {},
+        removeEventListener() {}, dispatchEvent() { return true; },
+      };
+    };
+  }, pointerMode);
+  if (blockZoomPlugin) {
+    await page.route('**/assets/vendor/chartjs-plugin-zoom-2.2.0/chartjs-plugin-zoom.min.js',
+      route => route.fulfill({ status: 404, contentType: 'text/plain', body: 'blocked by guard' }));
+  }
   if (failGold) {
     await page.route('**/data/derived/gold_vs_debt.json?*', route => route.fulfill({
       status: 500, contentType: 'application/json', body: '{}',
     }));
   } else if (goldOverride) {
     await page.route('**/data/derived/gold_vs_debt.json?*', route => route.fulfill({
-      status: 200, contentType: 'application/json',
-      body: JSON.stringify(goldOverride),
+      status: 200, contentType: 'application/json', body: JSON.stringify(goldOverride),
     }));
   }
   await page.goto(`${base}/macro.html`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForFunction(() => typeof Chart !== 'undefined'
-    && !!Chart.registry.plugins.get('zoom')
-    && !/正在加载/.test(document.getElementById('status')?.textContent || ''),
+  await page.waitForFunction(() => typeof Chart !== 'undefined',
   null, { timeout: 30000 });
-  return { context, page, pageErrors };
+  await page.waitForFunction(() => !!Chart.getChart(document.getElementById('ustChart')),
+  null, { timeout: 15000 });
+  return { context, page, pageErrors, externalRequests };
+}
+
+async function chartAreaPoint(page, xFraction, yFraction) {
+  return page.evaluate(({ xFraction, yFraction }) => {
+    const canvas = document.getElementById('ustChart');
+    const chart = Chart.getChart(canvas);
+    const rect = canvas.getBoundingClientRect();
+    const area = chart.chartArea;
+    return {
+      x: rect.left + area.left + (area.right - area.left) * xFraction,
+      y: rect.top + area.top + (area.bottom - area.top) * yFraction,
+    };
+  }, { xFraction, yFraction });
+}
+
+async function dragUST(page) {
+  const start = await chartAreaPoint(page, 0.18, 0.22);
+  const end = await chartAreaPoint(page, 0.66, 0.78);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down({ button: 'left' });
+  await page.mouse.move(end.x, end.y, { steps: 12 });
+  await page.mouse.up({ button: 'left' });
+  await page.waitForTimeout(200);
+}
+
+async function ustState(page) {
+  return page.evaluate(() => {
+    const chart = Chart.getChart(document.getElementById('ustChart'));
+    const left = Math.max(0, Math.ceil(Number.isFinite(chart.scales.x.min)
+      ? chart.scales.x.min : 0));
+    const right = Math.min(chart.data.labels.length - 1,
+      Math.floor(Number.isFinite(chart.scales.x.max)
+        ? chart.scales.x.max : chart.data.labels.length - 1));
+    const values = [];
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      if (!chart.isDatasetVisible(datasetIndex)) return;
+      for (let index = left; index <= right; index++) {
+        const value = dataset.data[index];
+        if (Number.isFinite(value)) values.push(Number(value));
+      }
+    });
+    const low = values.length ? Math.min(...values) : null;
+    const high = values.length ? Math.max(...values) : null;
+    const padding = values.length ? Math.max((high - low) * 0.08, 0.05) : null;
+    return {
+      xMin: chart.scales.x.min, xMax: chart.scales.x.max,
+      yMin: chart.scales.y.min, yMax: chart.scales.y.max,
+      expectedMin: low === null ? null : low - padding,
+      expectedMax: high === null ? null : high + padding,
+      zoomed: typeof chart.isZoomedOrPanned === 'function'
+        ? chart.isZoomedOrPanned() : false,
+      resetDisabled: document.getElementById('ustResetZoom').disabled,
+      dragEnabled: chart.options.plugins.zoom?.zoom?.drag?.enabled === true,
+      hint: document.getElementById('ustZoomHint').textContent,
+      health: window.__ustZoomHealth,
+    };
+  });
+}
+
+function sameAxisState(a, b) {
+  return a.xMin === b.xMin && a.xMax === b.xMax
+    && Math.abs(a.yMin - b.yMin) < 1e-9
+    && Math.abs(a.yMax - b.yMax) < 1e-9;
 }
 
 try {
   const normal = await preparePage();
   const { page } = normal;
-  await page.waitForFunction(() => !!Chart.getChart(document.getElementById('goldDebtChart'))
-    && !!Chart.getChart(document.getElementById('ustChart'))
-    && !!document.querySelector('#liveTreasuryWidget iframe'), null, { timeout: 15000 });
-
+  await page.waitForFunction(() => !!Chart.getChart(document.getElementById('goldDebtChart')),
+  null, { timeout: 15000 });
   const initial = await page.evaluate(() => {
     const gold = Chart.getChart(document.getElementById('goldDebtChart'));
-    const ust = Chart.getChart(document.getElementById('ustChart'));
     return {
       goldDatasets: gold.data.datasets.map(dataset => ({
         label: dataset.label, field: dataset.sourceField,
         frequency: dataset.sourceFrequency, count: dataset.data.length,
       })),
-      ust: {
-        xMin: ust.scales.x.min, xMax: ust.scales.x.max,
-        yMin: ust.scales.y.min, yMax: ust.scales.y.max,
-        drag: ust.options.plugins.zoom.zoom.drag.enabled,
-      },
       live: window.__liveTreasuryWidgetContract,
-      attribution: document.querySelector('.tradingview-widget-copyright')?.textContent,
+      liveIframe: Boolean(document.querySelector('#liveTreasuryWidget iframe')),
+      liveFallback: document.getElementById('liveTreasuryFallback')?.textContent,
       goldMethod: document.getElementById('goldDebtMethod')?.textContent,
-      status: document.getElementById('liveTreasuryStatus')?.textContent,
     };
   });
+  const initialUST = await ustState(page);
   check('gold-vs-debt 页面有两条真实 source dataset',
     initial.goldDatasets.length === 2
     && initial.goldDatasets.some(row => row.field === 'global_gold_value_usd_tn'
@@ -187,101 +268,145 @@ try {
       && row.count === observations.filter(
         row => row.us_total_public_debt_usd_tn !== null).length),
   JSON.stringify(initial.goldDatasets));
-  check('Live widget 默认用 US10Y 分时分钟级配置',
-    initial.live?.symbol === 'TVC:US10Y' && initial.live?.interval === '5'
-    && initial.live?.range === '1D' && initial.live?.writesDerivedJson === false
-    && initial.live?.entersFiscalCalculations === false,
-  JSON.stringify(initial.live));
-  check('官方 TradingView attribution 保留',
-    /by TradingView/.test(initial.attribution || ''));
-  check('页面公开实际黄金价格代理、估算口径与既定资产定义',
+  check('Live card 为 unavailable，不创建 iframe 或请求受限 symbol',
+    initial.live?.status === 'unavailable'
+    && Array.isArray(initial.live?.symbols) && initial.live.symbols.length === 0
+    && initial.live?.writesDerivedJson === false
+    && initial.live?.entersFiscalCalculations === false
+    && !initial.liveIframe && normal.externalRequests.length === 0,
+  JSON.stringify({ live: initial.live, requests: normal.externalRequests }));
+  check('Live unavailable fallback 不将 FRED 冒充 intraday',
+    /licensed market-data API/.test(initial.liveFallback || '')
+    && /FRED 日频数据伪装成 intraday/.test(initial.liveFallback || ''),
+  initial.liveFallback);
+  check('页面公开 fixed-stock valuation proxy 与当前价格代理',
     initial.goldMethod?.includes(`黄金估值价格代理：${methodology.gold_price_source}`)
     && initial.goldMethod?.includes(methodology.gold_price_instrument)
-    && /估值代理/.test(initial.goldMethod)
-    && !/official spot price/i.test(initial.goldMethod)
     && initial.goldMethod.includes('220,700')
-    && initial.goldMethod.includes('Total Public Debt Outstanding'),
+    && initial.goldMethod.includes('历史所有日期当前均使用固定 end-2025')
+    && initial.goldMethod.includes('不是历史各时点真实 above-ground gold stock 的完整重建'),
   initial.goldMethod);
+  check('hybrid pointer 下 UST drag zoom 真正启用',
+    initialUST.health?.pluginAvailable === true
+    && initialUST.health?.mouseCapable === true
+    && initialUST.dragEnabled === true
+    && /按住鼠标左键/.test(initialUST.hint), JSON.stringify(initialUST));
 
-  const canvas = page.locator('#ustChart');
-  const box = await canvas.boundingBox();
-  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.25);
-  await page.mouse.down({ button: 'left' });
-  await page.mouse.move(box.x + box.width * 0.62, box.y + box.height * 0.8,
-    { steps: 10 });
-  await page.mouse.up({ button: 'left' });
-  await page.waitForTimeout(250);
-  const zoomed = await page.evaluate(() => {
+  const tooltipPoint = await chartAreaPoint(page, 0.5, 0.5);
+  await page.mouse.move(tooltipPoint.x, tooltipPoint.y);
+  await page.waitForTimeout(100);
+  const tooltipEnabled = await page.evaluate(() => {
     const chart = Chart.getChart(document.getElementById('ustChart'));
-    const left = Math.max(0, Math.ceil(chart.scales.x.min));
-    const right = Math.min(chart.data.labels.length - 1, Math.floor(chart.scales.x.max));
-    const values = chart.data.datasets.flatMap(dataset => dataset.data
-      .slice(left, right + 1)).filter(Number.isFinite).map(Number);
-    const low = Math.min(...values);
-    const high = Math.max(...values);
-    const padding = Math.max((high - low) * 0.08, 0.05);
-    return {
-      xMin: chart.scales.x.min, xMax: chart.scales.x.max,
-      yMin: chart.scales.y.min, yMax: chart.scales.y.max,
-      expectedMin: low - padding, expectedMax: high + padding,
-      zoomed: chart.isZoomedOrPanned(), resetDisabled:
-        document.getElementById('ustResetZoom').disabled,
-    };
+    return chart.options.plugins.tooltip.enabled !== false;
   });
-  check('真实左键拖框使 UST X 轴范围变小', zoomed.zoomed
-    && zoomed.xMax - zoomed.xMin < initial.ust.xMax - initial.ust.xMin,
-  JSON.stringify({ initial: initial.ust, zoomed }));
-  check('UST Y 轴按选区内真实数据自动重算',
+  check('UST tooltip 保持启用', tooltipEnabled);
+
+  const legendToggle = await page.evaluate(() => {
+    const chart = Chart.getChart(document.getElementById('ustChart'));
+    chart.setDatasetVisibility(0, false);
+    chart.update('none');
+    const hidden = !chart.isDatasetVisible(0);
+    chart.setDatasetVisibility(0, true);
+    chart.update('none');
+    return hidden && chart.isDatasetVisible(0);
+  });
+  check('UST legend dataset visibility toggle 仍可用', legendToggle);
+
+  await dragUST(page);
+  const zoomedForLegend = await ustState(page);
+  const legendPoint = await page.evaluate(() => {
+    const canvas = document.getElementById('ustChart');
+    const chart = Chart.getChart(canvas);
+    const rect = canvas.getBoundingClientRect();
+    const box = chart.legend.legendHitBoxes[0];
+    return { x: rect.left + box.left + box.width / 2, y: rect.top + box.top + box.height / 2 };
+  });
+  await page.mouse.dblclick(legendPoint.x, legendPoint.y);
+  await page.waitForTimeout(100);
+  const afterLegendDblclick = await ustState(page);
+  check('双击 legend / 绘图区外不触发 UST reset',
+    zoomedForLegend.zoomed && afterLegendDblclick.zoomed,
+  JSON.stringify({ before: zoomedForLegend, after: afterLegendDblclick }));
+
+  const inside = await chartAreaPoint(page, 0.5, 0.5);
+  await page.mouse.dblclick(inside.x, inside.y);
+  await page.waitForTimeout(100);
+  const dblclickReset = await ustState(page);
+  check('绘图区双击恢复完整 UST X/Y 与按钮状态',
+    zoomedForLegend.zoomed && !dblclickReset.zoomed && dblclickReset.resetDisabled
+    && sameAxisState(initialUST, dblclickReset),
+  JSON.stringify({ initial: initialUST, reset: dblclickReset }));
+
+  await page.mouse.dblclick(inside.x, inside.y);
+  const noOpReset = await ustState(page);
+  check('未缩放状态双击是安全 no-op',
+    !noOpReset.zoomed && noOpReset.resetDisabled && sameAxisState(initialUST, noOpReset),
+  JSON.stringify(noOpReset));
+
+  await dragUST(page);
+  const zoomed = await ustState(page);
+  check('基于 chartArea 的真实左键拖框缩小 UST X 轴',
+    zoomed.zoomed && zoomed.xMax - zoomed.xMin < initialUST.xMax - initialUST.xMin
+    && !zoomed.resetDisabled, JSON.stringify({ initial: initialUST, zoomed }));
+  check('UST Y 轴按选区内启用 dataset 真实值自动重算',
     Math.abs(zoomed.yMin - zoomed.expectedMin) < 1e-9
-    && Math.abs(zoomed.yMax - zoomed.expectedMax) < 1e-9
-    && !zoomed.resetDisabled, JSON.stringify(zoomed));
+    && Math.abs(zoomed.yMax - zoomed.expectedMax) < 1e-9,
+  JSON.stringify(zoomed));
   await page.click('#ustResetZoom');
-  const reset = await page.evaluate(() => {
-    const chart = Chart.getChart(document.getElementById('ustChart'));
-    return { xMin: chart.scales.x.min, xMax: chart.scales.x.max,
-      yMin: chart.scales.y.min, yMax: chart.scales.y.max,
-      zoomed: chart.isZoomedOrPanned(), disabled:
-        document.getElementById('ustResetZoom').disabled };
-  });
-  check('UST Reset Zoom 恢复完整 X/Y 范围', !reset.zoomed && reset.disabled
-    && reset.xMin === initial.ust.xMin && reset.xMax === initial.ust.xMax
-    && Math.abs(reset.yMin - initial.ust.yMin) < 1e-9
-    && Math.abs(reset.yMax - initial.ust.yMax) < 1e-9,
-  JSON.stringify({ initial: initial.ust, reset }));
-
-  for (const [selector, symbol] of [
-    ['[data-live-symbol="TVC:US02Y"]', 'TVC:US02Y'],
-    ['[data-live-symbol="TVC:US30Y"]', 'TVC:US30Y'],
-  ]) {
-    await page.click(selector);
-    await page.waitForFunction(expected =>
-      window.__liveTreasuryWidgetContract?.symbol === expected, symbol);
-    const actual = await page.evaluate(() => window.__liveTreasuryWidgetContract?.symbol);
-    check(`${symbol} tenor 切换更新真实 widget symbol`, actual === symbol, actual);
-  }
-  for (const [view, expected] of [
-    ['oneDay', { interval: '15', range: '1D' }],
-    ['fiveDay', { interval: '60', range: '5D' }],
-    ['intraday', { interval: '5', range: '1D' }],
-  ]) {
-    await page.click(`[data-live-view="${view}"]`);
-    await page.waitForFunction(value =>
-      window.__liveTreasuryWidgetContract?.interval === value.interval
-      && window.__liveTreasuryWidgetContract?.range === value.range, expected);
-    const actual = await page.evaluate(() => window.__liveTreasuryWidgetContract);
-    check(`${view} 切换改变分钟 interval / 时间范围`,
-      actual.interval === expected.interval && actual.range === expected.range,
-    JSON.stringify(actual));
-  }
+  const buttonReset = await ustState(page);
+  check('UST Reset Zoom 按钮与双击恢复结果完全一致',
+    !buttonReset.zoomed && buttonReset.resetDisabled
+    && sameAxisState(initialUST, buttonReset)
+    && sameAxisState(dblclickReset, buttonReset),
+  JSON.stringify({ dblclickReset, buttonReset }));
   check('正常页面无未捕获 pageerror', normal.pageErrors.length === 0,
     JSON.stringify(normal.pageErrors));
   await normal.context.close();
 
+  const touchOnly = await preparePage({ pointerMode: 'touch' });
+  const touchInitial = await ustState(touchOnly.page);
+  await dragUST(touchOnly.page);
+  const touchAfterDrag = await ustState(touchOnly.page);
+  const touchPoint = await chartAreaPoint(touchOnly.page, 0.5, 0.5);
+  await touchOnly.page.mouse.dblclick(touchPoint.x, touchPoint.y);
+  const touchAfterDblclick = await ustState(touchOnly.page);
+  check('touch-only fixture 禁用 drag 与 desktop dblclick reset',
+    touchInitial.health?.mouseCapable === false && !touchInitial.dragEnabled
+    && !touchAfterDrag.zoomed && sameAxisState(touchInitial, touchAfterDrag)
+    && sameAxisState(touchInitial, touchAfterDblclick),
+  JSON.stringify({ touchInitial, touchAfterDrag, touchAfterDblclick }));
+  check('touch-only 页面无未捕获 pageerror', touchOnly.pageErrors.length === 0,
+    JSON.stringify(touchOnly.pageErrors));
+  await touchOnly.context.close();
+
+  const pluginMissing = await preparePage({ blockZoomPlugin: true });
+  await pluginMissing.page.waitForFunction(() =>
+    !!Chart.getChart(document.getElementById('goldDebtChart'))
+    && !!Chart.getChart(document.getElementById('fedChart'))
+    && !!Chart.getChart(document.getElementById('cpiChart'))
+    && !!Chart.getChart(document.getElementById('debtOverviewChart')),
+  null, { timeout: 15000 });
+  const missing = await pluginMissing.page.evaluate(() => ({
+    zoomRegistered: Boolean(Chart.registry.plugins.get('zoom')),
+    health: window.__ustZoomHealth,
+    hint: document.getElementById('ustZoomHint')?.textContent,
+    disabled: document.getElementById('ustResetZoom')?.disabled,
+    charts: ['ustChart', 'fedChart', 'cpiChart', 'debtOverviewChart', 'goldDebtChart']
+      .map(id => Boolean(Chart.getChart(document.getElementById(id)))),
+  }));
+  check('zoom plugin missing 显示固定局部错误并禁用 Reset',
+    !missing.zoomRegistered && missing.health?.pluginAvailable === false
+    && missing.disabled && missing.hint === '缩放组件加载失败，请刷新重试。',
+  JSON.stringify(missing));
+  check('zoom plugin missing 不影响其它宏观图', missing.charts.every(Boolean),
+    JSON.stringify(missing.charts));
+  check('zoom plugin missing 无未捕获 pageerror', pluginMissing.pageErrors.length === 0,
+    JSON.stringify(pluginMissing.pageErrors));
+  await pluginMissing.context.close();
+
   const alternateSource = methodology.gold_price_instrument === 'GC=F'
-    ? { source: 'Stooq (xauusd)', instrument: 'XAUUSD',
-      label: 'XAUUSD gold spot proxy' }
-    : { source: 'Yahoo Finance (GC=F)', instrument: 'GC=F',
-      label: 'COMEX gold futures' };
+    ? { source: 'Stooq (xauusd)', instrument: 'XAUUSD', label: 'XAUUSD gold spot proxy' }
+    : { source: 'Yahoo Finance (GC=F)', instrument: 'GC=F', label: 'COMEX gold futures' };
   const switchedDerived = structuredClone(derived);
   Object.assign(switchedDerived.data.methodology, {
     gold_price_source: alternateSource.source,
@@ -293,56 +418,40 @@ try {
   await sourceSwitch.page.waitForFunction(() => !!Chart.getChart(
     document.getElementById('goldDebtChart')), null, { timeout: 15000 });
   const switchedMethod = await sourceSwitch.page.locator('#goldDebtMethod').textContent();
-  check('页面价格代理文案动态读取 derived methodology',
+  check('页面价格代理文案动态读取 derived methodology 且保留 fixed-stock 警示',
     switchedMethod.includes(alternateSource.source)
     && switchedMethod.includes(alternateSource.instrument)
-    && !switchedMethod.includes(methodology.gold_price_source), switchedMethod);
+    && !switchedMethod.includes(methodology.gold_price_source)
+    && switchedMethod.includes('历史所有日期当前均使用固定 end-2025'), switchedMethod);
   check('price source 切换页面无未捕获 pageerror',
     sourceSwitch.pageErrors.length === 0, JSON.stringify(sourceSwitch.pageErrors));
   await sourceSwitch.context.close();
 
-  const widgetFailure = await preparePage({ failWidget: true });
-  await widgetFailure.page.waitForFunction(() =>
-    !document.getElementById('liveTreasuryFallback')?.hidden, null, { timeout: 15000 });
-  const isolated = await widgetFailure.page.evaluate(() => ({
-    fallback: document.getElementById('liveTreasuryFallback')?.textContent,
-    gold: !!Chart.getChart(document.getElementById('goldDebtChart')),
-    ust: !!Chart.getChart(document.getElementById('ustChart')),
-    fiscal: !!Chart.getChart(document.getElementById('fiscalRatesChart')),
-  }));
-  check('TradingView CDN 失败显示明确 fallback',
-    /暂不可用/.test(isolated.fallback || ''));
-  check('TradingView CDN 失败不拖垮 gold / UST / C17',
-    isolated.gold && isolated.ust && isolated.fiscal, JSON.stringify(isolated));
-  check('TradingView CDN 失败无未捕获 pageerror',
-    widgetFailure.pageErrors.length === 0, JSON.stringify(widgetFailure.pageErrors));
-  await widgetFailure.context.close();
-
   const goldFailure = await preparePage({ failGold: true });
   await goldFailure.page.waitForFunction(() =>
-    /失败/.test(document.getElementById('goldDebtStatus')?.textContent || '')
-    && !!document.querySelector('#liveTreasuryWidget iframe'),
+    /失败/.test(document.getElementById('goldDebtStatus')?.textContent || ''),
   null, { timeout: 15000 });
   const goldIsolated = await goldFailure.page.evaluate(() => ({
-    gold: !!Chart.getChart(document.getElementById('goldDebtChart')),
-    ust: !!Chart.getChart(document.getElementById('ustChart')),
-    live: !!document.querySelector('#liveTreasuryWidget iframe'),
+    gold: Boolean(Chart.getChart(document.getElementById('goldDebtChart'))),
+    ust: Boolean(Chart.getChart(document.getElementById('ustChart'))),
+    liveUnavailable: window.__liveTreasuryWidgetContract?.status === 'unavailable',
     status: document.getElementById('goldDebtStatus')?.textContent,
   }));
   check('gold-vs-debt 加载失败只挂比较卡', !goldIsolated.gold
-    && goldIsolated.ust && goldIsolated.live && /失败/.test(goldIsolated.status),
-  JSON.stringify(goldIsolated));
+    && goldIsolated.ust && goldIsolated.liveUnavailable
+    && /失败/.test(goldIsolated.status), JSON.stringify(goldIsolated));
+  check('gold-vs-debt 加载失败无未捕获 pageerror',
+    goldFailure.pageErrors.length === 0, JSON.stringify(goldFailure.pageErrors));
   await goldFailure.context.close();
 
   const mobile = await preparePage({ mobile: true });
   await mobile.page.waitForFunction(() => !!Chart.getChart(
-    document.getElementById('goldDebtChart')) && !!document.querySelector(
-      '#liveTreasuryWidget iframe'), null, { timeout: 15000 });
+    document.getElementById('goldDebtChart')), null, { timeout: 15000 });
   const mobileState = await mobile.page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     innerWidth: window.innerWidth,
     ustDrag: Chart.getChart(document.getElementById('ustChart'))
-      ?.options.plugins.zoom.zoom.drag.enabled,
+      ?.options.plugins.zoom?.zoom?.drag?.enabled,
     liveWidth: document.getElementById('liveTreasuryPanel')?.getBoundingClientRect().width,
   }));
   check('移动端无横向溢出且禁用历史 UST drag zoom',

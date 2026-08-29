@@ -10,8 +10,8 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="assets/vendor/hammerjs-2.0.8/hammer.min.js"></script>
+<script src="assets/vendor/chartjs-plugin-zoom-2.2.0/chartjs-plugin-zoom.min.js"></script>
 <script src="js/data-helpers.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -68,7 +68,7 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px;display:grid;gap:24px}
 .live-control-label{font-size:11px;color:#8b949e;margin-right:2px}
 .live-toolbar button{appearance:none;border:1px solid #30363d;background:#0d1117;color:#8b949e;border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer}
 .live-toolbar button:hover,.live-toolbar button[aria-pressed="true"]{border-color:#58a6ff;color:#f0f6fc;background:rgba(88,166,255,.12)}
-.live-widget-shell{position:relative;min-height:440px;width:100%;overflow:hidden;border:1px solid #21262d;border-radius:9px;background:#0d1117}
+.live-widget-shell{position:relative;min-height:180px;width:100%;overflow:hidden;border:1px solid #21262d;border-radius:9px;background:#0d1117}
 .live-widget-host{height:440px;width:100%}
 .tradingview-widget-container{height:100%;width:100%}
 .tradingview-widget-container__widget{height:calc(100% - 32px);width:100%}
@@ -207,43 +207,29 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
         <span>周频黄金估值截至：<strong id="goldDebtGoldAsOf">--</strong></span>
         <span>同日美债总额截至：<strong id="goldDebtDebtAsOf">--</strong></span>
       </div>
-      <div class="gold-debt-method" id="goldDebtMethod">全球黄金总市值是固定 220,700 公吨地上黄金存量（World Gold Council，end-2025）乘以本项目黄金价格代理的估算，并非官方每日全球黄金市值统计。实际价格代理将在数据加载后显示。美债口径为 Total Public Debt Outstanding；只采用黄金观测日同日真实债务值，不前值填充、不插值。</div>
+      <div class="gold-debt-method" id="goldDebtMethod">全球黄金总市值是固定 220,700 公吨地上黄金存量（World Gold Council，end-2025）乘以本项目黄金价格代理的估算，并非官方每日全球黄金市值统计。历史所有日期当前均使用固定 end-2025 的 220,700 t 存量，因此该曲线主要反映黄金价格变化，不是历史各时点真实 above-ground gold stock 的完整重建。实际价格代理将在数据加载后显示。美债口径为 Total Public Debt Outstanding；只采用黄金观测日同日真实债务值，不前值填充、不插值。</div>
       <div class="status" id="goldDebtStatus" role="status">正在加载黄金总市值与美债总额…</div>
     </div>
 
-    <div class="card full">
+    <div class="card full" id="ustPanel">
       <div class="card-title">美国国债收益率</div>
       <div class="card-sub">2 年期（蓝）· 10 年期（金）· 30 年期（红）— 单位同为 %，共用一条 Y 轴</div>
       <div class="treasury-toolbar">
         <button type="button" id="ustResetZoom" disabled>重置缩放</button>
-        <span class="treasury-zoom-hint" id="ustZoomHint">鼠标左键拖框缩放时间轴；Y 轴按选区内真实观测自动重算</span>
+        <span class="treasury-zoom-hint" id="ustZoomHint">请在绘图区内按住鼠标左键拖框缩放；双击恢复；Y 轴按当前可见数据自适应。</span>
       </div>
       <div class="chart-wrap"><canvas id="ustChart"></canvas></div>
     </div>
 
     <div class="card full" id="liveTreasuryPanel">
-      <div class="card-title">实时国债收益率 / Live Treasury Market Context</div>
-      <div class="card-sub">TradingView Advanced Real-Time Chart · 默认 10Y；分钟级可用性及延迟取决于 TradingView 对相应市场符号的实际服务。</div>
-      <div class="live-toolbar" aria-label="实时国债收益率图表控制">
-        <div class="live-control-group" id="liveTenorControls">
-          <span class="live-control-label">期限</span>
-          <button type="button" data-live-symbol="TVC:US02Y" aria-pressed="false">2Y</button>
-          <button type="button" data-live-symbol="TVC:US10Y" aria-pressed="true">10Y</button>
-          <button type="button" data-live-symbol="TVC:US30Y" aria-pressed="false">30Y</button>
-        </div>
-        <div class="live-control-group" id="liveRangeControls">
-          <span class="live-control-label">范围</span>
-          <button type="button" data-live-view="intraday" aria-pressed="true">分时</button>
-          <button type="button" data-live-view="oneDay" aria-pressed="false">1D</button>
-          <button type="button" data-live-view="fiveDay" aria-pressed="false">5D</button>
-        </div>
-      </div>
+      <div class="card-title">实时美债市场（暂不可用） / Live U.S. Treasury Market</div>
+      <div class="card-sub">TradingView 第三方 Advanced Chart Widget 对 Treasury yield 与已探测的 CBOT Treasury futures symbols 均限制嵌入。</div>
       <div class="live-widget-shell">
-        <div class="live-widget-host" id="liveTreasuryWidget" aria-label="TradingView 实时美国国债收益率图"></div>
-        <div class="live-widget-fallback" id="liveTreasuryFallback" hidden>实时市场图暂不可用，请稍后重试。</div>
+        <div class="live-widget-host" id="liveTreasuryWidget" aria-label="实时美债市场不可用"></div>
+        <div class="live-widget-fallback" id="liveTreasuryFallback">在不增加 licensed market-data API 的条件下，当前无法可靠提供嵌入式实时 Treasury yield；页面不会用 FRED 日频数据伪装成 intraday。</div>
       </div>
-      <div class="live-note" id="liveTreasuryDisclaimer">Data / chart source: TradingView。该图使用 TradingView 市场数据，仅作实时/近实时 Treasury 市场背景；它与上方 FRED 历史收益率的数据来源和频率不同，也不是 C17 中美国政府存量债务的 effective_r，不进入 C17/C18C 债务动力学或 Fiscal Gap 计算。</div>
-      <div class="status live-status" id="liveTreasuryStatus" role="status">正在加载 TradingView 市场图…</div>
+      <div class="live-note" id="liveTreasuryDisclaimer">Compatibility source: TradingView Advanced Chart Widget。受限 symbol 不会被请求或隐藏提示；本卡不写入项目 JSON、不替代上方 FRED 历史收益率，也不是 C17 effective_r，不进入 Fiscal Gap、C18B 或 C18C 计算。</div>
+      <div class="status err live-status" id="liveTreasuryStatus" role="status">实时美债市场图不可用；等待未来单独评估 licensed market-data API。</div>
     </div>
 
     <div class="card">
@@ -572,14 +558,61 @@ function autoscaleUSTY(chart) {
   return true;
 }
 
+const UST_ZOOM_AVAILABLE_HINT =
+  '请在绘图区内按住鼠标左键拖框缩放；双击恢复；Y 轴按当前可见数据自适应。';
+const UST_ZOOM_UNAVAILABLE_HINT = '缩放组件加载失败，请刷新重试。';
+const UST_ZOOM_TOUCH_HINT = '触摸设备不启用拖框缩放；可使用外接鼠标。';
+
+function hasUSTMouseCapability() {
+  return window.matchMedia('(any-pointer: fine)').matches
+    && window.matchMedia('(any-hover: hover)').matches;
+}
+
+function isUSTZoomPluginAvailable() {
+  return typeof Chart !== 'undefined'
+    && Boolean(Chart.registry?.plugins?.get('zoom'));
+}
+
+function getUSTZoomHealth() {
+  const pluginAvailable = isUSTZoomPluginAvailable();
+  const mouseCapable = hasUSTMouseCapability();
+  return Object.freeze({
+    pluginAvailable,
+    mouseCapable,
+    enabled: pluginAvailable && mouseCapable,
+    dependencySource: 'vendored',
+  });
+}
+
+function syncUSTZoomHealthUI(chart = ustChart) {
+  const health = getUSTZoomHealth();
+  const panel = document.getElementById('ustPanel');
+  const hint = document.getElementById('ustZoomHint');
+  panel?.classList.toggle('fine-pointer', health.enabled);
+  if (hint) {
+    hint.textContent = !health.pluginAvailable
+      ? UST_ZOOM_UNAVAILABLE_HINT
+      : (health.mouseCapable ? UST_ZOOM_AVAILABLE_HINT : UST_ZOOM_TOUCH_HINT);
+  }
+  window.__ustZoomHealth = health;
+  syncUSTResetButton(chart);
+  return health;
+}
+
 function syncUSTResetButton(chart) {
   const button = document.getElementById('ustResetZoom');
-  if (!button || !chart) return;
-  button.disabled = !chart.isZoomedOrPanned();
+  if (!button) return;
+  const ready = isUSTZoomPluginAvailable()
+    && chart && typeof chart.isZoomedOrPanned === 'function';
+  button.disabled = !ready || !chart.isZoomedOrPanned();
 }
 
 function resetUSTZoom() {
-  if (!ustChart || typeof ustChart.resetZoom !== 'function') return;
+  if (!isUSTZoomPluginAvailable()
+      || !ustChart || typeof ustChart.resetZoom !== 'function') {
+    syncUSTZoomHealthUI(ustChart);
+    return;
+  }
   ustChart.resetZoom('none');
   delete ustChart.options.scales.y.min;
   delete ustChart.options.scales.y.max;
@@ -589,14 +622,14 @@ function resetUSTZoom() {
 
 function ustChartOptions() {
   const options = chartOptions();
-  const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const zoomEnabled = getUSTZoomHealth().enabled;
   options.plugins.zoom = {
     pan: { enabled: false },
     zoom: {
       wheel: { enabled: false },
       pinch: { enabled: false },
       drag: {
-        enabled: finePointer,
+        enabled: zoomEnabled,
         threshold: 12,
         backgroundColor: 'rgba(88,166,255,.18)',
         borderColor: 'rgba(88,166,255,.85)',
@@ -628,10 +661,20 @@ function renderUST(ust) {
     },
     options: ustChartOptions(),
   });
-  syncUSTResetButton(ustChart);
+  syncUSTZoomHealthUI(ustChart);
 }
 
 document.getElementById('ustResetZoom').addEventListener('click', resetUSTZoom);
+document.getElementById('ustChart').addEventListener('dblclick', event => {
+  const health = getUSTZoomHealth();
+  if (!health.enabled || !ustChart || event.sourceCapabilities?.firesTouchEvents) return;
+  const rect = event.currentTarget.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  const area = ustChart.chartArea;
+  if (!area || x < area.left || x > area.right || y < area.top || y > area.bottom) return;
+  resetUSTZoom();
+});
 
 function renderFed(fed) {
   makeChart('fedChart', fed.map(r => r.date), [
@@ -724,155 +767,21 @@ function renderGoldVsDebt(payload) {
     `乘以本项目黄金价格代理的估算。黄金估值价格代理：${methodology.gold_price_source}` +
     `（${methodology.gold_price_instrument_label}；${methodology.gold_price_instrument}）。` +
     `因此该曲线是估值代理，并非官方每日全球黄金市值统计。` +
+    `历史所有日期当前均使用固定 end-2025 的 220,700 t 存量，` +
+    `因此该曲线主要反映黄金价格变化，不是历史各时点真实 above-ground gold stock 的完整重建。` +
     `美债口径为 Total Public Debt Outstanding；只采用黄金观测日同日真实债务值，` +
     `不前值填充、不插值。`;
   return { goldPoints: goldPoints.length, debtPoints: debtPoints.length };
 }
 
-const TRADINGVIEW_TENORS = Object.freeze({
-  'TVC:US02Y': '2Y',
-  'TVC:US10Y': '10Y',
-  'TVC:US30Y': '30Y',
+const LIVE_TREASURY_AVAILABILITY = Object.freeze({
+  status: 'unavailable',
+  symbols: Object.freeze([]),
+  reason: 'tradingview_third_party_symbol_restriction',
+  writesDerivedJson: false,
+  entersFiscalCalculations: false,
 });
-const TRADINGVIEW_VIEWS = Object.freeze({
-  intraday: { label: '分时', interval: '5', range: '1D' },
-  oneDay: { label: '1D', interval: '15', range: '1D' },
-  fiveDay: { label: '5D', interval: '60', range: '5D' },
-});
-const TRADINGVIEW_WIDGET_SRC =
-  'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-let liveTreasuryState = { symbol: 'TVC:US10Y', view: 'intraday', token: 0 };
-let liveTreasuryTimer = null;
-
-function setLiveTreasuryUnavailable(message = '实时市场图暂不可用，请稍后重试。') {
-  const fallback = document.getElementById('liveTreasuryFallback');
-  const status = document.getElementById('liveTreasuryStatus');
-  fallback.textContent = message;
-  fallback.hidden = false;
-  status.textContent = message;
-  status.className = 'status err live-status';
-}
-
-function syncLiveTreasuryControls() {
-  for (const button of document.querySelectorAll('[data-live-symbol]')) {
-    button.setAttribute('aria-pressed', String(
-      button.dataset.liveSymbol === liveTreasuryState.symbol));
-  }
-  for (const button of document.querySelectorAll('[data-live-view]')) {
-    button.setAttribute('aria-pressed', String(
-      button.dataset.liveView === liveTreasuryState.view));
-  }
-}
-
-function waitForTradingViewFrame(token, attempts = 20) {
-  clearTimeout(liveTreasuryTimer);
-  const host = document.getElementById('liveTreasuryWidget');
-  const fallback = document.getElementById('liveTreasuryFallback');
-  const status = document.getElementById('liveTreasuryStatus');
-  const poll = remaining => {
-    if (token !== liveTreasuryState.token) return;
-    if (host.querySelector('iframe')) {
-      fallback.hidden = true;
-      status.textContent = `${TRADINGVIEW_TENORS[liveTreasuryState.symbol]} · `
-        + `${TRADINGVIEW_VIEWS[liveTreasuryState.view].label}；数据粒度与延迟由 TradingView 提供。`;
-      status.className = 'status live-status';
-      return;
-    }
-    if (remaining <= 0) {
-      setLiveTreasuryUnavailable();
-      return;
-    }
-    liveTreasuryTimer = setTimeout(() => poll(remaining - 1), 500);
-  };
-  poll(attempts);
-}
-
-function renderLiveTreasuryWidget() {
-  const host = document.getElementById('liveTreasuryWidget');
-  const fallback = document.getElementById('liveTreasuryFallback');
-  const status = document.getElementById('liveTreasuryStatus');
-  const view = TRADINGVIEW_VIEWS[liveTreasuryState.view];
-  if (!host || !view || !TRADINGVIEW_TENORS[liveTreasuryState.symbol]) {
-    setLiveTreasuryUnavailable('实时市场图配置无效，请稍后重试。');
-    return;
-  }
-  clearTimeout(liveTreasuryTimer);
-  liveTreasuryState.token += 1;
-  const token = liveTreasuryState.token;
-  host.replaceChildren();
-  fallback.hidden = true;
-  status.textContent = '正在加载 TradingView 市场图…';
-  status.className = 'status live-status';
-  syncLiveTreasuryControls();
-
-  const container = document.createElement('div');
-  container.className = 'tradingview-widget-container';
-  const mount = document.createElement('div');
-  mount.className = 'tradingview-widget-container__widget';
-  const attribution = document.createElement('div');
-  attribution.className = 'tradingview-widget-copyright';
-  const link = document.createElement('a');
-  link.href = `https://www.tradingview.com/symbols/${liveTreasuryState.symbol.replace(':', '-')}/`;
-  link.rel = 'noopener nofollow';
-  link.target = '_blank';
-  link.textContent = `${TRADINGVIEW_TENORS[liveTreasuryState.symbol]} U.S. Treasury yield chart`;
-  attribution.append(link, document.createTextNode(' by TradingView'));
-  const script = document.createElement('script');
-  script.type = 'text/javascript';
-  script.src = TRADINGVIEW_WIDGET_SRC;
-  script.async = true;
-  script.onerror = () => {
-    if (token === liveTreasuryState.token) setLiveTreasuryUnavailable();
-  };
-  const config = {
-    autosize: true,
-    symbol: liveTreasuryState.symbol,
-    interval: view.interval,
-    range: view.range,
-    timezone: 'exchange',
-    theme: 'dark',
-    backgroundColor: '#0d1117',
-    gridColor: 'rgba(139,148,158,0.12)',
-    style: '2',
-    locale: 'zh_CN',
-    withdateranges: true,
-    hide_side_toolbar: true,
-    hide_top_toolbar: false,
-    hide_legend: false,
-    hide_volume: true,
-    allow_symbol_change: false,
-    save_image: false,
-    calendar: false,
-    support_host: 'https://www.tradingview.com',
-  };
-  window.__liveTreasuryWidgetContract = Object.freeze({
-    type: 'TradingView Advanced Real-Time Chart',
-    source: TRADINGVIEW_WIDGET_SRC,
-    symbol: config.symbol,
-    interval: config.interval,
-    range: config.range,
-    writesDerivedJson: false,
-    entersFiscalCalculations: false,
-  });
-  script.textContent = JSON.stringify(config);
-  container.append(mount, attribution, script);
-  host.append(container);
-  waitForTradingViewFrame(token);
-}
-
-for (const button of document.querySelectorAll('[data-live-symbol]')) {
-  button.addEventListener('click', () => {
-    liveTreasuryState.symbol = button.dataset.liveSymbol;
-    renderLiveTreasuryWidget();
-  });
-}
-for (const button of document.querySelectorAll('[data-live-view]')) {
-  button.addEventListener('click', () => {
-    liveTreasuryState.view = button.dataset.liveView;
-    renderLiveTreasuryWidget();
-  });
-}
-renderLiveTreasuryWidget();
+window.__liveTreasuryWidgetContract = LIVE_TREASURY_AVAILABILITY;
 
 function _formatFiscalPercent(value, suffix = '%') {
   return value === null || value === undefined

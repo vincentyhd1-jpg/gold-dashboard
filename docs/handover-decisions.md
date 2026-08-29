@@ -571,13 +571,18 @@ GitHub：`vincentyhd1-jpg/gold-dashboard`。
 - 美债对比只使用 Treasury `Total Public Debt Outstanding`，并只在黄金观测日存在
   精确同日值时配对。任一源缺口只让对应字段保持 null，不隐藏同日另一真实字段；
   禁止最近值、forward-fill、插值或换用公众持有债务。
-- 历史 UST 仍以 FRED 为事实源；桌面框选缩放可按可见真实观测自适应 Y，但不得改变、
-  补齐或重采样数据。移动端关闭 drag，Reset 必须同时复原 X/Y。
-- Live Treasury 只使用 TradingView 官方 Advanced Real-Time Chart Widget，默认
-  `TVC:US10Y`，允许 US02Y/US10Y/US30Y 与分钟范围切换；实际粒度、延迟和可用性由
-  TradingView 决定，项目不得伪造。
+- 历史 UST 仍以 FRED 为事实源；vendored Hammer/zoom plugin 保证缩放依赖不受 CDN
+  抖动影响。hybrid input 用 `any-pointer`/`any-hover` 判断外接鼠标；框选按可见真实
+  观测自适应 Y，绘图区双击与按钮必须共同复原 X/Y。touch-only 关闭 drag/dblclick。
+- TradingView Advanced Widget 的真实第三方探测确认 `TVC` Treasury yields 及
+  `CBOT:ZT1!`/`ZN1!`/`ZB1!` 均受限。production 不请求或隐藏这些 symbol，只展示
+  unavailable 卡；没有 licensed market-data API 时不得继续换随机 symbol 或将 FRED
+  日频冒充 intraday。
 - TradingView 不需要项目 API key，不落盘、不进入 derived JSON、不替代 FRED，也不
   进入 C17 effective r、Fiscal Gap、C18B scenario 或 C18C monitor。第三方/CDN 失败
   只降级 Live card，属于独立外部资源边界。
 - committed comparison 与 dist 必须耦合当前 gold/debt source；新源配旧派生必须在
   derive 或 static 闸门变红。页面/公式/口径/fallback 的关键保护由真实 injection 证明。
+- 当前黄金历史估值是固定 end-2025 220,700 t 存量的 valuation proxy，不是历史 stock
+  reconstruction。Historical Global Gold Valuation v2 作为独立 TODO，须先取得官方
+  随年份变化的 above-ground stock；本阶段禁止插值历史存量。
