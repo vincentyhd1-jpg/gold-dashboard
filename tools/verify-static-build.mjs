@@ -19,6 +19,7 @@ const REQUIRED_PATHS = [
   'data/treasury_mts_fiscal.json',
   'data/derived/macro_fiscal_stress.json',
   'data/derived/fiscal_risk_monitor.json',
+  'data/derived/gold_vs_debt.json',
   'data/derived/cbo_baseline_latest.json',
   'data/derived/cbo_scenario_basis.json',
 ];
@@ -27,6 +28,7 @@ const FORBIDDEN_PATHS = [
   'fetch_fred.py', 'fetch_treasury_debt.py', 'fetch_treasury_fiscal.py',
   'fetch_cbo_baseline.py', 'derive_cbo_scenario_basis.py', 'tools', 'docs', '.github', '.git',
   'derive_fiscal_risk_monitor.py',
+  'derive_gold_vs_debt.py',
   'data/quarantine', 'data/cbo',
 ];
 
@@ -229,6 +231,78 @@ const monitorMatchesFiscal = Array.isArray(fiscalRows) && Array.isArray(monitorR
   });
 check('dist fiscal risk monitor 业务数据与 YoY 对应当前 fiscal stress',
   monitorMatchesFiscal);
+
+let goldSource;
+let debtSource;
+let goldDebt;
+try {
+  goldSource = readJson('data/gold_price.json');
+  debtSource = readJson('data/treasury_debt_daily.json');
+  goldDebt = readJson('data/derived/gold_vs_debt.json');
+  check('dist gold / debt / comparison 均为合法 JSON', true);
+} catch (error) {
+  check('dist gold / debt / comparison 均为合法 JSON', false, error.message);
+}
+const goldDebtRefs = goldDebt?.derived_from;
+check('dist gold-vs-debt derived_from 对应当前两个 source',
+  Array.isArray(goldDebtRefs) && goldDebtRefs.length === 2
+  && goldDebtRefs[0]?.source === goldSource?.source
+  && goldDebtRefs[0]?.generated_at === goldSource?.generated_at
+  && JSON.stringify(goldDebtRefs[0]?.coverage) === JSON.stringify(goldSource?.coverage)
+  && goldDebtRefs[0]?.envelope === true
+  && goldDebtRefs[1]?.source === debtSource?.source
+  && goldDebtRefs[1]?.generated_at === debtSource?.generated_at
+  && JSON.stringify(goldDebtRefs[1]?.coverage) === JSON.stringify(debtSource?.coverage)
+  && goldDebtRefs[1]?.envelope === true);
+const goldPriceSource = goldSource?.info?.find(item =>
+  typeof item === 'string' && item.startsWith('price_source='))
+  ?.slice('price_source='.length).trim();
+const normalizedGoldPriceSource = goldPriceSource?.toLowerCase() || '';
+const expectedGoldInstrument = normalizedGoldPriceSource.includes('yahoo finance')
+  && normalizedGoldPriceSource.includes('gc=f') ? 'GC=F'
+  : normalizedGoldPriceSource.includes('stooq')
+    && normalizedGoldPriceSource.includes('xauusd') ? 'XAUUSD' : null;
+const expectedGoldInstrumentLabel = expectedGoldInstrument === 'GC=F'
+  ? 'COMEX gold futures'
+  : expectedGoldInstrument === 'XAUUSD' ? 'XAUUSD gold spot proxy' : null;
+check('dist gold-vs-debt price proxy metadata 对应当前 gold source',
+  expectedGoldInstrument !== null
+  && goldDebt?.data?.methodology?.gold_price_source === goldPriceSource
+  && goldDebt?.data?.methodology?.gold_price_instrument === expectedGoldInstrument
+  && goldDebt?.data?.methodology?.gold_price_instrument_label
+    === expectedGoldInstrumentLabel
+  && goldDebt?.data?.methodology?.gold_price_is_proxy === true);
+const goldRows = goldSource?.data;
+const debtByDate = new Map((debtSource?.data || []).map(row => [row.date, row.total_bn]));
+const comparisonRows = goldDebt?.data?.observations;
+const GOLD_STOCK_TONNES = 220700;
+const TROY_OZ_PER_METRIC_TONNE = 32150.74656862798;
+const goldDebtMatchesSources = Array.isArray(goldRows) && Array.isArray(comparisonRows)
+  && comparisonRows.length === goldRows.length
+  && goldRows.every((goldRow, index) => {
+    const row = comparisonRows[index];
+    const debtBn = debtByDate.get(goldRow.date);
+    const expectedGold = goldRow.price === null ? null
+      : GOLD_STOCK_TONNES * TROY_OZ_PER_METRIC_TONNE * goldRow.price / 1e12;
+    const expectedDebt = debtBn === undefined ? null : debtBn / 1000;
+    return row?.date === goldRow.date
+      && Object.is(row.gold_price_usd_oz, goldRow.price)
+      && (expectedGold === null
+        ? row.global_gold_value_usd_tn === null
+        : Number.isFinite(row.global_gold_value_usd_tn)
+          && Math.abs(row.global_gold_value_usd_tn - expectedGold) <= 1e-12)
+      && Object.is(row.us_total_public_debt_usd_tn, expectedDebt);
+  });
+check('dist gold-vs-debt 业务数据对应当前 gold/debt sources',
+  goldDebtMatchesSources);
+check('dist gold-vs-debt 方法学锁定估算、Total Public Debt 与不填充',
+  goldDebt?.data?.methodology?.gold_value_is_estimate === true
+  && goldDebt?.data?.methodology?.gold_price_is_proxy === true
+  && goldDebt?.data?.methodology?.gold_stock_tonnes === GOLD_STOCK_TONNES
+  && goldDebt?.data?.methodology?.debt_definition === 'Total Public Debt Outstanding'
+  && goldDebt?.data?.methodology?.debt_alignment === 'exact_gold_observation_date_only'
+  && goldDebt?.data?.methodology?.no_forward_fill === true
+  && goldDebt?.data?.methodology?.no_interpolation === true);
 
 for (const forbidden of FORBIDDEN_PATHS) {
   check(`dist 不公开 ${forbidden}`, !fs.existsSync(path.join(DIST, forbidden)));

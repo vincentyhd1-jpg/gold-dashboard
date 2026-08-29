@@ -43,6 +43,7 @@ jobs:
           python fetch_treasury_fiscal.py --test
           python derive_fiscal_stress.py --test
           python derive_fiscal_risk_monitor.py --test
+          python derive_gold_vs_debt.py --test
           # CBO baseline 是手工 vintage 更新；这里只跑完全离线的 parser/schema/
           # immutable-vintage 测试，不在每日任务下载或覆盖官方 workbook。
           python fetch_cbo_baseline.py --test
@@ -200,6 +201,17 @@ jobs:
           exit 0
         continue-on-error: true
 
+      # C18C.1 周频黄金估值 / 同日官方总债务比较。只做 exact-date 对齐，
+      # 不前值填充；失败保留旧派生产物并且不影响 Treasury/C17/C18 模块。
+      - name: Run derive_gold_vs_debt.py
+        id: derive_gold_vs_debt
+        run: |
+          set +e
+          python derive_gold_vs_debt.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+        continue-on-error: true
+
       # 原始数据不可再生（CME 无历史归档），无条件落盘：
       # 上面任何一步失败都不能连累已经拿到的采集数据，隔离区同样要提交。
       - name: Commit and push if data changed
@@ -223,7 +235,8 @@ jobs:
                    data/derived/macro_rates.json data/derived/macro_cpi.json \
                    data/derived/macro_debt.json \
                    data/derived/macro_fiscal_stress.json \
-                   data/derived/fiscal_risk_monitor.json; do
+                   data/derived/fiscal_risk_monitor.json \
+                   data/derived/gold_vs_debt.json; do
             git add "$f" 2>/dev/null || true
           done
           # 隔离区必须提交：CME 只提供当日文件，坏数据错过就永久拿不回来
@@ -255,7 +268,7 @@ jobs:
           }
 
           [ "${{ steps.tests.outcome }}"  = "failure" ] && \
-            fail "校验器自检" "十三个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro / fetch_treasury_debt / fetch_treasury_fiscal / derive_fiscal_stress / derive_fiscal_risk_monitor / fetch_cbo_baseline / derive_cbo_scenario_basis）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
+            fail "校验器自检" "十四个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro / fetch_treasury_debt / fetch_treasury_fiscal / derive_fiscal_stress / derive_fiscal_risk_monitor / derive_gold_vs_debt / fetch_cbo_baseline / derive_cbo_scenario_basis）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
           # COT 按真实 exit code 三态处理，不能只看 step outcome：
           # continue-on-error 会把 1/2 都折叠成 failure，丢失故障类别。
           case "${{ steps.cot.outputs.code }}" in
@@ -351,6 +364,11 @@ jobs:
             1) fail "派生层：财政风险监测" "derive_fiscal_risk_monitor.py 输入或契约失败（exit 1）—— fiscal_risk_monitor.json 保持上一版；C17、市场利率、CBO 与原始采集结果不受影响" ;;
             0|"") : ;;
             *) fail "派生层：财政风险监测" "derive_fiscal_risk_monitor.py 以未预期的 exit code ${{ steps.derive_fiscal_risk_monitor.outputs.code }} 退出（只应产生 0 或 1）" ;;
+          esac
+          case "${{ steps.derive_gold_vs_debt.outputs.code }}" in
+            1) fail "派生层：黄金总市值 vs 美债总额" "derive_gold_vs_debt.py 输入或契约失败（exit 1）—— gold_vs_debt.json 保持上一版；黄金、Treasury、C17/C18 与其它采集结果不受影响" ;;
+            0|"") : ;;
+            *) fail "派生层：黄金总市值 vs 美债总额" "derive_gold_vs_debt.py 以未预期的 exit code ${{ steps.derive_gold_vs_debt.outputs.code }} 退出（只应产生 0 或 1）" ;;
           esac
           [ "${{ steps.commit.outcome }}" = "failure" ] && \
             fail "提交层" "commit/push 失败 —— 本次采集到的数据未能入库，需人工介入"

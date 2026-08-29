@@ -150,7 +150,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
-| `tools/verify-injection-wrappers.mjs` | 0 | 56 passed, 0 failed |
+| `tools/verify-injection-wrappers.mjs` | 0 | 64 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 38 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
@@ -163,6 +163,7 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_treasury_fiscal.py --test` | 0 | 28 passed, 0 failed |
 | `derive_fiscal_stress.py --test` | 0 | 34 passed, 0 failed |
 | `derive_fiscal_risk_monitor.py --test` | 0 | 52 passed, 0 failed |
+| `derive_gold_vs_debt.py --test` | 0 | 23 passed, 0 failed |
 | `fetch_cbo_baseline.py --test` | 0 | 22 passed, 0 failed |
 | `derive_cbo_scenario_basis.py --test` | 0 | 26 passed, 0 failed |
 | `tools/verify-fiscal-stress-page.mjs` | 0 | 46 passed, 0 failed；page errors: none |
@@ -171,11 +172,14 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-cbo-scenario-page.mjs` | 0 | 22 passed, 0 failed；page errors: none |
 | `tools/verify-fiscal-risk-monitor-page.mjs` | 0 | 41 passed, 0 failed；page errors: none |
 | `tools/verify-fiscal-risk-monitor-snapshot-contract.mjs` | 0 | 8 passed, 0 failed |
-| `tools/verify-static-build.mjs` | 0 | 46 passed, 0 failed；40 个公开文件逐字节对账 |
+| `tools/verify-gold-debt-python.mjs` | 0 | 23 passed, 0 failed；动态 WSL root/cwd 一致 |
+| `tools/verify-treasury-enhancements.mjs` | 0 | 30 passed, 0 failed；page errors: none |
+| `tools/verify-static-build.mjs` | 0 | 52 passed, 0 failed；41 个公开文件逐字节对账 |
+| `tools/verify-static-build-injection.mjs` | 0 | 38 passed, 0 failed；六项部署破坏均红且恢复 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
-macro-page(86)/fiscal-stress-page(46)/cbo-baseline-page(24)/static-build(34) 有计数；
+macro-page(86)/fiscal-stress-page(46)/cbo-baseline-page(24)/static-build(52) 有计数；
 playback/gapframe 无 passed/failed 累加器，
 仅凭 exit code，清点全绿时不构成计数证据。
 
@@ -879,3 +883,34 @@ C18C 定向结果：Python 52/0、页面 41/0、snapshot contract 8/0；十一�
 11/0，所有 target/source/output SHA-256 恢复一致；wrapper meta 56/0。static build
 46/0，五项 static injection 33/0。Wrangler versions upload 与
 deploy dry-run 均 exit 0，未执行真实 production deploy。
+
+## 23. C18C.1 Treasury chart enhancements
+
+`derive_gold_vs_debt.py` 生成 strict schema v0 weekly
+`data/derived/gold_vs_debt.json`。全球黄金总市值使用 World Gold Council end-2025
+地上存量 220,700 公吨 × `32150.74656862798 oz/metric tonne` × 周频 USD/oz，单位
+USD tn；美债使用 Treasury Debt to the Penny 的 `Total Public Debt Outstanding`，
+只在黄金观测日存在精确同日债务时输出 USD tn。无同日值保持 null，禁止前值、最近值、
+forward-fill 和插值。派生测试与 static guard 都按当前 gold/debt source 重算业务内容，
+忽略顶层 generated_at，阻止 stale comparison 发布。
+
+黄金 USD/oz 输入被明确视为 dashboard valuation proxy。派生层从当前
+`gold_price.info` 的唯一 `price_source=` 解析实际来源：Yahoo Finance `GC=F` 映射为
+COMEX gold futures，Stooq `XAUUSD` 映射为 XAUUSD gold spot proxy；无法识别时派生失败，
+不得默认为 spot。methodology 透传 source、instrument、显示标签及
+`gold_price_is_proxy=true`，页面据此动态显示实际代理，而不是写死某一数据商或品种。
+
+`macro.html` 在历史 UST 前增加独立黄金估值 vs 美债图；历史 UST 桌面左键框选后 X
+缩放并以窗口内全部真实 tenor 值自适应 Y，Reset 同时还原 X/Y，移动端 drag 关闭。
+其下增加 TradingView 官方 Advanced Real-Time Chart Widget：默认 `TVC:US10Y`，
+2Y/10Y/30Y 映射 `TVC:US02Y`/`US10Y`/`US30Y`；分时、1D、5D 分别配置
+5m/1D、15m/1D、60m/5D。该第三方图不需要 API key，不写 JSON、不替代 FRED，且
+不进入 C17 effective r、C18C 或 Fiscal Gap；CDN/widget 失败只显示本卡 unavailable。
+
+C18C.1 定向结果：Python 28/0、动态 Windows→WSL bridge 28/0、页面 35/0；九项
+injection 覆盖 Y 自适应、分钟范围、第三方异常、attribution、Reset、黄金公式、债务
+口径、stale 数值源及 stale `price_source`，全部真实红、命中稳定 marker，恢复后全绿且
+四个目标 SHA-256 一致。wrapper meta 为 64/0。静态白名单为 41 文件、28 JSON，
+static guard 53/0；static injection 43/0，并分别阻止“新 gold 数值源 + 旧 comparison”与
+“新 gold proxy metadata + 旧 methodology”。每日 workflow 的派生与 commit 清单加入
+comparison JSON，并保持每一步真实 exit code 与故障隔离。
