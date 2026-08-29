@@ -27,6 +27,8 @@ DEBT_OBSERVATION_START = "1990-01-01"
 DEBT_HISTORY_SERIES = frozenset({
     "GFDEBTN", "FYGFDPUN", "FDHBATN", "FDHBFIN", "GDP",
 })
+OFFICIAL_RESERVES_OBSERVATION_START = "2000-01-01"
+OFFICIAL_RESERVES_SERIES = frozenset({"FORTREASPOS99990"})
 
 # (series_id, 目标文件, freq, kind, units)
 #
@@ -55,10 +57,15 @@ SERIES = (
     ("FDHBATN", "data/debt_intragov.json", "quarterly", "debt", "Millions of Dollars"),
     ("FDHBFIN", "data/debt_foreign.json", "quarterly", "debt_foreign", "Billions of Dollars"),
     ("GDP", "data/gdp_nominal.json", "quarterly", "gdp", "Billions of Dollars"),
+    # —— 全球官方储备构成（TIC/FRED，月频原始值；派生层只取季末月）——
+    ("FORTREASPOS99990", "data/foreign_official_ust.json", "monthly",
+     "foreign_official_ust", "Millions of Dollars"),
 )
 
 # 债务/GDP 类：值必须为正。与 CPI 指数 ≤ 0 同类，属可确定性判断，走 d 类硬闸。
-POSITIVE_KINDS = frozenset({"cpi", "debt", "debt_foreign", "gdp"})
+POSITIVE_KINDS = frozenset({
+    "cpi", "debt", "debt_foreign", "gdp", "foreign_official_ust",
+})
 
 # 滞后多少天开始报 warning。**只进 warnings，不触发 d 类**（宏观 d 类阈值待实测后确定）。
 # 季频那两个数是实测出来的，不是拍的：Treasury Bulletin 的 2026 Q1 数据发布于
@@ -100,6 +107,8 @@ def _key() -> str:
 
 
 def observation_start_for(series_id: str) -> str:
+    if series_id in OFFICIAL_RESERVES_SERIES:
+        return OFFICIAL_RESERVES_OBSERVATION_START
     return (
         DEBT_OBSERVATION_START
         if series_id in DEBT_HISTORY_SERIES
@@ -645,7 +654,7 @@ def run_tests() -> None:
         )
         check("失败 envelope data:null", failure_envelope("CPIAUCSL", "monthly", ["x"])["data"] is None)
         check("失败 envelope coverage:null", failure_envelope("CPIAUCSL", "monthly", ["x"])["coverage"] is None)
-        check("13 个序列配置", len(SERIES) == 13)
+        check("14 个序列配置", len(SERIES) == 14)
         check("每行 5 元组（含 units）", all(len(x) == 5 for x in SERIES))
         check("CPI 月频", all(x[2] == "monthly" for x in SERIES if x[3] == "cpi"))
         check("利率日频", all(x[2] == "daily" for x in SERIES if x[3] == "rate"))
@@ -676,8 +685,13 @@ def run_tests() -> None:
         check("GDP units = Billions of Dollars",
               UNITS["GDP"] == "Billions of Dollars", UNITS["GDP"])
         check("季频五条 units 均非空", all(x[4] for x in QUARTERLY))
-        check("日/月八条 units 留空（本批次不改它们的 info）",
-              all(x[4] == "" for x in SERIES if x[2] != "quarterly"))
+        check("FORTREASPOS99990 units = Millions of Dollars",
+              UNITS["FORTREASPOS99990"] == "Millions of Dollars")
+        check("既有日/月八条 units 留空",
+              all(x[4] == "" for x in SERIES
+                  if x[2] != "quarterly" and x[0] != "FORTREASPOS99990"))
+        check("FORTREASPOS99990 从 2000 开始采集",
+              observation_start_for("FORTREASPOS99990") == "2000-01-01")
 
         # units 进 info：非空才产出一行，且是 FRED 原文原样
         _pt = [{"date": "2026-01-01", "value": 1.0}]

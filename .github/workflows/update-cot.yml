@@ -44,6 +44,8 @@ jobs:
           python derive_fiscal_stress.py --test
           python derive_fiscal_risk_monitor.py --test
           python derive_gold_vs_debt.py --test
+          python fetch_wgc_official_reserves.py --test
+          python derive_official_reserve_composition.py --test
           # CBO baseline 是手工 vintage 更新；这里只跑完全离线的 parser/schema/
           # immutable-vintage 测试，不在每日任务下载或覆盖官方 workbook。
           python fetch_cbo_baseline.py --test
@@ -132,8 +134,8 @@ jobs:
           exit 0
         continue-on-error: true
 
-      # FRED 十三个序列（UST 2Y/10Y/30Y、Fed 目标区间上下限、DFF、CPIAUCSL、CPILFESL，
-      # 以及 GFDEBTN/FYGFDPUN/FDHBATN/FDHBFIN/GDP 五个债务与 GDP 序列）。
+      # FRED 十四个序列（UST 2Y/10Y/30Y、Fed 目标区间上下限、DFF、CPIAUCSL、CPILFESL，
+      # GFDEBTN/FYGFDPUN/FDHBATN/FDHBFIN/GDP，以及 TIC Foreign Official UST）。
       # 逐序列独立下载/解析/校验/落盘，一个序列失败不影响其余，见 fetch_fred.py:188 process_one。
       #
       # exit code 四态：0 正常 / 1 需人工介入（c 类解析失败已隔离原始响应；
@@ -153,6 +155,17 @@ jobs:
           set +e
           python fetch_fred.py 2>&1 | tee /tmp/fred.log
           echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit 0
+        continue-on-error: true
+
+      # WGC 季度官方黄金与 IMF IFS-compatible Total reserves 报告合计。
+      # 网络失败 exit 2 保留旧文件；确定性 schema/coverage 失败 exit 1 报红。
+      - name: Run fetch_wgc_official_reserves.py
+        id: wgc_official_reserves
+        run: |
+          set +e
+          python fetch_wgc_official_reserves.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
           exit 0
         continue-on-error: true
 
@@ -212,6 +225,17 @@ jobs:
           exit 0
         continue-on-error: true
 
+      # C18C.3B：WGC/IFS-compatible 官方储备与 TIC/FRED foreign-official UST
+      # 只按共同季度派生；失败保留旧产物，不影响旧 gold_vs_debt 或其它宏观模块。
+      - name: Run derive_official_reserve_composition.py
+        id: derive_official_reserves
+        run: |
+          set +e
+          python derive_official_reserve_composition.py
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+        continue-on-error: true
+
       # 原始数据不可再生（CME 无历史归档），无条件落盘：
       # 上面任何一步失败都不能连累已经拿到的采集数据，隔离区同样要提交。
       - name: Commit and push if data changed
@@ -232,11 +256,14 @@ jobs:
                    data/debt_intragov.json data/debt_foreign.json \
                    data/gdp_nominal.json data/treasury_debt_daily.json \
                    data/treasury_mts_fiscal.json \
+                   data/foreign_official_ust.json \
+                   data/wgc_official_reserves.json \
                    data/derived/macro_rates.json data/derived/macro_cpi.json \
                    data/derived/macro_debt.json \
                    data/derived/macro_fiscal_stress.json \
                    data/derived/fiscal_risk_monitor.json \
-                   data/derived/gold_vs_debt.json; do
+                   data/derived/gold_vs_debt.json \
+                   data/derived/official_reserve_composition.json; do
             git add "$f" 2>/dev/null || true
           done
           # 隔离区必须提交：CME 只提供当日文件，坏数据错过就永久拿不回来
@@ -268,7 +295,7 @@ jobs:
           }
 
           [ "${{ steps.tests.outcome }}"  = "failure" ] && \
-            fail "校验器自检" "十四个 --test 中至少一个失败（fetch_cot / fetch_gold / fetch_stocks / fetch_oi / derive_term_structure / fetch_fred / derive_macro / fetch_treasury_debt / fetch_treasury_fiscal / derive_fiscal_stress / derive_fiscal_risk_monitor / derive_gold_vs_debt / fetch_cbo_baseline / derive_cbo_scenario_basis）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
+            fail "校验器自检" "十六个 --test 中至少一个失败（既有十四项 + fetch_wgc_official_reserves / derive_official_reserve_composition）—— 校验逻辑本身有问题，本次采集的校验结果不可信。具体哪个见该步骤日志"
           # COT 按真实 exit code 三态处理，不能只看 step outcome：
           # continue-on-error 会把 1/2 都折叠成 failure，丢失故障类别。
           case "${{ steps.cot.outputs.code }}" in
@@ -340,7 +367,7 @@ jobs:
           #       同批成功序列仍会正常更新。
           case "${{ steps.fred.outputs.code }}" in
             1) fail "采集层：FRED" "fetch_fred.py 需人工介入（exit 1）—— c 类解析失败的原始响应已隔离到 data/quarantine/，d 类对应文件已落 data:null + coverage:null。详见该步骤日志中的逐序列行" ;;
-            3) fail "采集层：FRED" "FRED_API_KEY 缺失或无效（exit 3）—— 十三个序列一个都没取到，文件保持上一份。去 Settings → Secrets and variables → Actions 检查 secrets.FRED_API_KEY 是否存在、是否过期、是否被 fork/环境限制挡掉；key 在 https://fredaccount.stlouisfed.org/apikeys 重发" ;;
+            3) fail "采集层：FRED" "FRED_API_KEY 缺失或无效（exit 3）—— 十四个序列一个都没取到，文件保持上一份。去 Settings → Secrets and variables → Actions 检查 secrets.FRED_API_KEY 是否存在、是否过期、是否被 fork/环境限制挡掉；key 在 https://fredaccount.stlouisfed.org/apikeys 重发" ;;
             2) echo "::warning title=采集层：FRED::部分 FRED 序列未返回可用数据（下载失败或响应格式非法）；失败序列保持上一份，同批成功序列仍会正常更新（非异常）。key 问题不落在这一态，另有 exit 3" ;;
             0|"") : ;;
             *) fail "采集层：FRED" "fetch_fred.py 以未预期的 exit code ${{ steps.fred.outputs.code }} 退出（fetch_fred 只应产生 0 / 1 / 2 / 3）" ;;
@@ -369,6 +396,17 @@ jobs:
             1) fail "派生层：黄金总市值 vs 美债总额" "derive_gold_vs_debt.py 输入或契约失败（exit 1）—— gold_vs_debt.json 保持上一版；黄金、Treasury、C17/C18 与其它采集结果不受影响" ;;
             0|"") : ;;
             *) fail "派生层：黄金总市值 vs 美债总额" "derive_gold_vs_debt.py 以未预期的 exit code ${{ steps.derive_gold_vs_debt.outputs.code }} 退出（只应产生 0 或 1）" ;;
+          esac
+          case "${{ steps.wgc_official_reserves.outputs.code }}" in
+            1) fail "采集层：WGC 官方储备" "WGC 官方黄金/Total reserves schema 或 coverage 失败（exit 1）—— wgc_official_reserves.json 保持上一版" ;;
+            2) echo "::warning title=采集层：WGC 官方储备::WGC 公共接口暂时不可达；保留旧文件，等待下次任务" ;;
+            0|"") : ;;
+            *) fail "采集层：WGC 官方储备" "fetch_wgc_official_reserves.py 返回未预期 exit code ${{ steps.wgc_official_reserves.outputs.code }}" ;;
+          esac
+          case "${{ steps.derive_official_reserves.outputs.code }}" in
+            1) fail "派生层：全球官方储备构成" "derive_official_reserve_composition.py 输入或契约失败（exit 1）—— official_reserve_composition.json 保持上一版；其它模块不受影响" ;;
+            0|"") : ;;
+            *) fail "派生层：全球官方储备构成" "derive_official_reserve_composition.py 返回未预期 exit code ${{ steps.derive_official_reserves.outputs.code }}" ;;
           esac
           [ "${{ steps.commit.outcome }}" = "failure" ] && \
             fail "提交层" "commit/push 失败 —— 本次采集到的数据未能入库，需人工介入"

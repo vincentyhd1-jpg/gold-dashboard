@@ -176,6 +176,19 @@ try {
     'FAIL dist gold-vs-debt price proxy metadata 对应当前 gold source');
   runBuildAndGuard('G restore');
 
+  console.log('\n--- H: dist WGC source 更新但 official reserve composition 未重建 ---');
+  run(BUILD);
+  const distReserveSourcePath = path.join(DIST, 'data', 'wgc_official_reserves.json');
+  const distReserveSource = JSON.parse(fs.readFileSync(distReserveSourcePath, 'utf8'));
+  distReserveSource.generated_at = '2099-01-01T00:00:00Z';
+  fs.writeFileSync(distReserveSourcePath, `${JSON.stringify(distReserveSource, null, 2)}\n`);
+  check('H dist WGC source vintage 已真实改变',
+    JSON.parse(fs.readFileSync(distReserveSourcePath, 'utf8')).generated_at
+      === '2099-01-01T00:00:00Z');
+  expectRed('H stale official reserve composition',
+    'FAIL dist official reserve derived_from 对应当前 WGC / FRED sources');
+  runBuildAndGuard('H restore');
+
   runBuildAndGuard('final restored');
   check('最终 wrangler.jsonc SHA-256 一致',
     sha256(fs.readFileSync(CONFIG)) === originalHash);

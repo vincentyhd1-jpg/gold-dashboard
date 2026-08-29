@@ -144,13 +144,15 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `fetch_gold.py --test` | 0 | 42 passed, 0 failed |
 | `fetch_oi.py --test` | 0 | 63 passed, 0 failed |
 | `fetch_stocks.py --test` | 0 | 27 passed, 0 failed |
-| `fetch_fred.py --test` | 0 | 67 passed, 0 failed |
+| `fetch_fred.py --test` | 0 | 69 passed, 0 failed |
+| `fetch_wgc_official_reserves.py --test` | 0 | 10 passed, 0 failed |
+| `derive_official_reserve_composition.py --test` | 0 | 17 passed, 0 failed |
 | `fetch_treasury_debt.py --test` | 0 | 32 passed, 0 failed |
 | `derive_macro.py --test` | 0 | 53 passed, 0 failed |
 | `tools/verify-fetch-gates.py` | 0 | 63 passed, 0 failed |
 | `tools/verify-io-utils.py` | 0 | 109 passed, 0 failed |
 | `tools/verify-browser-launch.mjs` | 0 | 13 passed, 0 failed |
-| `tools/verify-injection-wrappers.mjs` | 0 | 67 passed, 0 failed |
+| `tools/verify-injection-wrappers.mjs` | 0 | 70 passed, 0 failed |
 | `tools/verify-ui-fixes.mjs` | 0 | 38 passed, 0 failed；page errors: none |
 | `tools/verify-contract-contango.mjs` | 0 | 29 passed, 0 failed；page errors: none |
 | `tools/verify-playback.mjs` | 0 | page errors: none |
@@ -173,10 +175,13 @@ io_utils.py:98      json.dumps(payload, ensure_ascii=False, indent=2)           
 | `tools/verify-fiscal-risk-monitor-page.mjs` | 0 | 41 passed, 0 failed；page errors: none |
 | `tools/verify-fiscal-risk-monitor-snapshot-contract.mjs` | 0 | 8 passed, 0 failed |
 | `tools/verify-gold-debt-python.mjs` | 0 | 28 passed, 0 failed；动态 WSL root/cwd 一致 |
-| `tools/verify-treasury-enhancements.mjs` | 0 | 40 passed, 0 failed；page errors: none |
+| `tools/verify-treasury-enhancements.mjs` | 0 | 44 passed, 0 failed；page errors: none |
 | `tools/verify-treasury-interaction-injection.mjs` | 0 | 67 passed, 0 failed；九项均真实红且恢复 |
-| `tools/verify-static-build.mjs` | 0 | 60 passed, 0 failed；45 个公开文件逐字节对账 |
-| `tools/verify-static-build-injection.mjs` | 0 | 43 passed, 0 failed；七项部署破坏均红且恢复 |
+| `tools/verify-official-reserve-contract.mjs` | 0 | 10 passed, 0 failed |
+| `tools/verify-official-reserve-composition.mjs` | 0 | 20 passed, 0 failed；page errors: none |
+| `tools/verify-official-reserve-composition-injection.mjs` | 0 | 数据 33/0 + 展示 18/0；六项均真实红且恢复 |
+| `tools/verify-static-build.mjs` | 0 | 68 passed, 0 failed；48 个公开文件逐字节对账 |
+| `tools/verify-static-build-injection.mjs` | 0 | 48 passed, 0 failed；八项部署破坏均红且恢复 |
 
 前端 verify 中 ui-fixes(38)/contract-contango(29)/isolation(37)/
 schema-coupling(3)/envelope-helper-raw-inputs(8)/cot-sentinel-strict(4)/
@@ -498,7 +503,8 @@ tooltip、完整季度恒等式映射、foreign 右端缺口、金额/比例独�
 以及 debt ↔ rates/CPI 双向加载故障隔离。`verify-debt-overview-injection.mjs` 当前
 **81/0**，11 项破坏均红且恢复后重新 86/0、文件 SHA-256 一致。
 
-`.github/workflows/update-cot.yml` 的 FRED 基线为 13 个序列。提交清单包含五个
+`.github/workflows/update-cot.yml` 的 FRED 基线为 14 个序列（C18C.3B 新增
+`FORTREASPOS99990`）。提交清单包含五个
 债务/GDP 原始信封（`debt_total.json`、`debt_held_public.json`、
 `debt_intragov.json`、`debt_foreign.json`、`gdp_nominal.json`）和
 `data/derived/macro_debt.json`；宏观派生说明与错误信息按 rates/CPI/debt 三链维护。
@@ -943,3 +949,32 @@ guard 为 60/0，并显式拒绝 dist 中重新出现受限 symbol 或外部 wid
 TODO：Historical Global Gold Valuation v2 需官方逐年 above-ground stock 后再做，当前
 不插值历史库存。static injection 为 43/0，dist macro guard 为 86/0；Wrangler
 `versions upload --dry-run` 与 `deploy --dry-run` 均 exit 0，未执行真实部署。
+
+## 25. C18C.3B Official Reserves Composition
+
+`fetch_wgc_official_reserves.py` 从 WGC Central Bank Dashboard 公共季度 JSON 读取
+官方黄金美元价值、吨数与 `Total reserves`，按报告经济体分别求和。WGC 的 Total
+reserves 指标为 IMF IFS-compatible、含黄金口径；三个指标每季至少 90 个有效报告
+经济体才保留，因此不完整的 2026-Q1 自动排除。当前原始 coverage 为 2000-12-31 至
+2025-12-31，共 101 季。`fetch_fred.py` 新增第 14 条
+`FORTREASPOS99990 -> data/foreign_official_ust.json`，从 2000-01-01 采集，单位保持
+FRED 原始 Millions of Dollars。
+
+`derive_official_reserve_composition.py` strict 读取两份源，只采用 FRED 的
+3/6/9/12 月观测并转换为 `YYYY-Qn`，与 WGC 季度取交集。输出
+`data/derived/official_reserve_composition.json`，当前 2000-Q4 至 2025-Q4、101 季。
+金额转为 USD；两条 share 均使用同一个 WGC/IFS-compatible
+`Total Official Reserve Assets`。任何非季末月、重复日期、非法分母、fill 或插值都
+不得生成观测；COFER USD share 明确不属于本管线。
+
+macro 原 `全球黄金总市值 vs 美债总额` 卡替换为单图双 Y 轴官方储备构成卡。左轴两条
+百分比线，右轴两条 USD tn 金额线；tooltip 透传 series、单位、period、source 与
+source observation as_of。TIC foreign official 范围免责声明保留。新卡独立加载失败时，
+历史 UST、Live unavailable、debt 与财政模块继续渲染。旧 `derive_gold_vs_debt.py` 与
+JSON 不删除、继续每日更新与 freshness 测试，但 macro 不再请求。
+
+C18C.3B 定向基线：WGC fetch 10/0，derive 17/0，contract 10/0，真实页面 20/0；六项
+injection 分为数据契约 33/0、展示语义 18/0，覆盖 COFER 替代、不同分母、source
+label 删除、美元储备误名、全球黄金总市值误名与 forward-fill，全部命中固定 FAIL
+marker 且两目标 SHA-256 恢复。static whitelist 更新为 48 文件/31 JSON，并增加
+WGC/FRED source 与派生 freshness；static guard 当前 68/0。

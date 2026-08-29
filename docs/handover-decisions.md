@@ -588,3 +588,23 @@ GitHub：`vincentyhd1-jpg/gold-dashboard`。
 - 当前黄金历史估值是固定 end-2025 220,700 t 存量的 valuation proxy，不是历史 stock
   reconstruction。Historical Global Gold Valuation v2 作为独立 TODO，须先取得官方
   随年份变化的 above-ground stock；本阶段禁止插值历史存量。
+
+## C18C.3B 全球官方储备构成长期决策
+
+- macro 首卡改为“全球官方储备构成：黄金 vs 外国官方机构持有美债”单图双轴四线；
+  旧 `gold_vs_debt` 管线保留但不再作为页面产品展示，避免删除历史依赖与扩大范围。
+- 两条比例线只能共用 `Total Official Reserve Assets`。当前分母是 WGC Central Bank
+  Dashboard 的 `Total reserves` 报告国合计，按 WGC 方法学为 IMF IFS-compatible、
+  含黄金口径；不得换成 COFER allocated FX、COFER USD share 或另一独立分母。
+- 官方黄金金额直接采用 WGC `Gold reserves (US$ Millions)` 的季末市场价值；不得
+  使用全球全部地上黄金总市值，也不得把央行账面成本当市场价值。
+- 美债金额严格为 TIC/FRED `FORTREASPOS99990` Foreign Official U.S. Treasury
+  Holdings。正式中文名固定为“外国官方机构持有美债额”；不能改成美元储备、外国
+  政府持有、所有外国持有或全球央行持有。TIC foreign official 范围需持续披露。
+- 目标频率固定季度。FRED 月频只取 3/6/9/12 月实际值，以 `YYYY-Qn` 与 WGC 对齐；
+  publication date、nearest date、forward-fill、插值和复制日/月值均禁止。
+- WGC 最新季度可能存在大量 awaited 国别值；production 只接受三个核心指标各至少
+  90 个报告经济体的季度。覆盖国随 vintage 变化是来源限制，必须在 metadata/方法学
+  中披露，不能用 0 或旧值补齐。
+- 页面双轴只用于同一经济问题的比例与金额视图：左轴 `% of Total Official Reserve
+  Assets`，右轴 `USD tn`。前端只做 USD→tn 显示缩放，不重算 share 或分母。
