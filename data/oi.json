@@ -2,18 +2,18 @@
   "schema_version": 0,
   "source": "cme_section62",
   "freq": "daily",
-  "generated_at": "2026-08-28T05:50:38Z",
+  "generated_at": "2026-08-29T20:40:34Z",
   "date_field": "date",
   "coverage": {
     "first": "2026-06-26",
-    "last": "2026-08-27",
-    "count": 43
+    "last": "2026-08-28",
+    "count": 44
   },
   "derived_from": [],
   "warnings": [],
   "info": [
     "CME Daily Bulletin Section 62 (Metals Futures Products): https://www.cmegroup.com/daily_bulletin/current/Section62_Metals_Futures_Products.pdf",
-    "Section 62 首页文本片段（前 500 字节，纯观测）：62 METAL FUTURES PRODUCTS 62\nSide 01 Side 01\n2026 DAILY INFORMATION BULLETIN - http://www.cmegroup.com/dailybulletin\nCME Group, Inc.\n20 South Wacker Drive, Chicago, Illinois 60606-7499.\nCustomer Service: (312) 930-1000\nPRELIMINARY\nPG62 BULLETIN # 165@ METAL FUTURES PRODUCTS Thu, Aug 27, 2026 PG62\nTHE CME GROUP DAILY BULLETIN ONLY DISPLAYS THOSE PRODUCTS/CONTRACT MONTHS THAT HAVE VOLUME AND/OR OPEN INTEREST. VOLUME INCLUDES GLOBEX (ELECTRONIC) AND\nPRIVATELY NEGOTIATED TRANSACTIONS (PNT) THAT INCL"
+    "Section 62 首页文本片段（前 500 字节，纯观测）：62 METAL FUTURES PRODUCTS 62\nSide 01 Side 01\n2026 DAILY INFORMATION BULLETIN - http://www.cmegroup.com/dailybulletin\nCME Group, Inc.\n20 South Wacker Drive, Chicago, Illinois 60606-7499.\nCustomer Service: (312) 930-1000\nPRELIMINARY\nPG62 BULLETIN # 166@ METAL FUTURES PRODUCTS Fri, Aug 28, 2026 PG62\nTHE CME GROUP DAILY BULLETIN ONLY DISPLAYS THOSE PRODUCTS/CONTRACT MONTHS THAT HAVE VOLUME AND/OR OPEN INTEREST. VOLUME INCLUDES GLOBEX (ELECTRONIC) AND\nPRIVATELY NEGOTIATED TRANSACTIONS (PNT) THAT INCL"
   ],
   "data": [
     {
@@ -6935,6 +6935,173 @@
         {
           "month": "DEC29",
           "settle": 5313.3,
+          "oi": 49,
+          "oi_chg": 0
+        }
+      ]
+    },
+    {
+      "date": "2026-08-28",
+      "months": [
+        {
+          "month": "SEP26",
+          "settle": 4478.1,
+          "oi": 2815,
+          "oi_chg": 4
+        },
+        {
+          "month": "OCT26",
+          "settle": 4494.7,
+          "oi": 49212,
+          "oi_chg": -519
+        },
+        {
+          "month": "NOV26",
+          "settle": 4513.2,
+          "oi": 621,
+          "oi_chg": 9
+        },
+        {
+          "month": "DEC26",
+          "settle": 4529.9,
+          "oi": 325983,
+          "oi_chg": -5512
+        },
+        {
+          "month": "JAN27",
+          "settle": 4549.5,
+          "oi": 485,
+          "oi_chg": 1
+        },
+        {
+          "month": "FEB27",
+          "settle": 4566.4,
+          "oi": 30800,
+          "oi_chg": 927
+        },
+        {
+          "month": "MAR27",
+          "settle": 4584.4,
+          "oi": 124,
+          "oi_chg": 2
+        },
+        {
+          "month": "APR27",
+          "settle": 4601.9,
+          "oi": 7592,
+          "oi_chg": -215
+        },
+        {
+          "month": "MAY27",
+          "settle": 4620.8,
+          "oi": 19,
+          "oi_chg": 0
+        },
+        {
+          "month": "JUN27",
+          "settle": 4639.2,
+          "oi": 3498,
+          "oi_chg": 140
+        },
+        {
+          "month": "JUL27",
+          "settle": 4657.9,
+          "oi": 23,
+          "oi_chg": 9
+        },
+        {
+          "month": "AUG27",
+          "settle": 4676.8,
+          "oi": 1154,
+          "oi_chg": 92
+        },
+        {
+          "month": "SEP27",
+          "settle": 4695.1,
+          "oi": 11,
+          "oi_chg": 1
+        },
+        {
+          "month": "OCT27",
+          "settle": 4713.5,
+          "oi": 305,
+          "oi_chg": 5
+        },
+        {
+          "month": "NOV27",
+          "settle": 4732.3,
+          "oi": 22,
+          "oi_chg": 5
+        },
+        {
+          "month": "DEC27",
+          "settle": 4750.6,
+          "oi": 556,
+          "oi_chg": 6
+        },
+        {
+          "month": "JAN28",
+          "settle": 4769.0,
+          "oi": 7,
+          "oi_chg": 0
+        },
+        {
+          "month": "FEB28",
+          "settle": 4787.8,
+          "oi": 90,
+          "oi_chg": 0
+        },
+        {
+          "month": "MAR28",
+          "settle": 4805.9,
+          "oi": 5,
+          "oi_chg": 0
+        },
+        {
+          "month": "APR28",
+          "settle": 4824.4,
+          "oi": 119,
+          "oi_chg": -1
+        },
+        {
+          "month": "MAY28",
+          "settle": 4842.5,
+          "oi": 3,
+          "oi_chg": 0
+        },
+        {
+          "month": "JUN28",
+          "settle": 4860.4,
+          "oi": 117,
+          "oi_chg": 0
+        },
+        {
+          "month": "JUL28",
+          "settle": 4878.2,
+          "oi": 1,
+          "oi_chg": 0
+        },
+        {
+          "month": "AUG28",
+          "settle": 4896.5,
+          "oi": 5,
+          "oi_chg": 0
+        },
+        {
+          "month": "DEC28",
+          "settle": 4968.3,
+          "oi": 140,
+          "oi_chg": 1
+        },
+        {
+          "month": "JUN29",
+          "settle": 5072.7,
+          "oi": 37,
+          "oi_chg": 0
+        },
+        {
+          "month": "DEC29",
+          "settle": 5176.9,
           "oi": 49,
           "oi_chg": 0
         }
