@@ -112,19 +112,14 @@ function renderFed`),
       expectedFailureMarkers: ['FAIL Live unavailable contract 不写 JSON 或进入财政计算'],
     },
     {
-      name: 'fixed-stock historical methodology warning removed',
-      patch: bytes => {
-        const text = bytes.toString('utf8');
-        const anchor = '历史所有日期当前均使用固定 end-2025 的 220,700 t 存量';
-        const count = text.split(anchor).length - 1;
-        if (count !== 2) throw new Error(`fixed-stock 锚点应命中 2 次，实际 ${count}`);
-        return text.replaceAll(anchor, '历史库存方法说明已删除');
-      },
+      name: 'replacement reserve methodology loses COFER exclusion',
+      patch: bytes => replaceExactly(bytes.toString('utf8'),
+        '不使用 COFER USD share', 'COFER 口径说明已删除'),
       verifyPatch: (_, patched) => ({
-        ok: !patched.toString('utf8').includes('历史所有日期当前均使用固定 end-2025 的 220,700 t 存量'),
-        detail: 'initial and dynamically rendered methodology both lost the caveat',
+        ok: !patched.toString('utf8').includes('不使用 COFER USD share'),
+        detail: 'replacement card no longer distinguishes COFER USD share from UST holdings',
       }),
-      expectedFailureMarkers: ['FAIL 页面公开 fixed-stock valuation proxy 与当前价格代理'],
+      expectedFailureMarkers: ['FAIL 页面公开样本分母、TIC universe mismatch 与 no-fill 方法学'],
     },
   ],
 });

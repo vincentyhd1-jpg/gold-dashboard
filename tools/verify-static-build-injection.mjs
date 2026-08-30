@@ -176,6 +176,35 @@ try {
     'FAIL dist gold-vs-debt price proxy metadata 对应当前 gold source');
   runBuildAndGuard('G restore');
 
+  console.log('\n--- H: dist WGC source 更新但 official reserve composition 未重建 ---');
+  run(BUILD);
+  const distReserveSourcePath = path.join(DIST, 'data', 'wgc_official_reserves.json');
+  const distReserveSource = JSON.parse(fs.readFileSync(distReserveSourcePath, 'utf8'));
+  distReserveSource.generated_at = '2099-01-01T00:00:00Z';
+  fs.writeFileSync(distReserveSourcePath, `${JSON.stringify(distReserveSource, null, 2)}\n`);
+  check('H dist WGC source vintage 已真实改变',
+    JSON.parse(fs.readFileSync(distReserveSourcePath, 'utf8')).generated_at
+      === '2099-01-01T00:00:00Z');
+  expectRed('H stale official reserve composition',
+    'FAIL dist official reserve derived_from 对应当前 WGC / FRED sources');
+  runBuildAndGuard('H restore');
+
+  console.log('\n--- I: dist WGC 样本混入 World aggregate ---');
+  run(BUILD);
+  const distReserveUniversePath = path.join(DIST, 'data', 'wgc_official_reserves.json');
+  const distReserveUniverse = JSON.parse(fs.readFileSync(distReserveUniversePath, 'utf8'));
+  const universeRow = distReserveUniverse.data.at(-1);
+  universeRow.reporting_entities.matched.push('WLD');
+  universeRow.matched_reporting_entities_count += 1;
+  fs.writeFileSync(distReserveUniversePath,
+    `${JSON.stringify(distReserveUniverse, null, 2)}\n`);
+  check('I World aggregate identity 已真实混入匹配样本',
+    JSON.parse(fs.readFileSync(distReserveUniversePath, 'utf8')).data.at(-1)
+      .reporting_entities.matched.includes('WLD'));
+  expectRed('I World aggregate double-count risk',
+    'FAIL dist WGC sample uses exact same-entity intersection without aggregates');
+  runBuildAndGuard('I restore');
+
   runBuildAndGuard('final restored');
   check('最终 wrangler.jsonc SHA-256 一致',
     sha256(fs.readFileSync(CONFIG)) === originalHash);

@@ -199,16 +199,17 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
 
   <div class="charts-section">
 
-    <div class="card full" id="goldDebtPanel">
-      <div class="card-title">全球黄金总市值 vs 美债总额</div>
-      <div class="card-sub">Global Gold Value（固定 end-2025 地上黄金存量 × 周频价格代理估算）· U.S. Total Public Debt Outstanding（同一真实日期的官方值）— USD tn</div>
-      <div class="chart-wrap gold-debt-chart-wrap"><canvas id="goldDebtChart"></canvas></div>
-      <div class="gold-debt-asof" aria-label="黄金与美债比较数据截至时间">
-        <span>周频黄金估值截至：<strong id="goldDebtGoldAsOf">--</strong></span>
-        <span>同日美债总额截至：<strong id="goldDebtDebtAsOf">--</strong></span>
+    <div class="card full" id="officialReservePanel">
+      <div class="card-title">WGC 报告经济体官方储备样本：黄金 vs 外国官方机构持有美债</div>
+      <div class="card-sub">左轴：官方部门黄金占匹配报告样本比例（%）· 右轴：金额（USD tn）· 季度真实观测</div>
+      <div class="chart-wrap gold-debt-chart-wrap"><canvas id="officialReserveChart"></canvas></div>
+      <div class="gold-debt-asof" aria-label="WGC 官方储备报告样本数据截至时间">
+        <span>共同季度：<strong id="officialReserveAsOf">--</strong></span>
+        <span>黄金 / 样本分母：<strong>WGC 匹配报告经济体</strong></span>
+        <span>美债来源：<strong>TIC/FRED</strong></span>
       </div>
-      <div class="gold-debt-method" id="goldDebtMethod">全球黄金总市值是固定 220,700 公吨地上黄金存量（World Gold Council，end-2025）乘以本项目黄金价格代理的估算，并非官方每日全球黄金市值统计。历史所有日期当前均使用固定 end-2025 的 220,700 t 存量，因此该曲线主要反映黄金价格变化，不是历史各时点真实 above-ground gold stock 的完整重建。实际价格代理将在数据加载后显示。美债口径为 Total Public Debt Outstanding；只采用黄金观测日同日真实债务值，不前值填充、不插值。</div>
-      <div class="status" id="goldDebtStatus" role="status">正在加载黄金总市值与美债总额…</div>
+      <div class="gold-debt-method" id="officialReserveMethod">黄金金额为 World Gold Council 官方部门（主要为央行，适用时含其他官方机构）黄金储备按季末市场金价估值；黄金比例的分子与分母严格使用当季同时具备黄金金额、黄金吨数和 Total reserves 的同一经济体交集。分母是该匹配报告样本的 IMF IFS-compatible Total reserves（含黄金），不是 source-provided Global Total Official Reserve Assets。美债金额为 TIC/FRED FORTREASPOS99990 的全体 Foreign Official U.S. Treasury Holdings；其统计总体可能包括中央银行、政府部门、稳定基金、财政代理及国际/区域官方机构，与 WGC 匹配报告样本不一致，因此本图不生产美债占比，也不使用 COFER USD share。WGC 报告覆盖随 vintage 变化；未报告值不补 0。全部数据只取共同季度，不前值填充、不插值。</div>
+      <div class="status" id="officialReserveStatus" role="status">正在加载 WGC 官方储备报告样本…</div>
     </div>
 
     <div class="card full" id="ustPanel">
@@ -698,78 +699,95 @@ function renderCPI(rows) {
   ]);
 }
 
-let goldDebtChart = null;
+let officialReserveChart = null;
 
-function renderGoldVsDebt(payload) {
+function renderOfficialReserveComposition(payload) {
   const observations = payload?.observations;
   const methodology = payload?.methodology;
-  if (!Array.isArray(observations) || !observations.length || !methodology) {
-    throw new Error('gold-vs-debt observations/methodology missing');
+  const sources = payload?.sources;
+  if (!Array.isArray(observations) || !observations.length || !methodology || !sources) {
+    throw new Error('official reserve composition observations/methodology missing');
   }
-  if (methodology.debt_definition !== 'Total Public Debt Outstanding'
-      || methodology.gold_value_is_estimate !== true
-      || methodology.gold_price_is_proxy !== true
-      || typeof methodology.gold_price_source !== 'string'
-      || !methodology.gold_price_source.trim()
-      || typeof methodology.gold_price_instrument !== 'string'
-      || !methodology.gold_price_instrument.trim()
-      || typeof methodology.gold_price_instrument_label !== 'string'
-      || !methodology.gold_price_instrument_label.trim()
+  if (methodology.gold_share_denominator !== 'Matched WGC reporting-entity Total reserves'
+      || methodology.denominator_source_provided_global_aggregate !== false
+      || methodology.gold_numerator_denominator_same_entity_universe !== true
+      || methodology.tic_numerator_denominator_same_entity_universe !== false
+      || methodology.ust_ratio_status !== 'not_produced_unmatched_statistical_universe'
+      || methodology.cofer_usd_share_is_not_ust_share !== true
       || methodology.no_forward_fill !== true
-      || methodology.no_interpolation !== true) {
-    throw new Error('gold-vs-debt methodology contract mismatch');
+      || methodology.no_interpolation !== true
+      || sources.foreign_official_ust !== 'TIC/FRED FORTREASPOS99990') {
+    throw new Error('official reserve composition methodology contract mismatch');
   }
-  const labels = observations.map(row => row.date);
-  const goldPoints = observations
-    .filter(row => Number.isFinite(row.global_gold_value_usd_tn))
-    .map(row => ({ x: row.date, y: row.global_gold_value_usd_tn }));
-  const debtPoints = observations
-    .filter(row => Number.isFinite(row.us_total_public_debt_usd_tn))
-    .map(row => ({ x: row.date, y: row.us_total_public_debt_usd_tn }));
-  if (!goldPoints.length || !debtPoints.length) {
-    throw new Error('gold-vs-debt has no visible observations');
+  const fields = [
+    'official_gold_share_pct', 'official_gold_value_usd', 'foreign_official_ust_value_usd',
+  ];
+  if (!observations.every((row, index) => typeof row.period === 'string'
+      && (index === 0 || row.period > observations[index - 1].period)
+      && fields.every(field => Number.isFinite(row[field]))
+      && !Object.hasOwn(row, 'foreign_official_ust_share_pct')
+      && Number.isInteger(row.matched_reporting_entities_count)
+      && row.matched_reporting_entities_count > 0
+      && Array.isArray(row.matched_reporting_entities)
+      && row.matched_reporting_entities.length === row.matched_reporting_entities_count)) {
+    throw new Error('official reserve composition quarterly observations invalid');
   }
+  const labels = observations.map(row => row.period);
   const options = chartOptions();
-  options.plugins.tooltip.callbacks.label = ctx =>
-    `  ${ctx.dataset.label}: $${Number(ctx.parsed.y).toFixed(2)} tn`;
-  options.scales.y.ticks.callback = value => '$' + Number(value).toFixed(0) + ' tn';
-  options.scales.y.title = {
-    display: true, text: 'USD tn', color: COLORS.muted, font: { size: 10 },
-  };
   options.animation = false;
-  goldDebtChart?.destroy();
-  goldDebtChart = new Chart(document.getElementById('goldDebtChart'), {
+  options.interaction = { mode: 'index', intersect: false };
+  options.scales.y = {
+    position: 'left', beginAtZero: true, grid: { color: '#30363d' },
+    ticks: { color: COLORS.muted, callback: value => `${Number(value).toFixed(0)}%` },
+    title: { display: true, text: '% of matched WGC reserve sample', color: COLORS.muted },
+  };
+  options.scales.yAmount = {
+    position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
+    ticks: { color: COLORS.muted, callback: value => `$${Number(value).toFixed(1)} tn` },
+    title: { display: true, text: 'USD tn', color: COLORS.muted },
+  };
+  options.plugins.tooltip.callbacks.title = items => `季度：${items[0]?.label || '--'}`;
+  options.plugins.tooltip.callbacks.label = ctx => {
+    const unit = ctx.dataset.valueUnit;
+    const value = Number(ctx.parsed.y);
+    return `  ${ctx.dataset.label}：${unit === '%' ? value.toFixed(2) + '%' : '$' + value.toFixed(3) + ' tn'}`;
+  };
+  options.plugins.tooltip.callbacks.afterLabel = ctx => {
+    const row = observations[ctx.dataIndex];
+    const sourcePeriod = ctx.dataset.sourceKind === 'ust'
+      ? `${row.ust_source_date.slice(0, 7)} (${row.period})`
+      : `${row.period} (quarter-end)`;
+    return `  来源：${ctx.dataset.sourceLabel} · source period ${sourcePeriod}`;
+  };
+  officialReserveChart?.destroy();
+  officialReserveChart = new Chart(document.getElementById('officialReserveChart'), {
     type: 'line',
     data: {
       labels,
       datasets: [
-        lineDataset('Global Gold Value（估算）', goldPoints, COLORS.gold, {
-          pointRadius: 1.5, tension: 0, sourceField: 'global_gold_value_usd_tn',
-          sourceFrequency: 'weekly',
-        }),
-        lineDataset('U.S. Total Public Debt Outstanding', debtPoints, COLORS.blue, {
-          pointRadius: 1.5, tension: 0,
-          sourceField: 'us_total_public_debt_usd_tn',
-          sourceFrequency: 'exact_date_daily_observation',
-        }),
+        lineDataset('匹配报告经济体官方部门黄金占样本储备比例',
+          observations.map(row => row.official_gold_share_pct), COLORS.gold, {
+            yAxisID: 'y', sourceField: 'official_gold_share_pct', valueUnit: '%',
+            sourceKind: 'gold', sourceLabel: 'WGC / IMF IFS-compatible', pointRadius: 1.5,
+          }),
+        lineDataset('匹配报告经济体官方部门黄金金额',
+          observations.map(row => row.official_gold_value_usd / 1e12), '#d29922', {
+            yAxisID: 'yAmount', sourceField: 'official_gold_value_usd', valueUnit: 'USD tn',
+            sourceKind: 'gold', sourceLabel: 'World Gold Council', borderDash: [7, 4], pointRadius: 1.5,
+          }),
+        lineDataset('外国官方机构持有美债额',
+          observations.map(row => row.foreign_official_ust_value_usd / 1e12), '#79c0ff', {
+            yAxisID: 'yAmount', sourceField: 'foreign_official_ust_value_usd', valueUnit: 'USD tn',
+            sourceKind: 'ust', sourceLabel: 'TIC/FRED FORTREASPOS99990', borderDash: [7, 4], pointRadius: 1.5,
+          }),
       ],
     },
     options,
   });
-  const lastGold = goldPoints.at(-1)?.x || '--';
-  const lastDebt = debtPoints.at(-1)?.x || '--';
-  document.getElementById('goldDebtGoldAsOf').textContent = lastGold;
-  document.getElementById('goldDebtDebtAsOf').textContent = lastDebt;
-  document.getElementById('goldDebtMethod').textContent =
-    `全球黄金总市值是固定 220,700 公吨地上黄金存量（World Gold Council，end-2025）` +
-    `乘以本项目黄金价格代理的估算。黄金估值价格代理：${methodology.gold_price_source}` +
-    `（${methodology.gold_price_instrument_label}；${methodology.gold_price_instrument}）。` +
-    `因此该曲线是估值代理，并非官方每日全球黄金市值统计。` +
-    `历史所有日期当前均使用固定 end-2025 的 220,700 t 存量，` +
-    `因此该曲线主要反映黄金价格变化，不是历史各时点真实 above-ground gold stock 的完整重建。` +
-    `美债口径为 Total Public Debt Outstanding；只采用黄金观测日同日真实债务值，` +
-    `不前值填充、不插值。`;
-  return { goldPoints: goldPoints.length, debtPoints: debtPoints.length };
+  officialReserveChart.$officialReserveRows = observations;
+  document.getElementById('officialReserveAsOf').textContent = observations.at(-1).period;
+  return { observations: observations.length, first: observations[0].period,
+    last: observations.at(-1).period };
 }
 
 const LIVE_TREASURY_AVAILABILITY = Object.freeze({
@@ -1710,29 +1728,29 @@ window.addEventListener('unhandledrejection', e => {
   console.error('[unhandled] ', e.reason);
 });
 
-// Gold-vs-debt is an independent derived comparison.  Its weekly/exact-date
-// failure boundary cannot affect historical rates, Live Treasury, or fiscal modules.
-loadJson('data/derived/gold_vs_debt.json?_=' + Date.now(), {
-  name: 'gold_vs_debt.json',
+// Official reserve composition is independent. Its failure boundary cannot affect
+// historical Treasury, Live Treasury, debt, or fiscal modules.
+loadJson('data/derived/official_reserve_composition.json?_=' + Date.now(), {
+  name: 'official_reserve_composition.json',
 })
   .then(payload => {
     let summary;
-    const rendered = _safeRender('全球黄金总市值 vs 美债总额', () => {
-      summary = renderGoldVsDebt(payload);
+    const rendered = _safeRender('WGC 官方储备报告样本', () => {
+      summary = renderOfficialReserveComposition(payload);
     });
-    const el = document.getElementById('goldDebtStatus');
+    const el = document.getElementById('officialReserveStatus');
     if (rendered) {
-      el.textContent = `已加载 ${summary.goldPoints} 个真实周频黄金估值点与 `
-        + `${summary.debtPoints} 个同日官方美债总额点；未做填充或插值。`;
+      el.textContent = `已加载 ${summary.observations} 个共同季度（${summary.first} — ${summary.last}）；`
+        + '三条曲线使用真实季度观测；美债比例因统计总体不匹配而不生产。';
     } else {
-      el.textContent = '黄金与美债比较图渲染失败，请查看控制台。';
+      el.textContent = 'WGC 官方储备报告样本图渲染失败，请查看控制台。';
       el.className = 'status err';
     }
   })
   .catch(err => {
-    console.error('[fetch] 黄金与美债比较数据加载失败：', err);
-    const el = document.getElementById('goldDebtStatus');
-    el.textContent = '黄金与美债比较数据加载失败：' + err.message;
+    console.error('[fetch] WGC 官方储备报告样本数据加载失败：', err);
+    const el = document.getElementById('officialReserveStatus');
+    el.textContent = 'WGC 官方储备报告样本数据加载失败：' + err.message;
     el.className = 'status err';
   });
 

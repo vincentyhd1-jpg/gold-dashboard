@@ -24,6 +24,9 @@ const REQUIRED_PATHS = [
   'data/derived/macro_fiscal_stress.json',
   'data/derived/fiscal_risk_monitor.json',
   'data/derived/gold_vs_debt.json',
+  'data/foreign_official_ust.json',
+  'data/wgc_official_reserves.json',
+  'data/derived/official_reserve_composition.json',
   'data/derived/cbo_baseline_latest.json',
   'data/derived/cbo_scenario_basis.json',
 ];
@@ -33,6 +36,7 @@ const FORBIDDEN_PATHS = [
   'fetch_cbo_baseline.py', 'derive_cbo_scenario_basis.py', 'tools', 'docs', '.github', '.git',
   'derive_fiscal_risk_monitor.py',
   'derive_gold_vs_debt.py',
+  'fetch_wgc_official_reserves.py', 'derive_official_reserve_composition.py',
   'data/quarantine', 'data/cbo',
 ];
 
@@ -327,6 +331,65 @@ check('dist gold-vs-debt 方法学锁定估算、Total Public Debt 与不填充'
   && goldDebt?.data?.methodology?.debt_alignment === 'exact_gold_observation_date_only'
   && goldDebt?.data?.methodology?.no_forward_fill === true
   && goldDebt?.data?.methodology?.no_interpolation === true);
+
+let reserveGoldSource;
+let reserveUstSource;
+let reserveComposition;
+try {
+  reserveGoldSource = readJson('data/wgc_official_reserves.json');
+  reserveUstSource = readJson('data/foreign_official_ust.json');
+  reserveComposition = readJson('data/derived/official_reserve_composition.json');
+  check('dist official reserve sources / derivation 均为合法 JSON', true);
+} catch (error) {
+  check('dist official reserve sources / derivation 均为合法 JSON', false, error.message);
+}
+const reserveRefs = reserveComposition?.derived_from;
+check('dist official reserve derived_from 对应当前 WGC / FRED sources',
+  Array.isArray(reserveRefs) && reserveRefs.length === 2
+  && reserveRefs[0]?.source === reserveGoldSource?.source
+  && reserveRefs[0]?.generated_at === reserveGoldSource?.generated_at
+  && JSON.stringify(reserveRefs[0]?.coverage) === JSON.stringify(reserveGoldSource?.coverage)
+  && reserveRefs[0]?.envelope === true
+  && reserveRefs[1]?.source === reserveUstSource?.source
+  && reserveRefs[1]?.generated_at === reserveUstSource?.generated_at
+  && JSON.stringify(reserveRefs[1]?.coverage) === JSON.stringify(reserveUstSource?.coverage)
+  && reserveRefs[1]?.envelope === true);
+const reserveRows = reserveComposition?.data?.observations;
+const reserveGoldRows = reserveGoldSource?.data;
+check('dist WGC sample uses exact same-entity intersection without aggregates',
+  Array.isArray(reserveGoldRows) && reserveGoldRows.length > 0
+  && reserveGoldSource?.info?.includes('source_provided_world_global_aggregate=false')
+  && reserveGoldRows.every(row => {
+    const entities = row.reporting_entities || {};
+    const lists = ['gold_reserves', 'gold_reserves_tonnes', 'total_reserves', 'matched']
+      .map(field => entities[field]);
+    if (!lists.every(list => Array.isArray(list) && list.length > 0
+      && list.every((value, index) => typeof value === 'string'
+        && (index === 0 || value > list[index - 1])))) return false;
+    const expected = lists[0].filter(value => lists[1].includes(value)
+      && lists[2].includes(value));
+    return JSON.stringify(lists[3]) === JSON.stringify(expected)
+      && row.matched_reporting_entities_count === lists[3].length
+      && !lists.flat().some(value => ['WLD', 'WORLD', 'GLOBAL', 'EUR', 'EUU',
+        'EMU', 'IMF', 'ECB', 'BIS', 'G7', 'G20'].includes(value));
+  }));
+check('dist official reserve keeps honest sample denominator and exact quarterly UST amount',
+  reserveComposition?.data?.methodology?.gold_share_denominator
+    === 'Matched WGC reporting-entity Total reserves'
+  && reserveComposition?.data?.methodology?.denominator_source_provided_global_aggregate === false
+  && reserveComposition?.data?.methodology?.gold_numerator_denominator_same_entity_universe === true
+  && reserveComposition?.data?.methodology?.tic_numerator_denominator_same_entity_universe === false
+  && reserveComposition?.data?.methodology?.ust_ratio_status
+    === 'not_produced_unmatched_statistical_universe'
+  && reserveComposition?.data?.methodology?.cofer_usd_share_is_not_ust_share === true
+  && reserveComposition?.data?.methodology?.no_forward_fill === true
+  && reserveComposition?.data?.methodology?.no_interpolation === true
+  && Array.isArray(reserveRows) && reserveRows.length > 0
+  && reserveRows.every(row =>
+    Math.abs(row.official_gold_share_pct
+      - row.official_gold_value_usd / row.total_official_reserve_assets_usd * 100) < 1e-10
+    && !Object.hasOwn(row, 'foreign_official_ust_share_pct')
+    && /-(03|06|09|12)-01$/.test(row.ust_source_date)));
 
 for (const forbidden of FORBIDDEN_PATHS) {
   check(`dist 不公开 ${forbidden}`, !fs.existsSync(path.join(DIST, forbidden)));

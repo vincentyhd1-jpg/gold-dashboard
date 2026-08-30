@@ -31,6 +31,7 @@ const wrappers = [
   'verify-fiscal-risk-monitor-injection.mjs',
   'verify-treasury-enhancements-injection.mjs',
   'verify-treasury-interaction-injection.mjs',
+  'verify-official-reserve-composition-injection.mjs',
 ];
 
 console.log('## static contract');

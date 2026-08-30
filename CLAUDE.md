@@ -55,18 +55,20 @@ fetch_gold.py     Yahoo Finance 金价   → data/gold_price.json
 fetch_stocks.py   CME 库存             → data/stocks.json
 fetch_oi.py       CME Section 62 PDF   → data/oi.json        （含 4 项写入前校验）
 derive_term_structure.py                → data/derived/term-structure-series.json
-fetch_fred.py      FRED 13 个序列        → rates / CPI / debt / GDP 原始信封
+fetch_fred.py      FRED 14 个序列        → rates / CPI / debt / GDP / foreign-official UST 原始信封
+fetch_wgc_official_reserves.py           → WGC 官方黄金 / IMF IFS-compatible Total reserves
 fetch_treasury_debt.py  Treasury Debt to the Penny → data/treasury_debt_daily.json
 derive_macro.py                         → macro_rates / macro_cpi / macro_debt
 fetch_treasury_fiscal.py  Treasury MTS Table 9 → data/treasury_mts_fiscal.json
 derive_fiscal_stress.py                 → data/derived/macro_fiscal_stress.json
 derive_fiscal_risk_monitor.py            → data/derived/fiscal_risk_monitor.json
 derive_gold_vs_debt.py                    → data/derived/gold_vs_debt.json
+derive_official_reserve_composition.py    → data/derived/official_reserve_composition.json
 fetch_cbo_baseline.py  CBO Budget Baseline XLSX → immutable vintage + cbo_baseline_latest
 derive_cbo_scenario_basis.py             → audited CBO scenario accounting basis
 assets/js/cbo-scenario-engine.js         → browser-only deterministic user scenario
 index.html        期限结构回放 + 各图表
-macro.html        黄金 vs 美债 / 历史与 Live Treasury / CPI / 联邦债务 / 财政可持续性 / CBO 面板
+macro.html        官方储备构成 / 历史与 Live Treasury / CPI / 联邦债务 / 财政可持续性 / CBO 面板
 term-3d.html      Plotly 3D 曲面页，**已从导航移除**（无运行时入口，见下方专节）
 trading_calendar.py  交易日历，采集层与派生层共用一份假日表
 data_envelope.py  统一落盘信封 + write_json 单点落盘
@@ -75,8 +77,8 @@ tools/*.mjs       Playwright 验证脚本
 
 **Cloudflare 静态发布（C16）**：仓库不是 Worker JS 项目，`wrangler.jsonc` 不设
 `main`，只将 `assets.directory` 指向 `./dist`。`node tools/build-static-site.mjs`
-每次删除旧 dist 后按 41 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
-28 个公开 JSON；CBO source/vintage、quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
+每次删除旧 dist 后按 48 项显式文件白名单复制三个根 HTML、assets/css/js 文件与
+31 个公开 JSON；CBO source/vintage、quarantine、Python、Markdown、PDF、docs/tools/.github 等不得
 公开。Cloudflare Workers Builds 的 root 为 `/`，build command 为上述 Node 脚本，
 production deploy 为 `npx wrangler deploy`，preview deploy 为
 `npx wrangler versions upload`。`dist/` 与 `.wrangler/` 均为忽略的构建产物。
@@ -89,7 +91,7 @@ production deploy 为 `npx wrangler deploy`，preview deploy 为
 `tools/verify-browser-launch.mjs` 同时锁死静态调用边界、真实页面 JS 执行、ENOENT
 不 fallback 与 EPERM 继续抛出。
 
-**前端破坏注入（C10-C18C.2）**：十二个 `verify-*-injection.mjs` 统一经
+**前端破坏注入（C10-C18C.3B）**：十三个 `verify-*-injection.mjs` 统一经
 `tools/_injection.mjs` 执行 `baseline green → injection red → restore green`。
 每个 case 必须证明 patch 与业务锚点真实改变、目标 guard 非零且命中稳定 FAIL
 marker；备份只进系统临时目录，每 case 与最外层 `finally` 都按原始 bytes/SHA-256
@@ -739,7 +741,7 @@ C11 把同一计算扩展到每条 weekly，并删除前端两条 COT Index 回�
 里只告警，能连日不红 —— 配置问题等不来自愈，必须有人去看，故单独成一态并报红。
 
 **多序列脚本的汇总不能用 `max()`。** 退出码的严重度与数值大小无关：本仓的序是
-`1 > 3 > 2 > 0`。`fetch_fred` 一个进程跑十三个序列，用 `max(code)` 汇总时，
+`1 > 3 > 2 > 0`。`fetch_fred` 一个进程跑十四个序列，用 `max(code)` 汇总时，
 一个序列 d 类失败(1) 撞上另一个序列下载失败(2)，进程码会变成 2 —— 把「要人管」
 报成「上游没更新，正常」。故显式映射 `EXIT_SEVERITY = {0:0, 2:1, 3:2, 1:3}`
 （`fetch_fred.py`，配 `_severity()` / `worse_exit()` / `run_all()`），
@@ -799,10 +801,13 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
   `min-width:0`，否则桌面宽度初始化后缩到移动端会被 canvas 的 min-content 撑出
   横向页面溢出。
 - macro rates/CPI 与 debt 使用独立加载错误边界；任一组失败不得拖掉另一组。
-- 黄金总市值 vs 美债只消费 `gold_vs_debt.json`：黄金是 World Gold Council
-  end-2025 地上存量 220,700 公吨乘周频 USD/oz 金价的估算；美债只取同一黄金
-  观测日的 Treasury `Total Public Debt Outstanding`，无同日值保持 null，禁止
-  最近值、forward-fill 或插值。该模块与 UST、Live Treasury、C17/C18C 分别隔离。
+- macro 页首卡只消费 `official_reserve_composition.json`，显示 WGC 匹配报告经济体
+  样本的官方部门黄金金额/占比，以及 TIC/FRED foreign-official UST 金额三条季度曲线。
+  黄金分子与分母必须来自当季 gold value / tonnes / total reserves 的同实体交集；
+  WGC API 没有 source-provided World aggregate。TIC numerator 是更广的 global
+  foreign-official universe，禁止除以该 WGC 样本分母，故不生产 UST ratio。COFER USD
+  share、forward-fill 与 interpolation 同样禁止。旧 `gold_vs_debt` 管线继续保留、测试和
+  更新，但不再由 macro 页面请求或展示。
 - TradingView 官方 Advanced Widget 对 `TVC` Treasury yields 和实测的 CBOT Treasury
   futures 连续合约都返回 third-party restricted；production 不再请求这些 symbol，Live
   Treasury 卡明确 unavailable。没有 licensed market-data API 时不得换随机 symbol，
@@ -839,12 +844,14 @@ python3 fetch_oi.py --test                 # 采集校验（不联网）
 python3 fetch_cot.py --test                # 采集校验（含 build_payload 幂等前提）
 python3 fetch_gold.py --test               # 采集校验（含退化边界）
 python3 fetch_stocks.py --test             # 采集校验（含缺字段 SKIP）
-python3 fetch_fred.py --test               # 采集校验（13 个 FRED 序列，四态 + 磁盘安全）
+python3 fetch_fred.py --test               # 采集校验（14 个 FRED 序列，四态 + 磁盘安全）
+python3 fetch_wgc_official_reserves.py --test # WGC 季度聚合/coverage/幂等
 python3 fetch_treasury_debt.py --test      # Treasury 日频债务（三态 + 幂等/隔离/workflow）
 python3 fetch_treasury_fiscal.py --test    # Treasury MTS 月度财政流量（三态/层级/修订）
 python3 derive_fiscal_stress.py --test     # 财政可持续性公式/频率/缺失/幂等
 python3 derive_fiscal_risk_monitor.py --test # C18C 同季度同比/符号/新鲜度/幂等
 python3 derive_gold_vs_debt.py --test       # C18C.1 黄金估值/同日债务/新鲜度/幂等
+python3 derive_official_reserve_composition.py --test # C18C.3B 统一分母/共同季度/新鲜度
 python3 fetch_cbo_baseline.py --test       # CBO workbook schema/vintage/单位/发布安全
 python3 derive_cbo_scenario_basis.py --test # C18B SFA 闭合/幂等/baseline 只读
 python3 tools/verify-fetch-gates.py        # 端到端注入：闸真的拒绝落盘
@@ -879,6 +886,8 @@ node tools/verify-gold-debt-python.mjs      # 动态 WSL root 下运行黄金 vs
 node tools/verify-treasury-enhancements.mjs # 黄金/UST zoom/TradingView 契约与隔离
 node tools/verify-treasury-enhancements-injection.mjs # C18C.1 九项破坏注入
 node tools/verify-treasury-interaction-injection.mjs # C18C.2 九项交互/第三方内容边界注入
+node tools/verify-official-reserve-composition.mjs # C18C.3B 四线/双轴/tooltip/隔离/移动端
+node tools/verify-official-reserve-composition-injection.mjs # C18C.3B 六项语义注入
 node tools/build-static-site.mjs           # C16 生成 dist 静态白名单
 node tools/verify-static-build.mjs         # dist manifest/逐字节/不公开内部文件
 node tools/verify-static-build-injection.mjs  # 配置缺失/页面缺失/Python 泄漏必须红
@@ -1001,3 +1010,31 @@ effective r、C18B/C18C 或 Fiscal Gap。
 proxy，主要反映价格变化，并非历史各时点真实 above-ground stock reconstruction。
 TODO（独立未来任务）：Historical Global Gold Valuation v2 仅在取得官方逐年地上存量
 后实现；不得在本阶段插值或倒推历史存量。
+
+## C18C.3B WGC 官方储备报告样本
+
+`fetch_wgc_official_reserves.py` 从 WGC Central Bank Dashboard 公共季度接口取得
+`Gold reserves (US$ Millions)`、`Gold reserves (Tonnes)` 与 `Total reserves
+(US$ Millions)`。当前三个 metric 各有 123 个 ISO3 国家/经济体 series，没有 World、
+region、IMF、ECB 或 BIS aggregate；collector 遇到此类 aggregate/institution identity
+会拒绝，避免与成员经济体重复加总。每季度先按 entity identity 取三项交集，再对三项
+使用完全相同的 matched set 求和，并保存各 reporter list/count；不能只比较 count。
+coverage 闸要求 matched set 至少 90 个实体，故 2026-Q1 不进入生产，实际 coverage
+为 2000-Q4 至 2025-Q4；2025-Q4 matched count 为 90。
+
+`fetch_fred.py` 第 14 条源为 TIC/FRED `FORTREASPOS99990`（Foreign Official U.S.
+Treasury Holdings，Millions of Dollars）。`derive_official_reserve_composition.py`
+只取 3/6/9/12 月观测并按共同季度连接，不采用 publication date、最近日期、前值或
+插值。黄金 share 只除以同 matched set 的 WGC/IFS-compatible Total reserves。TIC
+`FORTREASPOS99990` 覆盖全体 foreign official institutions，包括中央银行、政府部门、
+稳定基金、财政代理及国际/区域官方机构，与 WGC matched sample 不同；因此派生与页面
+均不生产 `foreign_official_ust_share_pct`。COFER USD share 也不得进入本图。
+
+macro 首卡为单图双 Y 轴三线：左轴 `% of matched WGC reserve sample` 仅画黄金样本
+占比，右轴 `USD tn` 画黄金样本金额与 global TIC foreign-official UST 金额。四条
+dataset 才能同时表达两种金额与两种比例，但 UST 比例缺匹配总体，宁可少一线也不能
+伪造双轴转换。tooltip 必须披露 series、单位、source 与 source period；FRED
+`2025-12-01` 是月度 label，只显示 `2025-12 / 2025-Q4`，不得冒充精确日 as-of。旧
+`derive_gold_vs_debt.py` / `gold_vs_debt.json` 保留为历史独立管线并继续过 freshness
+guard，但页面不再请求。页面标题必须明确为 WGC 报告经济体样本，不得把动态 matched
+sample 标成 Global Total Official Reserve Assets。

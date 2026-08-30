@@ -47,6 +47,9 @@ const goldRows = goldEnvelope.data;
 const debtRows = JSON.parse(fs.readFileSync(
   path.join(ROOT, 'data', 'treasury_debt_daily.json'), 'utf8')).data;
 const debtByDate = new Map(debtRows.map(row => [row.date, row.total_bn]));
+const reserveDerived = JSON.parse(fs.readFileSync(
+  path.join(ROOT, 'data', 'derived', 'official_reserve_composition.json'), 'utf8'));
+const reserveRows = reserveDerived.data.observations;
 const upstreamPriceSource = goldEnvelope.info.find(item =>
   typeof item === 'string' && item.startsWith('price_source='))?.slice('price_source='.length);
 
@@ -125,8 +128,8 @@ check('美债明确是 Total Public Debt Outstanding 且只做 exact-date',
 
 const browser = await launchChromium();
 
-async function preparePage({ blockZoomPlugin = false, failGold = false, mobile = false,
-  goldOverride = null, pointerMode = mobile ? 'touch' : 'hybrid', deviceScaleFactor = 1 } = {}) {
+async function preparePage({ blockZoomPlugin = false, failReserve = false, mobile = false,
+  pointerMode = mobile ? 'touch' : 'hybrid', deviceScaleFactor = 1 } = {}) {
   const context = await browser.newContext(mobile ? {
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
     deviceScaleFactor,
@@ -164,13 +167,9 @@ async function preparePage({ blockZoomPlugin = false, failGold = false, mobile =
     await page.route('**/assets/vendor/chartjs-plugin-zoom-2.2.0/chartjs-plugin-zoom.min.js',
       route => route.fulfill({ status: 404, contentType: 'text/plain', body: 'blocked by guard' }));
   }
-  if (failGold) {
-    await page.route('**/data/derived/gold_vs_debt.json?*', route => route.fulfill({
+  if (failReserve) {
+    await page.route('**/data/derived/official_reserve_composition.json?*', route => route.fulfill({
       status: 500, contentType: 'application/json', body: '{}',
-    }));
-  } else if (goldOverride) {
-    await page.route('**/data/derived/gold_vs_debt.json?*', route => route.fulfill({
-      status: 200, contentType: 'application/json', body: JSON.stringify(goldOverride),
     }));
   }
   await page.goto(`${base}/macro.html`, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -266,33 +265,29 @@ function sameAxisState(a, b) {
 try {
   const normal = await preparePage();
   const { page } = normal;
-  await page.waitForFunction(() => !!Chart.getChart(document.getElementById('goldDebtChart')),
+  await page.waitForFunction(() => !!Chart.getChart(document.getElementById('officialReserveChart')),
   null, { timeout: 15000 });
   const initial = await page.evaluate(() => {
-    const gold = Chart.getChart(document.getElementById('goldDebtChart'));
+    const reserve = Chart.getChart(document.getElementById('officialReserveChart'));
     return {
-      goldDatasets: gold.data.datasets.map(dataset => ({
+      reserveDatasets: reserve.data.datasets.map(dataset => ({
         label: dataset.label, field: dataset.sourceField,
-        frequency: dataset.sourceFrequency, count: dataset.data.length,
+        axis: dataset.yAxisID, count: dataset.data.length,
       })),
       live: window.__liveTreasuryWidgetContract,
       liveIframe: Boolean(document.querySelector('#liveTreasuryWidget iframe')),
       liveFallback: document.getElementById('liveTreasuryFallback')?.textContent,
       livePanelContent: document.getElementById('liveTreasuryPanel')?.innerHTML || '',
-      goldMethod: document.getElementById('goldDebtMethod')?.textContent,
+      reserveMethod: document.getElementById('officialReserveMethod')?.textContent,
     };
   });
   const initialUST = await ustState(page);
-  check('gold-vs-debt 页面有两条真实 source dataset',
-    initial.goldDatasets.length === 2
-    && initial.goldDatasets.some(row => row.field === 'global_gold_value_usd_tn'
-      && row.frequency === 'weekly' && row.count === observations.filter(
-        item => item.global_gold_value_usd_tn !== null).length)
-    && initial.goldDatasets.some(row => row.field === 'us_total_public_debt_usd_tn'
-      && row.frequency === 'exact_date_daily_observation'
-      && row.count === observations.filter(
-        row => row.us_total_public_debt_usd_tn !== null).length),
-  JSON.stringify(initial.goldDatasets));
+  check('C18C.3B 页面替换位有三条诚实口径季度 dataset',
+    initial.reserveDatasets.length === 3
+    && initial.reserveDatasets.every(row => row.count === reserveRows.length)
+    && initial.reserveDatasets.filter(row => row.axis === 'y').length === 1
+    && initial.reserveDatasets.filter(row => row.axis === 'yAmount').length === 2,
+  JSON.stringify(initial.reserveDatasets));
   check('Live card 为 unavailable，不创建 iframe 或请求受限 symbol',
     initial.live?.status === 'unavailable'
     && Array.isArray(initial.live?.symbols) && initial.live.symbols.length === 0
@@ -308,13 +303,11 @@ try {
     !initial.liveIframe
     && !/(?:Apple Inc|Cboe One|TVC:|CBOT:)/i.test(initial.livePanelContent),
   initial.livePanelContent);
-  check('页面公开 fixed-stock valuation proxy 与当前价格代理',
-    initial.goldMethod?.includes(`黄金估值价格代理：${methodology.gold_price_source}`)
-    && initial.goldMethod?.includes(methodology.gold_price_instrument)
-    && initial.goldMethod.includes('220,700')
-    && initial.goldMethod.includes('历史所有日期当前均使用固定 end-2025')
-    && initial.goldMethod.includes('不是历史各时点真实 above-ground gold stock 的完整重建'),
-  initial.goldMethod);
+  check('页面公开样本分母、TIC universe mismatch 与 no-fill 方法学',
+    initial.reserveMethod?.includes('不是 source-provided Global Total Official Reserve Assets')
+    && initial.reserveMethod.includes('不使用 COFER USD share')
+    && initial.reserveMethod.includes('与 WGC 匹配报告样本不一致，因此本图不生产美债占比')
+    && initial.reserveMethod.includes('不前值填充、不插值'), initial.reserveMethod);
   check('hybrid pointer 下 UST drag zoom 真正启用',
     initialUST.health?.pluginAvailable === true
     && initialUST.health?.mouseCapable === true
@@ -466,7 +459,7 @@ try {
 
   const pluginMissing = await preparePage({ blockZoomPlugin: true });
   await pluginMissing.page.waitForFunction(() =>
-    !!Chart.getChart(document.getElementById('goldDebtChart'))
+    !!Chart.getChart(document.getElementById('officialReserveChart'))
     && !!Chart.getChart(document.getElementById('fedChart'))
     && !!Chart.getChart(document.getElementById('cpiChart'))
     && !!Chart.getChart(document.getElementById('debtOverviewChart')),
@@ -476,7 +469,7 @@ try {
     health: window.__ustZoomHealth,
     hint: document.getElementById('ustZoomHint')?.textContent,
     disabled: document.getElementById('ustResetZoom')?.disabled,
-    charts: ['ustChart', 'fedChart', 'cpiChart', 'debtOverviewChart', 'goldDebtChart']
+    charts: ['ustChart', 'fedChart', 'cpiChart', 'debtOverviewChart', 'officialReserveChart']
       .map(id => Boolean(Chart.getChart(document.getElementById(id)))),
   }));
   check('zoom plugin missing 显示固定局部错误并禁用 Reset',
@@ -489,49 +482,26 @@ try {
     JSON.stringify(pluginMissing.pageErrors));
   await pluginMissing.context.close();
 
-  const alternateSource = methodology.gold_price_instrument === 'GC=F'
-    ? { source: 'Stooq (xauusd)', instrument: 'XAUUSD', label: 'XAUUSD gold spot proxy' }
-    : { source: 'Yahoo Finance (GC=F)', instrument: 'GC=F', label: 'COMEX gold futures' };
-  const switchedDerived = structuredClone(derived);
-  Object.assign(switchedDerived.data.methodology, {
-    gold_price_source: alternateSource.source,
-    gold_price_instrument: alternateSource.instrument,
-    gold_price_instrument_label: alternateSource.label,
-    gold_price_is_proxy: true,
-  });
-  const sourceSwitch = await preparePage({ goldOverride: switchedDerived });
-  await sourceSwitch.page.waitForFunction(() => !!Chart.getChart(
-    document.getElementById('goldDebtChart')), null, { timeout: 15000 });
-  const switchedMethod = await sourceSwitch.page.locator('#goldDebtMethod').textContent();
-  check('页面价格代理文案动态读取 derived methodology 且保留 fixed-stock 警示',
-    switchedMethod.includes(alternateSource.source)
-    && switchedMethod.includes(alternateSource.instrument)
-    && !switchedMethod.includes(methodology.gold_price_source)
-    && switchedMethod.includes('历史所有日期当前均使用固定 end-2025'), switchedMethod);
-  check('price source 切换页面无未捕获 pageerror',
-    sourceSwitch.pageErrors.length === 0, JSON.stringify(sourceSwitch.pageErrors));
-  await sourceSwitch.context.close();
-
-  const goldFailure = await preparePage({ failGold: true });
-  await goldFailure.page.waitForFunction(() =>
-    /失败/.test(document.getElementById('goldDebtStatus')?.textContent || ''),
+  const reserveFailure = await preparePage({ failReserve: true });
+  await reserveFailure.page.waitForFunction(() =>
+    /失败/.test(document.getElementById('officialReserveStatus')?.textContent || ''),
   null, { timeout: 15000 });
-  const goldIsolated = await goldFailure.page.evaluate(() => ({
-    gold: Boolean(Chart.getChart(document.getElementById('goldDebtChart'))),
+  const reserveIsolated = await reserveFailure.page.evaluate(() => ({
+    reserve: Boolean(Chart.getChart(document.getElementById('officialReserveChart'))),
     ust: Boolean(Chart.getChart(document.getElementById('ustChart'))),
     liveUnavailable: window.__liveTreasuryWidgetContract?.status === 'unavailable',
-    status: document.getElementById('goldDebtStatus')?.textContent,
+    status: document.getElementById('officialReserveStatus')?.textContent,
   }));
-  check('gold-vs-debt 加载失败只挂比较卡', !goldIsolated.gold
-    && goldIsolated.ust && goldIsolated.liveUnavailable
-    && /失败/.test(goldIsolated.status), JSON.stringify(goldIsolated));
-  check('gold-vs-debt 加载失败无未捕获 pageerror',
-    goldFailure.pageErrors.length === 0, JSON.stringify(goldFailure.pageErrors));
-  await goldFailure.context.close();
+  check('official reserve 加载失败只挂替换卡', !reserveIsolated.reserve
+    && reserveIsolated.ust && reserveIsolated.liveUnavailable
+    && /失败/.test(reserveIsolated.status), JSON.stringify(reserveIsolated));
+  check('official reserve 加载失败无未捕获 pageerror',
+    reserveFailure.pageErrors.length === 0, JSON.stringify(reserveFailure.pageErrors));
+  await reserveFailure.context.close();
 
   const mobile = await preparePage({ mobile: true });
   await mobile.page.waitForFunction(() => !!Chart.getChart(
-    document.getElementById('goldDebtChart')), null, { timeout: 15000 });
+    document.getElementById('officialReserveChart')), null, { timeout: 15000 });
   const mobileState = await mobile.page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     innerWidth: window.innerWidth,
@@ -553,7 +523,7 @@ try {
   server.close();
 }
 
-check('页面请求 gold-vs-debt 派生产物',
-  requested.includes('data/derived/gold_vs_debt.json'));
+check('页面请求 official reserve composition 派生产物',
+  requested.includes('data/derived/official_reserve_composition.json'));
 console.log(`${passed} passed, ${failed} failed`);
 process.exitCode = failed ? 1 : 0;
