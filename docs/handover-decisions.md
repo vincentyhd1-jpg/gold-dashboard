@@ -589,22 +589,28 @@ GitHub：`vincentyhd1-jpg/gold-dashboard`。
   reconstruction。Historical Global Gold Valuation v2 作为独立 TODO，须先取得官方
   随年份变化的 above-ground stock；本阶段禁止插值历史存量。
 
-## C18C.3B 全球官方储备构成长期决策
+## C18C.3B WGC 官方储备报告样本长期决策
 
-- macro 首卡改为“全球官方储备构成：黄金 vs 外国官方机构持有美债”单图双轴四线；
-  旧 `gold_vs_debt` 管线保留但不再作为页面产品展示，避免删除历史依赖与扩大范围。
-- 两条比例线只能共用 `Total Official Reserve Assets`。当前分母是 WGC Central Bank
-  Dashboard 的 `Total reserves` 报告国合计，按 WGC 方法学为 IMF IFS-compatible、
-  含黄金口径；不得换成 COFER allocated FX、COFER USD share 或另一独立分母。
-- 官方黄金金额直接采用 WGC `Gold reserves (US$ Millions)` 的季末市场价值；不得
-  使用全球全部地上黄金总市值，也不得把央行账面成本当市场价值。
-- 美债金额严格为 TIC/FRED `FORTREASPOS99990` Foreign Official U.S. Treasury
-  Holdings。正式中文名固定为“外国官方机构持有美债额”；不能改成美元储备、外国
-  政府持有、所有外国持有或全球央行持有。TIC foreign official 范围需持续披露。
-- 目标频率固定季度。FRED 月频只取 3/6/9/12 月实际值，以 `YYYY-Qn` 与 WGC 对齐；
-  publication date、nearest date、forward-fill、插值和复制日/月值均禁止。
-- WGC 最新季度可能存在大量 awaited 国别值；production 只接受三个核心指标各至少
-  90 个报告经济体的季度。覆盖国随 vintage 变化是来源限制，必须在 metadata/方法学
-  中披露，不能用 0 或旧值补齐。
-- 页面双轴只用于同一经济问题的比例与金额视图：左轴 `% of Total Official Reserve
-  Assets`，右轴 `USD tn`。前端只做 USD→tn 显示缩放，不重算 share 或分母。
+- WGC Dashboard API 的 gold value / gold tonnes / total reserves 各为 123 个 ISO3
+  国家/经济体 series，当前没有 source-provided World/region/international-institution
+  aggregate。collector 必须拒绝 WLD/World/region/IMF/ECB/BIS 等身份，禁止 aggregate
+  与成员经济体重复加总；不能把 available-country sum 命名为 global total。
+- 每季度按 entity identity 取 gold value、gold tonnes、total reserves 三项交集；三项
+  aggregate 必须使用完全相同的 matched entity set，并保留 reporter lists/counts。
+  count 相同不代表 identity 相同，相关 guard 必须按名称集合求交。matched set 少于
+  90 个实体的季度不发布；覆盖随 WGC vintage 变化，不补 0 或旧值。
+- 官方黄金金额采用 matched set 的 WGC `Gold reserves (US$ Millions)` 季末市场价值；
+  黄金比例只除以相同 matched set 的 IMF IFS-compatible、含黄金 Total reserves。它是
+  WGC 报告样本占比，不是 source-provided Global Total Official Reserve Assets。
+- TIC/FRED `FORTREASPOS99990` 是全体 Foreign Official U.S. Treasury Holdings，可能
+  包括中央银行、政府部门、稳定基金、财政代理及国际/区域官方机构。该 global TIC
+  numerator 与 WGC matched reporting sample 不同，因此本阶段只保留真实美债金额，
+  不生产 UST percentage/proxy；COFER USD share 也不得替代。
+- 页面首卡改名为“WGC 报告经济体官方储备样本：黄金 vs 外国官方机构持有美债”，
+  保持单图双轴但只有三条真实曲线：黄金样本占比、黄金样本金额、TIC 美债金额。
+  金额与比例随季度分母变化，不能把两条金额线伪装成可由固定双轴同时读取的两条比例线。
+- FRED 月频只取 3/6/9/12 月实际 observation，以 `YYYY-Qn` 对齐；tooltip 把
+  `2025-12-01` 表达为 `2025-12 / 2025-Q4` source period，不声称精确日 as-of。
+  nearest date、forward-fill、插值和复制日/月值均禁止。
+- 旧 `gold_vs_debt` 管线保留但不再作为页面产品展示；Live Treasury unavailable、
+  C17/C18 计算与其它宏观模块均不受本口径修正影响。

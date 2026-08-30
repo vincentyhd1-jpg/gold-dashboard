@@ -801,10 +801,12 @@ workflow 里所有 fetch/derive 步骤都带 `continue-on-error`，commit 步骤
   `min-width:0`，否则桌面宽度初始化后缩到移动端会被 canvas 的 min-content 撑出
   横向页面溢出。
 - macro rates/CPI 与 debt 使用独立加载错误边界；任一组失败不得拖掉另一组。
-- macro 页首卡只消费 `official_reserve_composition.json`，显示全球官方储备构成的
-  四条季度曲线：官方黄金金额/占比与 TIC/FRED foreign-official UST 金额/占比。
-  两条占比共用 `Total Official Reserve Assets` 分母；禁止以 COFER USD share 冒充
-  UST share，禁止 forward-fill/interpolation。旧 `gold_vs_debt` 管线继续保留、测试和
+- macro 页首卡只消费 `official_reserve_composition.json`，显示 WGC 匹配报告经济体
+  样本的官方部门黄金金额/占比，以及 TIC/FRED foreign-official UST 金额三条季度曲线。
+  黄金分子与分母必须来自当季 gold value / tonnes / total reserves 的同实体交集；
+  WGC API 没有 source-provided World aggregate。TIC numerator 是更广的 global
+  foreign-official universe，禁止除以该 WGC 样本分母，故不生产 UST ratio。COFER USD
+  share、forward-fill 与 interpolation 同样禁止。旧 `gold_vs_debt` 管线继续保留、测试和
   更新，但不再由 macro 页面请求或展示。
 - TradingView 官方 Advanced Widget 对 `TVC` Treasury yields 和实测的 CBOT Treasury
   futures 连续合约都返回 third-party restricted；production 不再请求这些 symbol，Live
@@ -1009,22 +1011,30 @@ proxy，主要反映价格变化，并非历史各时点真实 above-ground stoc
 TODO（独立未来任务）：Historical Global Gold Valuation v2 仅在取得官方逐年地上存量
 后实现；不得在本阶段插值或倒推历史存量。
 
-## C18C.3B 全球官方储备构成
+## C18C.3B WGC 官方储备报告样本
 
 `fetch_wgc_official_reserves.py` 从 WGC Central Bank Dashboard 公共季度接口取得
 `Gold reserves (US$ Millions)`、`Gold reserves (Tonnes)` 与 `Total reserves
-(US$ Millions)` 的报告国合计；后者按 WGC 方法学为 IMF IFS-compatible、含黄金的
-Total reserves。coverage 完整度闸要求三个指标各至少 90 个报告经济体，故当前不完整
-的 2026-Q1 不进入生产，实际 coverage 为 2000-Q4 至 2025-Q4。
+(US$ Millions)`。当前三个 metric 各有 123 个 ISO3 国家/经济体 series，没有 World、
+region、IMF、ECB 或 BIS aggregate；collector 遇到此类 aggregate/institution identity
+会拒绝，避免与成员经济体重复加总。每季度先按 entity identity 取三项交集，再对三项
+使用完全相同的 matched set 求和，并保存各 reporter list/count；不能只比较 count。
+coverage 闸要求 matched set 至少 90 个实体，故 2026-Q1 不进入生产，实际 coverage
+为 2000-Q4 至 2025-Q4；2025-Q4 matched count 为 90。
 
 `fetch_fred.py` 第 14 条源为 TIC/FRED `FORTREASPOS99990`（Foreign Official U.S.
 Treasury Holdings，Millions of Dollars）。`derive_official_reserve_composition.py`
 只取 3/6/9/12 月观测并按共同季度连接，不采用 publication date、最近日期、前值或
-插值。两条 share 均严格除以同一个 `Total Official Reserve Assets`；COFER USD share
-只能作为另一个经济指标，绝不能进入本图或变量 `foreign_official_ust_share_pct`。
+插值。黄金 share 只除以同 matched set 的 WGC/IFS-compatible Total reserves。TIC
+`FORTREASPOS99990` 覆盖全体 foreign official institutions，包括中央银行、政府部门、
+稳定基金、财政代理及国际/区域官方机构，与 WGC matched sample 不同；因此派生与页面
+均不生产 `foreign_official_ust_share_pct`。COFER USD share 也不得进入本图。
 
-macro 首卡为单图双 Y 轴：左轴 `% of Total Official Reserve Assets`，右轴 `USD tn`；
-tooltip 必须披露 series、单位、period、source 与 source observation as_of。旧
+macro 首卡为单图双 Y 轴三线：左轴 `% of matched WGC reserve sample` 仅画黄金样本
+占比，右轴 `USD tn` 画黄金样本金额与 global TIC foreign-official UST 金额。四条
+dataset 才能同时表达两种金额与两种比例，但 UST 比例缺匹配总体，宁可少一线也不能
+伪造双轴转换。tooltip 必须披露 series、单位、source 与 source period；FRED
+`2025-12-01` 是月度 label，只显示 `2025-12 / 2025-Q4`，不得冒充精确日 as-of。旧
 `derive_gold_vs_debt.py` / `gold_vs_debt.json` 保留为历史独立管线并继续过 freshness
-guard，但页面不再请求。WGC 报告国覆盖会随 vintage 变化；页面方法学必须保留
-WGC/IMF IFS-compatible 与 TIC foreign official scope 免责声明。
+guard，但页面不再请求。页面标题必须明确为 WGC 报告经济体样本，不得把动态 matched
+sample 标成 Global Total Official Reserve Assets。

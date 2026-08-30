@@ -158,7 +158,7 @@ jobs:
           exit 0
         continue-on-error: true
 
-      # WGC 季度官方黄金与 IMF IFS-compatible Total reserves 报告合计。
+      # WGC 季度官方黄金与 IMF IFS-compatible Total reserves 同实体报告样本。
       # 网络失败 exit 2 保留旧文件；确定性 schema/coverage 失败 exit 1 报红。
       - name: Run fetch_wgc_official_reserves.py
         id: wgc_official_reserves
@@ -225,8 +225,8 @@ jobs:
           exit 0
         continue-on-error: true
 
-      # C18C.3B：WGC/IFS-compatible 官方储备与 TIC/FRED foreign-official UST
-      # 只按共同季度派生；失败保留旧产物，不影响旧 gold_vs_debt 或其它宏观模块。
+      # C18C.3B：WGC/IFS-compatible 官方储备样本与 TIC/FRED foreign-official UST
+      # 只生产同实体 WGC 样本黄金占比；总体不匹配的 UST ratio 不生产。
       - name: Run derive_official_reserve_composition.py
         id: derive_official_reserves
         run: |
@@ -398,15 +398,15 @@ jobs:
             *) fail "派生层：黄金总市值 vs 美债总额" "derive_gold_vs_debt.py 以未预期的 exit code ${{ steps.derive_gold_vs_debt.outputs.code }} 退出（只应产生 0 或 1）" ;;
           esac
           case "${{ steps.wgc_official_reserves.outputs.code }}" in
-            1) fail "采集层：WGC 官方储备" "WGC 官方黄金/Total reserves schema 或 coverage 失败（exit 1）—— wgc_official_reserves.json 保持上一版" ;;
+            1) fail "采集层：WGC 官方储备" "WGC 官方黄金/Total reserves entity-intersection、schema 或 coverage 失败（exit 1）—— wgc_official_reserves.json 保持上一版" ;;
             2) echo "::warning title=采集层：WGC 官方储备::WGC 公共接口暂时不可达；保留旧文件，等待下次任务" ;;
             0|"") : ;;
             *) fail "采集层：WGC 官方储备" "fetch_wgc_official_reserves.py 返回未预期 exit code ${{ steps.wgc_official_reserves.outputs.code }}" ;;
           esac
           case "${{ steps.derive_official_reserves.outputs.code }}" in
-            1) fail "派生层：全球官方储备构成" "derive_official_reserve_composition.py 输入或契约失败（exit 1）—— official_reserve_composition.json 保持上一版；其它模块不受影响" ;;
+            1) fail "派生层：WGC 官方储备报告样本" "derive_official_reserve_composition.py 输入或统计总体契约失败（exit 1）—— official_reserve_composition.json 保持上一版；其它模块不受影响" ;;
             0|"") : ;;
-            *) fail "派生层：全球官方储备构成" "derive_official_reserve_composition.py 返回未预期 exit code ${{ steps.derive_official_reserves.outputs.code }}" ;;
+            *) fail "派生层：WGC 官方储备报告样本" "derive_official_reserve_composition.py 返回未预期 exit code ${{ steps.derive_official_reserves.outputs.code }}" ;;
           esac
           [ "${{ steps.commit.outcome }}" = "failure" ] && \
             fail "提交层" "commit/push 失败 —— 本次采集到的数据未能入库，需人工介入"

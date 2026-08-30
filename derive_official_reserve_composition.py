@@ -78,6 +78,32 @@ def _gold_rows(payload: dict) -> dict[str, dict]:
         period = _period(date)
         if date <= previous or period in result:
             raise DerivationFailure("WGC dates must be unique and chronological")
+        reporting = row.get("reporting_entities")
+        if not isinstance(reporting, dict):
+            raise DerivationFailure(f"{period} reporting entity identity is missing")
+        entity_lists: dict[str, list[str]] = {}
+        for field in ("gold_reserves", "gold_reserves_tonnes", "total_reserves", "matched"):
+            values = reporting.get(field)
+            if (not isinstance(values, list) or not values
+                    or values != sorted(set(values))
+                    or any(not isinstance(value, str) for value in values)):
+                raise DerivationFailure(f"{period} {field} reporting entities are invalid")
+            entity_lists[field] = values
+        expected_matched = sorted(
+            set(entity_lists["gold_reserves"])
+            & set(entity_lists["gold_reserves_tonnes"])
+            & set(entity_lists["total_reserves"])
+        )
+        if entity_lists["matched"] != expected_matched:
+            raise DerivationFailure(f"{period} matched reporting entity identities differ")
+        expected_counts = {
+            "gold_reporting_entities_count": len(entity_lists["gold_reserves"]),
+            "gold_tonnes_reporting_entities_count": len(entity_lists["gold_reserves_tonnes"]),
+            "total_reserves_reporting_entities_count": len(entity_lists["total_reserves"]),
+            "matched_reporting_entities_count": len(entity_lists["matched"]),
+        }
+        if any(row.get(field) != count for field, count in expected_counts.items()):
+            raise DerivationFailure(f"{period} reporting entity counts differ from identities")
         gold_mn = _positive(row.get("official_gold_value_usd_mn"), f"{period} gold")
         total_mn = _positive(
             row.get("total_official_reserve_assets_usd_mn"), f"{period} reserves")
@@ -88,6 +114,8 @@ def _gold_rows(payload: dict) -> dict[str, dict]:
             "gold_mn": gold_mn,
             "total_mn": total_mn,
             "tonnes": _positive(row.get("official_gold_tonnes"), f"{period} tonnes"),
+            "matched_entities": entity_lists["matched"],
+            "reporting_counts": expected_counts,
         }
         previous = date
     return result
@@ -132,9 +160,10 @@ def build_data(gold: dict, ust: dict) -> dict:
             "official_gold_value_usd": gold_usd,
             "official_gold_share_pct": gold_usd / total_usd * 100.0,
             "foreign_official_ust_value_usd": ust_usd,
-            "foreign_official_ust_share_pct": ust_usd / total_usd * 100.0,
             "total_official_reserve_assets_usd": total_usd,
             "official_gold_tonnes": gold_row["tonnes"],
+            "matched_reporting_entities_count": len(gold_row["matched_entities"]),
+            "matched_reporting_entities": gold_row["matched_entities"],
             "gold_source_date": gold_row["date"],
             "ust_source_date": ust_row["date"],
         })
@@ -146,11 +175,22 @@ def build_data(gold: dict, ust: dict) -> dict:
         },
         "methodology": {
             "gold_value": "WGC official gold reserves valued at quarter-end market price",
-            "gold_share_formula": "OfficialGoldValue / TotalOfficialReserveAssets * 100",
+            "gold_share_formula": (
+                "MatchedReportingEntitiesOfficialGoldValue / "
+                "MatchedReportingEntitiesTotalReserves * 100"
+            ),
             "ust_value": "TIC/FRED Foreign Official U.S. Treasury Holdings (FORTREASPOS99990)",
-            "ust_share_formula": "ForeignOfficialUSTValue / TotalOfficialReserveAssets * 100",
-            "common_denominator": "Total Official Reserve Assets",
-            "denominator_source": "WGC Total reserves, IMF IFS-compatible including gold",
+            "ust_ratio_status": "not_produced_unmatched_statistical_universe",
+            "gold_share_denominator": "Matched WGC reporting-entity Total reserves",
+            "denominator_source": (
+                "WGC Total reserves, IMF IFS-compatible including gold, quarter-specific "
+                "same-entity intersection"
+            ),
+            "denominator_source_provided_global_aggregate": False,
+            "denominator_is_dynamic_available_country_sum": False,
+            "denominator_scope": "quarter-specific matched WGC reporting-entity sample",
+            "gold_numerator_denominator_same_entity_universe": True,
+            "tic_numerator_denominator_same_entity_universe": False,
             "quarterly_ust_rule": "March/June/September/December observations only",
             "cofer_usd_share_is_not_ust_share": True,
             "no_forward_fill": True,
@@ -162,7 +202,9 @@ def build_data(gold: dict, ust: dict) -> dict:
         },
         "sources": {
             "official_gold": "World Gold Council Central Bank Dashboard",
-            "total_official_reserve_assets": "WGC / IMF IFS-compatible Total reserves",
+            "total_official_reserve_assets": (
+                "WGC / IMF IFS-compatible Total reserves, matched reporting-entity sample"
+            ),
             "foreign_official_ust": "TIC/FRED FORTREASPOS99990",
         },
         "observations": observations,
@@ -174,6 +216,9 @@ def build_output(gold_path: Path = GOLD_PATH, ust_path: Path = UST_PATH) -> dict
         "source=World_Gold_Council_Central_Bank_Dashboard",
         "denominator_metric=Total_reserves_USD_millions",
         "total_reserves_source_semantics=IMF_IFS_compatible_including_gold",
+        "source_provided_world_global_aggregate=false",
+        "aggregation=quarter_specific_same_entity_intersection_no_fill_no_interpolation",
+        "denominator_scope=matched_WGC_reporting_entity_sample_not_global_total",
     ))
     ust = _load(ust_path, UST_SOURCE, "monthly", (
         "source=FRED", "series_id=FORTREASPOS99990", "units=Millions of Dollars",
@@ -192,10 +237,12 @@ def build_output(gold_path: Path = GOLD_PATH, ust_path: Path = UST_PATH) -> dict
         SOURCE, "quarterly", data, dates=periods, date_field="period",
         derived_from=refs,
         info=[
-            "four_series=official_gold_value_and_share,foreign_official_ust_value_and_share",
-            "common_denominator=Total_Official_Reserve_Assets",
+            "three_series=official_gold_value_and_sample_share,foreign_official_ust_value",
+            "gold_share_denominator=matched_WGC_reporting_entity_Total_reserves",
+            "denominator_is_not_source_provided_global_aggregate",
+            "foreign_official_ust_ratio_not_produced_due_unmatched_statistical_universe",
             "gold_source=World_Gold_Council",
-            "denominator_source=IMF_IFS_compatible_Total_reserves",
+            "denominator_source=IMF_IFS_compatible_Total_reserves_matched_sample",
             "ust_source=TIC_FRED_FORTREASPOS99990",
             "units=USD_and_percent",
             "quarterly_exact_observations_only_no_forward_fill_no_interpolation",
@@ -233,11 +280,28 @@ def run_once() -> int:
 
 
 def _fixture_payloads() -> tuple[dict, dict]:
+    matched = ["AAA", "BBB", "CCC"]
+    gold_entities = matched + ["GGG"]
+    reserve_entities = matched + ["RRR"]
+    entity_fields = {
+        "gold_reporting_entities_count": len(gold_entities),
+        "gold_tonnes_reporting_entities_count": len(gold_entities),
+        "total_reserves_reporting_entities_count": len(reserve_entities),
+        "matched_reporting_entities_count": len(matched),
+        "reporting_entities": {
+            "gold_reserves": gold_entities,
+            "gold_reserves_tonnes": gold_entities,
+            "total_reserves": reserve_entities,
+            "matched": matched,
+        },
+    }
     gold_rows = [
         {"date": "2024-03-31", "official_gold_value_usd_mn": 2_000_000,
-         "official_gold_tonnes": 32_000, "total_official_reserve_assets_usd_mn": 10_000_000},
+         "official_gold_tonnes": 32_000, "total_official_reserve_assets_usd_mn": 10_000_000,
+         **entity_fields},
         {"date": "2024-06-30", "official_gold_value_usd_mn": 2_100_000,
-         "official_gold_tonnes": 32_100, "total_official_reserve_assets_usd_mn": 10_500_000},
+         "official_gold_tonnes": 32_100, "total_official_reserve_assets_usd_mn": 10_500_000,
+         **entity_fields},
     ]
     ust_rows = [
         {"date": "2024-02-01", "value": 3_000_000},
@@ -250,6 +314,9 @@ def _fixture_payloads() -> tuple[dict, dict]:
             "source=World_Gold_Council_Central_Bank_Dashboard",
             "denominator_metric=Total_reserves_USD_millions",
             "total_reserves_source_semantics=IMF_IFS_compatible_including_gold",
+            "source_provided_world_global_aggregate=false",
+            "aggregation=quarter_specific_same_entity_intersection_no_fill_no_interpolation",
+            "denominator_scope=matched_WGC_reporting_entity_sample_not_global_total",
         ])
     ust = envelope(UST_SOURCE, "monthly", ust_rows,
         dates=[r["date"] for r in ust_rows], info=[
@@ -275,9 +342,16 @@ def run_tests() -> int:
     check("common quarterly index", [r["period"] for r in rows] == ["2024-Q1", "2024-Q2"])
     check("quarter-end month UST only", rows[0]["foreign_official_ust_value_usd"] == 3_100_000_000_000)
     check("official gold value preserved", rows[0]["official_gold_value_usd"] == 2_000_000_000_000)
-    check("one common denominator", rows[0]["total_official_reserve_assets_usd"] == 10_000_000_000_000)
+    check("matched sample denominator preserved",
+          rows[0]["total_official_reserve_assets_usd"] == 10_000_000_000_000)
     check("gold share formula", abs(rows[0]["official_gold_share_pct"] - 20.0) < 1e-12)
-    check("UST share formula", abs(rows[0]["foreign_official_ust_share_pct"] - 31.0) < 1e-12)
+    check("UST ratio omitted for unmatched statistical universe",
+          "foreign_official_ust_share_pct" not in rows[0]
+          and data["methodology"]["ust_ratio_status"]
+          == "not_produced_unmatched_statistical_universe")
+    check("gold numerator and denominator retain the same entity intersection",
+          rows[0]["matched_reporting_entities"] == ["AAA", "BBB", "CCC"]
+          and rows[0]["matched_reporting_entities_count"] == 3)
     check("no forward fill", [r["ust_source_date"] for r in rows] == ["2024-03-01", "2024-06-01"])
     check("COFER excluded", data["methodology"]["cofer_usd_share_is_not_ust_share"] is True)
     check("TIC/FRED source label", data["sources"]["foreign_official_ust"] == "TIC/FRED FORTREASPOS99990")
@@ -300,6 +374,15 @@ def run_tests() -> int:
         check("invalid denominator rejected", True)
     else:
         check("invalid denominator rejected", False)
+    try:
+        bad = json.loads(json.dumps(gold))
+        bad["data"][0]["reporting_entities"]["matched"] = ["AAA", "BBB", "RRR"]
+        build_data(bad, ust)
+    except DerivationFailure as exc:
+        check("equal reporter counts with different entity identities are rejected",
+              "matched reporting entity identities differ" in str(exc))
+    else:
+        check("equal reporter counts with different entity identities are rejected", False)
     try:
         bad = json.loads(json.dumps(ust))
         bad["data"] = [row for row in bad["data"] if row["date"][5:7] not in ("03", "06", "09", "12")]

@@ -32,37 +32,38 @@ check('common quarterly coverage is exact', Array.isArray(rows) && rows.length >
   && envelope.coverage.first === rows[0].period
   && envelope.coverage.last === rows.at(-1).period
   && rows.every((row, index) => index === 0 || row.period > rows[index - 1].period));
-check('gold share uses common denominator', rows.every(row =>
+check('gold share uses matched sample denominator', rows.every(row =>
   Math.abs(row.official_gold_share_pct
     - row.official_gold_value_usd / row.total_official_reserve_assets_usd * 100) < 1e-10));
-check('UST share uses same common denominator', rows.every(row =>
-  Math.abs(row.foreign_official_ust_share_pct
-    - row.foreign_official_ust_value_usd / row.total_official_reserve_assets_usd * 100) < 1e-10));
-check('TIC/FRED source is explicit and COFER is excluded',
+check('unmatched global TIC ratio is not produced', rows.every(row =>
+  !Object.hasOwn(row, 'foreign_official_ust_share_pct'))
+  && methodology.ust_ratio_status === 'not_produced_unmatched_statistical_universe'
+  && methodology.tic_numerator_denominator_same_entity_universe === false);
+check('TIC/FRED source is explicit COFER excluded and denominator scoped',
   envelope.data.sources.foreign_official_ust === 'TIC/FRED FORTREASPOS99990'
-  && methodology.common_denominator === 'Total Official Reserve Assets'
+  && methodology.denominator_source_provided_global_aggregate === false
+  && methodology.gold_numerator_denominator_same_entity_universe === true
   && methodology.cofer_usd_share_is_not_ust_share === true);
 check('quarter alignment has no fill or interpolation',
   methodology.quarterly_ust_rule === 'March/June/September/December observations only'
   && methodology.no_forward_fill === true && methodology.no_interpolation === true
   && rows.every(row => /-(03|06|09|12)-01$/.test(row.ust_source_date)));
-check('new card title and four canonical labels exist',
-  source.includes('全球官方储备构成：黄金 vs 外国官方机构持有美债')
-  && source.includes('全球央行持有黄金占全球官方储备比例')
-  && source.includes('外国官方机构持有美债占全球官方储备比例')
-  && source.includes('全球央行持有黄金金额')
+check('new card title and three honest labels exist',
+  source.includes('WGC 报告经济体官方储备样本：黄金 vs 外国官方机构持有美债')
+  && source.includes('匹配报告经济体官方部门黄金占样本储备比例')
+  && source.includes('匹配报告经济体官方部门黄金金额')
   && source.includes("lineDataset('外国官方机构持有美债额'"));
 check('old gold-vs-debt card is no longer exposed',
   !source.includes('全球黄金总市值 vs 美债总额')
   && !source.includes("loadJson('data/derived/gold_vs_debt.json"));
 check('dual-axis unit contract is explicit',
-  source.includes("text: '% of Total Official Reserve Assets'")
+  source.includes("text: '% of matched WGC reserve sample'")
   && source.includes("text: 'USD tn'")
   && source.includes("yAxisID: 'yAmount'"));
-check('methodology note states common denominator and TIC scope',
+check('methodology note states sample denominator and TIC scope mismatch',
   source.includes('不使用 COFER USD share')
-  && source.includes('WGC 国别报告覆盖随 vintage 变化')
-  && source.includes('外国官方机构按 TIC 定义')
+  && source.includes('不是 source-provided Global Total Official Reserve Assets')
+  && source.includes('与 WGC 匹配报告样本不一致，因此本图不生产美债占比')
   && source.includes('不前值填充、不插值'));
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -105,7 +106,7 @@ try {
     const labels = chart.data.labels;
     const sampleIndex = labels.length - 1;
     const tooltip = chart.options.plugins.tooltip.callbacks;
-    const sampleDataset = chart.data.datasets[3];
+    const sampleDataset = chart.data.datasets[2];
     const ctx = { dataset: sampleDataset, dataIndex: sampleIndex,
       parsed: { y: sampleDataset.data[sampleIndex] }, label: labels[sampleIndex] };
     return {
@@ -121,19 +122,21 @@ try {
       oldText: document.body.innerText.includes('全球黄金总市值 vs 美债总额'),
     };
   });
-  check('browser renders one chart with four complete datasets',
-    state.datasets.length === 4 && state.rowCount === rows.length
+  check('browser renders one chart with three complete datasets',
+    state.datasets.length === 3 && state.rowCount === rows.length
     && state.datasets.every(dataset => dataset.count === rows.length), JSON.stringify(state.datasets));
   check('browser datasets use correct distinct axes',
     state.datasets.filter(dataset => dataset.unit === '%').every(dataset => dataset.axis === 'y')
     && state.datasets.filter(dataset => dataset.unit === 'USD tn').every(dataset => dataset.axis === 'yAmount')
-    && state.axes.left === '% of Total Official Reserve Assets' && state.axes.right === 'USD tn');
-  check('tooltip exposes value unit, source, period and as_of',
+    && state.axes.left === '% of matched WGC reserve sample' && state.axes.right === 'USD tn');
+  check('tooltip exposes value unit source and honest monthly period',
     /\$.*tn/.test(state.tooltipLabel) && /TIC\/FRED FORTREASPOS99990/.test(state.tooltipSource)
-    && /period 2025-Q4/.test(state.tooltipSource) && /as_of 2025-12-01/.test(state.tooltipSource),
+    && /source period 2025-12 \(2025-Q4\)/.test(state.tooltipSource)
+    && !/as_of 2025-12-01/.test(state.tooltipSource),
   `${state.tooltipLabel} | ${state.tooltipSource}`);
   check('new title visible and old title absent',
-    state.title === '全球官方储备构成：黄金 vs 外国官方机构持有美债' && !state.oldText);
+    state.title === 'WGC 报告经济体官方储备样本：黄金 vs 外国官方机构持有美债'
+    && !state.oldText);
   check('normal browser page has no uncaught errors', normal.pageErrors.length === 0,
     JSON.stringify(normal.pageErrors));
   await normal.context.close();

@@ -189,6 +189,22 @@ try {
     'FAIL dist official reserve derived_from 对应当前 WGC / FRED sources');
   runBuildAndGuard('H restore');
 
+  console.log('\n--- I: dist WGC 样本混入 World aggregate ---');
+  run(BUILD);
+  const distReserveUniversePath = path.join(DIST, 'data', 'wgc_official_reserves.json');
+  const distReserveUniverse = JSON.parse(fs.readFileSync(distReserveUniversePath, 'utf8'));
+  const universeRow = distReserveUniverse.data.at(-1);
+  universeRow.reporting_entities.matched.push('WLD');
+  universeRow.matched_reporting_entities_count += 1;
+  fs.writeFileSync(distReserveUniversePath,
+    `${JSON.stringify(distReserveUniverse, null, 2)}\n`);
+  check('I World aggregate identity 已真实混入匹配样本',
+    JSON.parse(fs.readFileSync(distReserveUniversePath, 'utf8')).data.at(-1)
+      .reporting_entities.matched.includes('WLD'));
+  expectRed('I World aggregate double-count risk',
+    'FAIL dist WGC sample uses exact same-entity intersection without aggregates');
+  runBuildAndGuard('I restore');
+
   runBuildAndGuard('final restored');
   check('最终 wrangler.jsonc SHA-256 一致',
     sha256(fs.readFileSync(CONFIG)) === originalHash);

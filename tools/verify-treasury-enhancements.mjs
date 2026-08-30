@@ -282,10 +282,10 @@ try {
     };
   });
   const initialUST = await ustState(page);
-  check('C18C.3B 页面替换位有四条季度 official reserve dataset',
-    initial.reserveDatasets.length === 4
+  check('C18C.3B 页面替换位有三条诚实口径季度 dataset',
+    initial.reserveDatasets.length === 3
     && initial.reserveDatasets.every(row => row.count === reserveRows.length)
-    && initial.reserveDatasets.filter(row => row.axis === 'y').length === 2
+    && initial.reserveDatasets.filter(row => row.axis === 'y').length === 1
     && initial.reserveDatasets.filter(row => row.axis === 'yAmount').length === 2,
   JSON.stringify(initial.reserveDatasets));
   check('Live card 为 unavailable，不创建 iframe 或请求受限 symbol',
@@ -303,10 +303,10 @@ try {
     !initial.liveIframe
     && !/(?:Apple Inc|Cboe One|TVC:|CBOT:)/i.test(initial.livePanelContent),
   initial.livePanelContent);
-  check('页面公开共同分母、TIC scope 与 no-fill 方法学',
-    initial.reserveMethod?.includes('Total Official Reserve Assets')
+  check('页面公开样本分母、TIC universe mismatch 与 no-fill 方法学',
+    initial.reserveMethod?.includes('不是 source-provided Global Total Official Reserve Assets')
     && initial.reserveMethod.includes('不使用 COFER USD share')
-    && initial.reserveMethod.includes('外国官方机构按 TIC 定义')
+    && initial.reserveMethod.includes('与 WGC 匹配报告样本不一致，因此本图不生产美债占比')
     && initial.reserveMethod.includes('不前值填充、不插值'), initial.reserveMethod);
   check('hybrid pointer 下 UST drag zoom 真正启用',
     initialUST.health?.pluginAvailable === true

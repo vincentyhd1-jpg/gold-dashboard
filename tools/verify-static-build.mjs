@@ -355,8 +355,32 @@ check('dist official reserve derived_from 对应当前 WGC / FRED sources',
   && JSON.stringify(reserveRefs[1]?.coverage) === JSON.stringify(reserveUstSource?.coverage)
   && reserveRefs[1]?.envelope === true);
 const reserveRows = reserveComposition?.data?.observations;
-check('dist official reserve uses one denominator and exact quarterly UST observations',
-  reserveComposition?.data?.methodology?.common_denominator === 'Total Official Reserve Assets'
+const reserveGoldRows = reserveGoldSource?.data;
+check('dist WGC sample uses exact same-entity intersection without aggregates',
+  Array.isArray(reserveGoldRows) && reserveGoldRows.length > 0
+  && reserveGoldSource?.info?.includes('source_provided_world_global_aggregate=false')
+  && reserveGoldRows.every(row => {
+    const entities = row.reporting_entities || {};
+    const lists = ['gold_reserves', 'gold_reserves_tonnes', 'total_reserves', 'matched']
+      .map(field => entities[field]);
+    if (!lists.every(list => Array.isArray(list) && list.length > 0
+      && list.every((value, index) => typeof value === 'string'
+        && (index === 0 || value > list[index - 1])))) return false;
+    const expected = lists[0].filter(value => lists[1].includes(value)
+      && lists[2].includes(value));
+    return JSON.stringify(lists[3]) === JSON.stringify(expected)
+      && row.matched_reporting_entities_count === lists[3].length
+      && !lists.flat().some(value => ['WLD', 'WORLD', 'GLOBAL', 'EUR', 'EUU',
+        'EMU', 'IMF', 'ECB', 'BIS', 'G7', 'G20'].includes(value));
+  }));
+check('dist official reserve keeps honest sample denominator and exact quarterly UST amount',
+  reserveComposition?.data?.methodology?.gold_share_denominator
+    === 'Matched WGC reporting-entity Total reserves'
+  && reserveComposition?.data?.methodology?.denominator_source_provided_global_aggregate === false
+  && reserveComposition?.data?.methodology?.gold_numerator_denominator_same_entity_universe === true
+  && reserveComposition?.data?.methodology?.tic_numerator_denominator_same_entity_universe === false
+  && reserveComposition?.data?.methodology?.ust_ratio_status
+    === 'not_produced_unmatched_statistical_universe'
   && reserveComposition?.data?.methodology?.cofer_usd_share_is_not_ust_share === true
   && reserveComposition?.data?.methodology?.no_forward_fill === true
   && reserveComposition?.data?.methodology?.no_interpolation === true
@@ -364,8 +388,7 @@ check('dist official reserve uses one denominator and exact quarterly UST observ
   && reserveRows.every(row =>
     Math.abs(row.official_gold_share_pct
       - row.official_gold_value_usd / row.total_official_reserve_assets_usd * 100) < 1e-10
-    && Math.abs(row.foreign_official_ust_share_pct
-      - row.foreign_official_ust_value_usd / row.total_official_reserve_assets_usd * 100) < 1e-10
+    && !Object.hasOwn(row, 'foreign_official_ust_share_pct')
     && /-(03|06|09|12)-01$/.test(row.ust_source_date)));
 
 for (const forbidden of FORBIDDEN_PATHS) {

@@ -200,16 +200,16 @@ footer{text-align:center;padding:20px;font-size:12px;color:#484f58;border-top:1p
   <div class="charts-section">
 
     <div class="card full" id="officialReservePanel">
-      <div class="card-title">全球官方储备构成：黄金 vs 外国官方机构持有美债</div>
-      <div class="card-sub">左轴：占全球官方储备比例（%）· 右轴：金额（USD tn）· 季度真实观测</div>
+      <div class="card-title">WGC 报告经济体官方储备样本：黄金 vs 外国官方机构持有美债</div>
+      <div class="card-sub">左轴：官方部门黄金占匹配报告样本比例（%）· 右轴：金额（USD tn）· 季度真实观测</div>
       <div class="chart-wrap gold-debt-chart-wrap"><canvas id="officialReserveChart"></canvas></div>
-      <div class="gold-debt-asof" aria-label="全球官方储备构成数据截至时间">
+      <div class="gold-debt-asof" aria-label="WGC 官方储备报告样本数据截至时间">
         <span>共同季度：<strong id="officialReserveAsOf">--</strong></span>
-        <span>黄金 / 分母来源：<strong>WGC / IMF IFS-compatible</strong></span>
+        <span>黄金 / 样本分母：<strong>WGC 匹配报告经济体</strong></span>
         <span>美债来源：<strong>TIC/FRED</strong></span>
       </div>
-      <div class="gold-debt-method" id="officialReserveMethod">黄金金额为 World Gold Council 官方黄金储备按季末市场金价估值；黄金占比 = Official Gold Value / Total Official Reserve Assets。美债金额为 TIC/FRED FORTREASPOS99990 的 Foreign Official U.S. Treasury Holdings；美债占比使用同一 Total Official Reserve Assets 分母。分母为 WGC 提供的 IMF IFS-compatible Total reserves（含黄金），不使用 COFER USD share。WGC 国别报告覆盖随 vintage 变化；本图为满足完整度闸的可用报告经济体合计，不把未报告值补 0。外国官方机构按 TIC 定义，可能包括中央银行、政府部门、稳定基金及国际官方机构。全部数据只取共同季度，不前值填充、不插值。</div>
-      <div class="status" id="officialReserveStatus" role="status">正在加载全球官方储备构成…</div>
+      <div class="gold-debt-method" id="officialReserveMethod">黄金金额为 World Gold Council 官方部门（主要为央行，适用时含其他官方机构）黄金储备按季末市场金价估值；黄金比例的分子与分母严格使用当季同时具备黄金金额、黄金吨数和 Total reserves 的同一经济体交集。分母是该匹配报告样本的 IMF IFS-compatible Total reserves（含黄金），不是 source-provided Global Total Official Reserve Assets。美债金额为 TIC/FRED FORTREASPOS99990 的全体 Foreign Official U.S. Treasury Holdings；其统计总体可能包括中央银行、政府部门、稳定基金、财政代理及国际/区域官方机构，与 WGC 匹配报告样本不一致，因此本图不生产美债占比，也不使用 COFER USD share。WGC 报告覆盖随 vintage 变化；未报告值不补 0。全部数据只取共同季度，不前值填充、不插值。</div>
+      <div class="status" id="officialReserveStatus" role="status">正在加载 WGC 官方储备报告样本…</div>
     </div>
 
     <div class="card full" id="ustPanel">
@@ -708,7 +708,11 @@ function renderOfficialReserveComposition(payload) {
   if (!Array.isArray(observations) || !observations.length || !methodology || !sources) {
     throw new Error('official reserve composition observations/methodology missing');
   }
-  if (methodology.common_denominator !== 'Total Official Reserve Assets'
+  if (methodology.gold_share_denominator !== 'Matched WGC reporting-entity Total reserves'
+      || methodology.denominator_source_provided_global_aggregate !== false
+      || methodology.gold_numerator_denominator_same_entity_universe !== true
+      || methodology.tic_numerator_denominator_same_entity_universe !== false
+      || methodology.ust_ratio_status !== 'not_produced_unmatched_statistical_universe'
       || methodology.cofer_usd_share_is_not_ust_share !== true
       || methodology.no_forward_fill !== true
       || methodology.no_interpolation !== true
@@ -716,12 +720,16 @@ function renderOfficialReserveComposition(payload) {
     throw new Error('official reserve composition methodology contract mismatch');
   }
   const fields = [
-    'official_gold_share_pct', 'foreign_official_ust_share_pct',
-    'official_gold_value_usd', 'foreign_official_ust_value_usd',
+    'official_gold_share_pct', 'official_gold_value_usd', 'foreign_official_ust_value_usd',
   ];
   if (!observations.every((row, index) => typeof row.period === 'string'
       && (index === 0 || row.period > observations[index - 1].period)
-      && fields.every(field => Number.isFinite(row[field])))) {
+      && fields.every(field => Number.isFinite(row[field]))
+      && !Object.hasOwn(row, 'foreign_official_ust_share_pct')
+      && Number.isInteger(row.matched_reporting_entities_count)
+      && row.matched_reporting_entities_count > 0
+      && Array.isArray(row.matched_reporting_entities)
+      && row.matched_reporting_entities.length === row.matched_reporting_entities_count)) {
     throw new Error('official reserve composition quarterly observations invalid');
   }
   const labels = observations.map(row => row.period);
@@ -731,7 +739,7 @@ function renderOfficialReserveComposition(payload) {
   options.scales.y = {
     position: 'left', beginAtZero: true, grid: { color: '#30363d' },
     ticks: { color: COLORS.muted, callback: value => `${Number(value).toFixed(0)}%` },
-    title: { display: true, text: '% of Total Official Reserve Assets', color: COLORS.muted },
+    title: { display: true, text: '% of matched WGC reserve sample', color: COLORS.muted },
   };
   options.scales.yAmount = {
     position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
@@ -746,9 +754,10 @@ function renderOfficialReserveComposition(payload) {
   };
   options.plugins.tooltip.callbacks.afterLabel = ctx => {
     const row = observations[ctx.dataIndex];
-    const sourceDate = ctx.dataset.sourceKind === 'ust'
-      ? row.ust_source_date : row.gold_source_date;
-    return `  来源：${ctx.dataset.sourceLabel} · period ${row.period} · as_of ${sourceDate}`;
+    const sourcePeriod = ctx.dataset.sourceKind === 'ust'
+      ? `${row.ust_source_date.slice(0, 7)} (${row.period})`
+      : `${row.period} (quarter-end)`;
+    return `  来源：${ctx.dataset.sourceLabel} · source period ${sourcePeriod}`;
   };
   officialReserveChart?.destroy();
   officialReserveChart = new Chart(document.getElementById('officialReserveChart'), {
@@ -756,17 +765,12 @@ function renderOfficialReserveComposition(payload) {
     data: {
       labels,
       datasets: [
-        lineDataset('全球央行持有黄金占全球官方储备比例',
+        lineDataset('匹配报告经济体官方部门黄金占样本储备比例',
           observations.map(row => row.official_gold_share_pct), COLORS.gold, {
             yAxisID: 'y', sourceField: 'official_gold_share_pct', valueUnit: '%',
             sourceKind: 'gold', sourceLabel: 'WGC / IMF IFS-compatible', pointRadius: 1.5,
           }),
-        lineDataset('外国官方机构持有美债占全球官方储备比例',
-          observations.map(row => row.foreign_official_ust_share_pct), COLORS.blue, {
-            yAxisID: 'y', sourceField: 'foreign_official_ust_share_pct', valueUnit: '%',
-            sourceKind: 'ust', sourceLabel: 'TIC/FRED FORTREASPOS99990', pointRadius: 1.5,
-          }),
-        lineDataset('全球央行持有黄金金额',
+        lineDataset('匹配报告经济体官方部门黄金金额',
           observations.map(row => row.official_gold_value_usd / 1e12), '#d29922', {
             yAxisID: 'yAmount', sourceField: 'official_gold_value_usd', valueUnit: 'USD tn',
             sourceKind: 'gold', sourceLabel: 'World Gold Council', borderDash: [7, 4], pointRadius: 1.5,
@@ -1731,22 +1735,22 @@ loadJson('data/derived/official_reserve_composition.json?_=' + Date.now(), {
 })
   .then(payload => {
     let summary;
-    const rendered = _safeRender('全球官方储备构成', () => {
+    const rendered = _safeRender('WGC 官方储备报告样本', () => {
       summary = renderOfficialReserveComposition(payload);
     });
     const el = document.getElementById('officialReserveStatus');
     if (rendered) {
       el.textContent = `已加载 ${summary.observations} 个共同季度（${summary.first} — ${summary.last}）；`
-        + '四条曲线使用真实季度观测，未做填充或插值。';
+        + '三条曲线使用真实季度观测；美债比例因统计总体不匹配而不生产。';
     } else {
-      el.textContent = '全球官方储备构成图渲染失败，请查看控制台。';
+      el.textContent = 'WGC 官方储备报告样本图渲染失败，请查看控制台。';
       el.className = 'status err';
     }
   })
   .catch(err => {
-    console.error('[fetch] 全球官方储备构成数据加载失败：', err);
+    console.error('[fetch] WGC 官方储备报告样本数据加载失败：', err);
     const el = document.getElementById('officialReserveStatus');
-    el.textContent = '全球官方储备构成数据加载失败：' + err.message;
+    el.textContent = 'WGC 官方储备报告样本数据加载失败：' + err.message;
     el.className = 'status err';
   });
 

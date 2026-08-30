@@ -119,7 +119,7 @@ function renderFed`),
         ok: !patched.toString('utf8').includes('不使用 COFER USD share'),
         detail: 'replacement card no longer distinguishes COFER USD share from UST holdings',
       }),
-      expectedFailureMarkers: ['FAIL 页面公开共同分母、TIC scope 与 no-fill 方法学'],
+      expectedFailureMarkers: ['FAIL 页面公开样本分母、TIC universe mismatch 与 no-fill 方法学'],
     },
   ],
 });
