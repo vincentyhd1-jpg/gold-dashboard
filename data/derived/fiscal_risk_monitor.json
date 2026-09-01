@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_fiscal_risk_monitor",
   "freq": "quarterly",
-  "generated_at": "2026-09-01T00:49:49Z",
+  "generated_at": "2026-09-01T23:36:43Z",
   "date_field": "date",
   "coverage": {
     "first": "2016-01-01",
@@ -12,7 +12,7 @@
   "derived_from": [
     {
       "source": "derived_fiscal_sustainability",
-      "generated_at": "2026-09-01T00:49:48Z",
+      "generated_at": "2026-09-01T23:36:43Z",
       "coverage": {
         "first": "2016-01-01",
         "last": "2026-04-01",
