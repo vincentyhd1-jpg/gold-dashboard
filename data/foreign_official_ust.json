@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "FRED",
   "freq": "monthly",
-  "generated_at": "2026-08-29T15:18:38Z",
+  "generated_at": "2026-09-10T23:27:30Z",
   "date_field": "date",
   "coverage": {
     "first": "2000-01-01",
@@ -10,7 +10,9 @@
     "count": 318
   },
   "derived_from": [],
-  "warnings": [],
+  "warnings": [
+    "最新观测滞后 101 天"
+  ],
   "info": [
     "source=FRED",
     "series_id=FORTREASPOS99990",

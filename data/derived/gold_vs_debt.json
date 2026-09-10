@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_global_gold_value_vs_us_debt",
   "freq": "weekly",
-  "generated_at": "2026-09-09T23:34:32Z",
+  "generated_at": "2026-09-10T23:27:31Z",
   "date_field": "date",
   "coverage": {
     "first": "2025-09-09",
@@ -22,11 +22,11 @@
     },
     {
       "source": "treasury_fiscal_data_debt_to_penny",
-      "generated_at": "2026-09-09T23:34:24Z",
+      "generated_at": "2026-09-10T23:27:24Z",
       "coverage": {
         "first": "1993-04-01",
-        "last": "2026-09-08",
-        "count": 8388
+        "last": "2026-09-09",
+        "count": 8389
       },
       "envelope": true
     }
