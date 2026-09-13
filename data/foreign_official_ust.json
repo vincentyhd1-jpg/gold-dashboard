@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "FRED",
   "freq": "monthly",
-  "generated_at": "2026-09-12T20:21:05Z",
+  "generated_at": "2026-09-13T23:42:34Z",
   "date_field": "date",
   "coverage": {
     "first": "2000-01-01",
@@ -11,7 +11,7 @@
   },
   "derived_from": [],
   "warnings": [
-    "最新观测滞后 103 天"
+    "最新观测滞后 104 天"
   ],
   "info": [
     "source=FRED",
