@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_official_reserve_composition",
   "freq": "quarterly",
-  "generated_at": "2026-09-13T23:42:37Z",
+  "generated_at": "2026-09-15T00:02:52Z",
   "date_field": "period",
   "coverage": {
     "first": "2000-Q4",
@@ -22,7 +22,7 @@
     },
     {
       "source": "FRED",
-      "generated_at": "2026-09-13T23:42:34Z",
+      "generated_at": "2026-09-15T00:02:50Z",
       "coverage": {
         "first": "2000-01-01",
         "last": "2026-06-01",
