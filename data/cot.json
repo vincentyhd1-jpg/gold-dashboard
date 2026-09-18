@@ -2,11 +2,11 @@
   "schema_version": 0,
   "source": "cftc_cot",
   "freq": "weekly",
-  "generated_at": "2026-09-11T23:35:14Z",
+  "generated_at": "2026-09-18T23:40:17Z",
   "date_field": "date",
   "coverage": {
-    "first": "2025-09-16",
-    "last": "2026-09-08",
+    "first": "2025-09-23",
+    "last": "2026-09-15",
     "count": 52
   },
   "derived_from": [],
@@ -14,31 +14,23 @@
   "info": [],
   "data": {
     "latest": {
-      "date": "2026-09-08",
-      "mf_net": 134972,
-      "comm_net": -270274,
-      "open_interest": 411227,
-      "mf_net_chg": -1799,
-      "comm_net_chg": -5556,
-      "mf_index": 64,
-      "comm_index": 28
+      "date": "2026-09-15",
+      "mf_net": 133116,
+      "comm_net": -261721,
+      "open_interest": 409899,
+      "mf_net_chg": -1856,
+      "comm_net_chg": 8553,
+      "mf_index": 61,
+      "comm_index": 33
     },
     "weekly": [
-      {
-        "date": "2025-09-16",
-        "mf_net": 158971,
-        "comm_net": -302371,
-        "open_interest": 516221,
-        "mf_index": 98,
-        "comm_index": 0
-      },
       {
         "date": "2025-09-23",
         "mf_net": 160549,
         "comm_net": -298403,
         "open_interest": 528789,
         "mf_index": 100,
-        "comm_index": 3
+        "comm_index": 0
       },
       {
         "date": "2025-09-30",
@@ -46,7 +38,7 @@
         "comm_net": -288236,
         "open_interest": 493748,
         "mf_index": 78,
-        "comm_index": 12
+        "comm_index": 9
       },
       {
         "date": "2025-10-07",
@@ -54,7 +46,7 @@
         "comm_net": -263772,
         "open_interest": 485559,
         "mf_index": 57,
-        "comm_index": 33
+        "comm_index": 31
       },
       {
         "date": "2025-10-14",
@@ -62,7 +54,7 @@
         "comm_net": -236867,
         "open_interest": 485788,
         "mf_index": 26,
-        "comm_index": 56
+        "comm_index": 55
       },
       {
         "date": "2025-10-21",
@@ -70,7 +62,7 @@
         "comm_net": -210117,
         "open_interest": 472421,
         "mf_index": 3,
-        "comm_index": 79
+        "comm_index": 78
       },
       {
         "date": "2025-10-28",
@@ -78,7 +70,7 @@
         "comm_net": -237027,
         "open_interest": 457122,
         "mf_index": 20,
-        "comm_index": 56
+        "comm_index": 54
       },
       {
         "date": "2025-11-04",
@@ -86,7 +78,7 @@
         "comm_net": -236542,
         "open_interest": 450399,
         "mf_index": 15,
-        "comm_index": 56
+        "comm_index": 55
       },
       {
         "date": "2025-11-10",
@@ -94,7 +86,7 @@
         "comm_net": -244823,
         "open_interest": 459997,
         "mf_index": 20,
-        "comm_index": 49
+        "comm_index": 48
       },
       {
         "date": "2025-11-18",
@@ -102,7 +94,7 @@
         "comm_net": -245585,
         "open_interest": 471953,
         "mf_index": 12,
-        "comm_index": 49
+        "comm_index": 47
       },
       {
         "date": "2025-11-25",
@@ -110,7 +102,7 @@
         "comm_net": -241403,
         "open_interest": 432946,
         "mf_index": 28,
-        "comm_index": 52
+        "comm_index": 51
       },
       {
         "date": "2025-12-02",
@@ -118,7 +110,7 @@
         "comm_net": -255348,
         "open_interest": 418490,
         "mf_index": 43,
-        "comm_index": 40
+        "comm_index": 38
       },
       {
         "date": "2025-12-09",
@@ -126,7 +118,7 @@
         "comm_net": -262579,
         "open_interest": 432569,
         "mf_index": 48,
-        "comm_index": 34
+        "comm_index": 32
       },
       {
         "date": "2025-12-16",
@@ -134,7 +126,7 @@
         "comm_net": -274358,
         "open_interest": 471093,
         "mf_index": 61,
-        "comm_index": 24
+        "comm_index": 21
       },
       {
         "date": "2025-12-23",
@@ -142,7 +134,7 @@
         "comm_net": -283526,
         "open_interest": 492103,
         "mf_index": 66,
-        "comm_index": 16
+        "comm_index": 13
       },
       {
         "date": "2025-12-30",
@@ -150,7 +142,7 @@
         "comm_net": -275246,
         "open_interest": 481866,
         "mf_index": 51,
-        "comm_index": 23
+        "comm_index": 21
       },
       {
         "date": "2026-01-06",
@@ -158,7 +150,7 @@
         "comm_net": -272035,
         "open_interest": 488116,
         "mf_index": 47,
-        "comm_index": 26
+        "comm_index": 23
       },
       {
         "date": "2026-01-13",
@@ -166,7 +158,7 @@
         "comm_net": -297106,
         "open_interest": 527455,
         "mf_index": 64,
-        "comm_index": 5
+        "comm_index": 1
       },
       {
         "date": "2026-01-20",
@@ -174,7 +166,7 @@
         "comm_net": -289689,
         "open_interest": 528004,
         "mf_index": 67,
-        "comm_index": 11
+        "comm_index": 8
       },
       {
         "date": "2026-01-27",
@@ -182,7 +174,7 @@
         "comm_net": -248285,
         "open_interest": 488463,
         "mf_index": 40,
-        "comm_index": 46
+        "comm_index": 44
       },
       {
         "date": "2026-02-03",
@@ -190,7 +182,7 @@
         "comm_net": -207778,
         "open_interest": 409694,
         "mf_index": 3,
-        "comm_index": 81
+        "comm_index": 80
       },
       {
         "date": "2026-02-10",
@@ -198,7 +190,7 @@
         "comm_net": -197738,
         "open_interest": 404391,
         "mf_index": 3,
-        "comm_index": 90
+        "comm_index": 89
       },
       {
         "date": "2026-02-17",
@@ -206,7 +198,7 @@
         "comm_net": -196782,
         "open_interest": 407078,
         "mf_index": 9,
-        "comm_index": 91
+        "comm_index": 90
       },
       {
         "date": "2026-02-24",
@@ -246,7 +238,7 @@
         "comm_net": -203828,
         "open_interest": 403925,
         "mf_index": 3,
-        "comm_index": 85
+        "comm_index": 84
       },
       {
         "date": "2026-03-31",
@@ -270,7 +262,7 @@
         "comm_net": -201082,
         "open_interest": 362274,
         "mf_index": 8,
-        "comm_index": 87
+        "comm_index": 86
       },
       {
         "date": "2026-04-21",
@@ -294,7 +286,7 @@
         "comm_net": -198935,
         "open_interest": 367932,
         "mf_index": 6,
-        "comm_index": 89
+        "comm_index": 88
       },
       {
         "date": "2026-05-12",
@@ -302,7 +294,7 @@
         "comm_net": -210258,
         "open_interest": 376496,
         "mf_index": 12,
-        "comm_index": 79
+        "comm_index": 78
       },
       {
         "date": "2026-05-19",
@@ -334,7 +326,7 @@
         "comm_net": -201036,
         "open_interest": 332709,
         "mf_index": 23,
-        "comm_index": 87
+        "comm_index": 86
       },
       {
         "date": "2026-06-16",
@@ -358,7 +350,7 @@
         "comm_net": -221070,
         "open_interest": 369541,
         "mf_index": 43,
-        "comm_index": 70
+        "comm_index": 69
       },
       {
         "date": "2026-07-07",
@@ -366,7 +358,7 @@
         "comm_net": -222282,
         "open_interest": 371776,
         "mf_index": 37,
-        "comm_index": 69
+        "comm_index": 68
       },
       {
         "date": "2026-07-14",
@@ -374,7 +366,7 @@
         "comm_net": -214788,
         "open_interest": 383689,
         "mf_index": 44,
-        "comm_index": 75
+        "comm_index": 74
       },
       {
         "date": "2026-07-21",
@@ -390,7 +382,7 @@
         "comm_net": -212309,
         "open_interest": 384603,
         "mf_index": 42,
-        "comm_index": 77
+        "comm_index": 76
       },
       {
         "date": "2026-08-04",
@@ -398,7 +390,7 @@
         "comm_net": -226491,
         "open_interest": 371551,
         "mf_index": 58,
-        "comm_index": 65
+        "comm_index": 64
       },
       {
         "date": "2026-08-11",
@@ -406,7 +398,7 @@
         "comm_net": -252640,
         "open_interest": 400309,
         "mf_index": 68,
-        "comm_index": 43
+        "comm_index": 41
       },
       {
         "date": "2026-08-18",
@@ -414,7 +406,7 @@
         "comm_net": -258418,
         "open_interest": 406260,
         "mf_index": 73,
-        "comm_index": 38
+        "comm_index": 35
       },
       {
         "date": "2026-08-25",
@@ -422,7 +414,7 @@
         "comm_net": -279585,
         "open_interest": 427957,
         "mf_index": 78,
-        "comm_index": 20
+        "comm_index": 17
       },
       {
         "date": "2026-09-01",
@@ -430,7 +422,7 @@
         "comm_net": -264718,
         "open_interest": 415196,
         "mf_index": 66,
-        "comm_index": 32
+        "comm_index": 30
       },
       {
         "date": "2026-09-08",
@@ -438,7 +430,15 @@
         "comm_net": -270274,
         "open_interest": 411227,
         "mf_index": 64,
-        "comm_index": 28
+        "comm_index": 25
+      },
+      {
+        "date": "2026-09-15",
+        "mf_net": 133116,
+        "comm_net": -261721,
+        "open_interest": 409899,
+        "mf_index": 61,
+        "comm_index": 33
       }
     ]
   }
