@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "gold_price",
   "freq": "weekly",
-  "generated_at": "2026-09-18T23:40:18Z",
+  "generated_at": "2026-09-19T20:16:44Z",
   "date_field": "date",
   "coverage": {
     "first": "2025-09-23",
@@ -233,7 +233,7 @@
     },
     {
       "date": "2026-09-15",
-      "price": 4399.7
+      "price": 4424.9
     }
   ]
 }
