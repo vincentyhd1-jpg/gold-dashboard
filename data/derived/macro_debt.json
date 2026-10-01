@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_macro_debt",
   "freq": "quarterly",
-  "generated_at": "2026-08-28T05:50:46Z",
+  "generated_at": "2026-10-01T00:52:47Z",
   "date_field": "date",
   "coverage": {
     "first": "1990-01-01",
@@ -52,7 +52,7 @@
     },
     {
       "source": "FRED",
-      "generated_at": "2026-08-28T05:50:46Z",
+      "generated_at": "2026-10-01T00:52:46Z",
       "coverage": {
         "first": "1990-01-01",
         "last": "2026-04-01",
@@ -1576,9 +1576,9 @@
         "intragov_bn": 6125.707,
         "domestic_public_bn": 14968.563000000002,
         "foreign_bn": 7038.3,
-        "gdp_bn": 22680.693,
-        "debt_gdp_pct": 124.03752389752817,
-        "public_gdp_pct": 97.02905903272004
+        "gdp_bn": 22704.65,
+        "debt_gdp_pct": 123.90664467410859,
+        "public_gdp_pct": 96.92667801529643
       },
       {
         "date": "2021-04-01",
@@ -1588,9 +1588,9 @@
         "intragov_bn": 6175.904,
         "domestic_public_bn": 14834.632,
         "foreign_bn": 7518.9,
-        "gdp_bn": 23425.91,
-        "debt_gdp_pct": 121.78581749865853,
-        "public_gdp_pct": 95.42225680880699
+        "gdp_bn": 23456.708,
+        "debt_gdp_pct": 121.62591613452325,
+        "public_gdp_pct": 95.29697006076044
       },
       {
         "date": "2021-07-01",
@@ -1600,9 +1600,9 @@
         "intragov_bn": 6123.04,
         "domestic_public_bn": 14734.979000000001,
         "foreign_bn": 7570.9,
-        "gdp_bn": 23982.379,
-        "debt_gdp_pct": 118.54086285601608,
-        "public_gdp_pct": 93.0094508138663
+        "gdp_bn": 23998.844,
+        "debt_gdp_pct": 118.45953496760093,
+        "public_gdp_pct": 92.94563938163022
       },
       {
         "date": "2021-10-01",
@@ -1612,9 +1612,9 @@
         "intragov_bn": 6448.886,
         "domestic_public_bn": 15427.929000000002,
         "foreign_bn": 7740.4,
-        "gdp_bn": 24813.6,
-        "debt_gdp_pct": 119.35879920688654,
-        "public_gdp_pct": 93.36947883418772
+        "gdp_bn": 24823.19,
+        "debt_gdp_pct": 119.3126870478774,
+        "public_gdp_pct": 93.33340718900351
       },
       {
         "date": "2022-01-01",
@@ -1624,9 +1624,9 @@
         "intragov_bn": 6497.68,
         "domestic_public_bn": 16299.079999999998,
         "foreign_bn": 7604.2,
-        "gdp_bn": 25250.347,
-        "debt_gdp_pct": 120.39818700313305,
-        "public_gdp_pct": 94.6651545026292
+        "gdp_bn": 25259.992,
+        "debt_gdp_pct": 120.35221547180221,
+        "public_gdp_pct": 94.6290085919267
       },
       {
         "date": "2022-04-01",
@@ -1636,9 +1636,9 @@
         "intragov_bn": 6635.101,
         "domestic_public_bn": 16516.581,
         "foreign_bn": 7416.9,
-        "gdp_bn": 25861.292,
-        "debt_gdp_pct": 118.20206817200005,
-        "public_gdp_pct": 92.5455735158166
+        "gdp_bn": 25869.353,
+        "debt_gdp_pct": 118.16523590675034,
+        "public_gdp_pct": 92.51673592300511
       },
       {
         "date": "2022-07-01",
@@ -1648,9 +1648,9 @@
         "intragov_bn": 6608.706,
         "domestic_public_bn": 17068.706,
         "foreign_bn": 7251.5,
-        "gdp_bn": 26336.304,
-        "debt_gdp_pct": 117.43831632563173,
-        "public_gdp_pct": 92.34479523018871
+        "gdp_bn": 26335.374,
+        "debt_gdp_pct": 117.4424635093468,
+        "public_gdp_pct": 92.34805626834842
       },
       {
         "date": "2022-10-01",
@@ -1660,9 +1660,9 @@
         "intragov_bn": 6880.448,
         "domestic_public_bn": 17344.541,
         "foreign_bn": 7194.7,
-        "gdp_bn": 26770.514,
-        "debt_gdp_pct": 117.36677525130821,
-        "public_gdp_pct": 91.66518431435424
+        "gdp_bn": 26774.117,
+        "debt_gdp_pct": 117.35098117334739,
+        "public_gdp_pct": 91.65284890627767
       },
       {
         "date": "2023-01-01",
@@ -1672,9 +1672,9 @@
         "intragov_bn": 6743.612,
         "domestic_public_bn": 17246.226000000002,
         "foreign_bn": 7468.6,
-        "gdp_bn": 27216.445,
-        "debt_gdp_pct": 115.5861391890087,
-        "public_gdp_pct": 90.80842850710297
+        "gdp_bn": 27241.282,
+        "debt_gdp_pct": 115.48075454011304,
+        "public_gdp_pct": 90.72563471865972
       },
       {
         "date": "2023-04-01",
@@ -1684,9 +1684,9 @@
         "intragov_bn": 6850.199,
         "domestic_public_bn": 17918.875,
         "foreign_bn": 7563.2,
-        "gdp_bn": 27530.055,
-        "debt_gdp_pct": 117.44355033072038,
-        "public_gdp_pct": 92.56093022698283
+        "gdp_bn": 27533.925,
+        "debt_gdp_pct": 117.42704318399939,
+        "public_gdp_pct": 92.54792042907069
       },
       {
         "date": "2023-07-01",
@@ -1696,9 +1696,9 @@
         "intragov_bn": 6817.835,
         "domestic_public_bn": 18840.398999999998,
         "foreign_bn": 7509.1,
-        "gdp_bn": 28074.846,
-        "debt_gdp_pct": 118.13897037939229,
-        "public_gdp_pct": 93.8544738589127
+        "gdp_bn": 28064.032,
+        "debt_gdp_pct": 118.18449323318903,
+        "public_gdp_pct": 93.89063909277185
       },
       {
         "date": "2023-10-01",
@@ -1708,9 +1708,9 @@
         "intragov_bn": 7041.267,
         "domestic_public_bn": 19020.227,
         "foreign_bn": 7940.0,
-        "gdp_bn": 28424.722,
-        "debt_gdp_pct": 119.61944254019441,
-        "public_gdp_pct": 94.84781240780472
+        "gdp_bn": 28464.306,
+        "debt_gdp_pct": 119.45309328813427,
+        "public_gdp_pct": 94.71591192140781
       },
       {
         "date": "2024-01-01",
@@ -1720,9 +1720,9 @@
         "intragov_bn": 7053.111,
         "domestic_public_bn": 19425.521999999997,
         "foreign_bn": 8107.9,
-        "gdp_bn": 28708.161,
-        "debt_gdp_pct": 120.47630985488762,
-        "public_gdp_pct": 95.90799633595478
+        "gdp_bn": 28793.191,
+        "debt_gdp_pct": 120.12052780117357,
+        "public_gdp_pct": 95.62476767510763
       },
       {
         "date": "2024-04-01",
@@ -1732,9 +1732,9 @@
         "intragov_bn": 7197.526,
         "domestic_public_bn": 19334.808,
         "foreign_bn": 8299.3,
-        "gdp_bn": 29147.044,
-        "debt_gdp_pct": 119.50314412672516,
-        "public_gdp_pct": 94.80929867193393
+        "gdp_bn": 29232.964,
+        "debt_gdp_pct": 119.15190673104512,
+        "public_gdp_pct": 94.53064013625166
       },
       {
         "date": "2024-07-01",
@@ -1744,9 +1744,9 @@
         "intragov_bn": 7138.959,
         "domestic_public_bn": 19559.415,
         "foreign_bn": 8766.3,
-        "gdp_bn": 29511.664,
-        "debt_gdp_pct": 120.17171922260974,
-        "public_gdp_pct": 95.98142280286194
+        "gdp_bn": 29568.256,
+        "debt_gdp_pct": 119.94171722539197,
+        "public_gdp_pct": 95.79771968965636
       },
       {
         "date": "2024-10-01",
@@ -1756,9 +1756,9 @@
         "intragov_bn": 7359.48,
         "domestic_public_bn": 20239.825,
         "foreign_bn": 8619.3,
-        "gdp_bn": 29825.182,
-        "debt_gdp_pct": 121.43632518319588,
-        "public_gdp_pct": 96.76093510510681
+        "gdp_bn": 29929.552,
+        "debt_gdp_pct": 121.01285378411279,
+        "public_gdp_pct": 96.42351145115704
       },
       {
         "date": "2025-01-01",
@@ -1768,9 +1768,9 @@
         "intragov_bn": 7281.33628264719,
         "domestic_public_bn": 19878.77323814926,
         "foreign_bn": 9054.2,
-        "gdp_bn": 30042.113,
-        "debt_gdp_pct": 120.54514780899885,
-        "public_gdp_pct": 96.30805009670678
+        "gdp_bn": 30171.979,
+        "debt_gdp_pct": 120.02629831074871,
+        "public_gdp_pct": 95.89352172805523
       },
       {
         "date": "2025-04-01",
@@ -1780,9 +1780,9 @@
         "intragov_bn": 7235.29225514179,
         "domestic_public_bn": 19885.876744858215,
         "foreign_bn": 9090.3,
-        "gdp_bn": 30485.729,
-        "debt_gdp_pct": 118.78170602382512,
-        "public_gdp_pct": 95.04833144996537
+        "gdp_bn": 30630.174,
+        "debt_gdp_pct": 118.22155825820644,
+        "public_gdp_pct": 94.60010493201317
       },
       {
         "date": "2025-07-01",
@@ -1792,9 +1792,9 @@
         "intragov_bn": 7339.27125686674,
         "domestic_public_bn": 21063.881338690895,
         "foreign_bn": 9234.4,
-        "gdp_bn": 31098.027,
-        "debt_gdp_pct": 121.0287475651032,
-        "public_gdp_pct": 97.4283073929124
+        "gdp_bn": 31180.493,
+        "debt_gdp_pct": 120.70865138520301,
+        "public_gdp_pct": 97.17062953010684
       },
       {
         "date": "2025-10-01",
@@ -1804,9 +1804,9 @@
         "intragov_bn": 7643.29590550346,
         "domestic_public_bn": 21599.813094496538,
         "foreign_bn": 9270.9,
-        "gdp_bn": 31422.526,
-        "debt_gdp_pct": 122.56815063181105,
-        "public_gdp_pct": 98.24389386931063
+        "gdp_bn": 31462.523,
+        "debt_gdp_pct": 122.41233482769324,
+        "public_gdp_pct": 98.11900048351664
       },
       {
         "date": "2026-01-01",
@@ -1816,9 +1816,9 @@
         "intragov_bn": null,
         "domestic_public_bn": null,
         "foreign_bn": null,
-        "gdp_bn": 31865.721,
-        "debt_gdp_pct": 122.59387132649533,
-        "public_gdp_pct": 98.71049506631203
+        "gdp_bn": 31906.274,
+        "debt_gdp_pct": 122.43805403288394,
+        "public_gdp_pct": 98.58503363805424
       },
       {
         "date": "2026-04-01",
@@ -1828,7 +1828,7 @@
         "intragov_bn": null,
         "domestic_public_bn": null,
         "foreign_bn": null,
-        "gdp_bn": 32486.066,
+        "gdp_bn": 32563.03,
         "debt_gdp_pct": null,
         "public_gdp_pct": null
       }
