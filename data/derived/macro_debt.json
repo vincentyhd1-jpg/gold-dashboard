@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_macro_debt",
   "freq": "quarterly",
-  "generated_at": "2026-10-01T00:52:47Z",
+  "generated_at": "2026-10-02T01:07:06Z",
   "date_field": "date",
   "coverage": {
     "first": "1990-01-01",
@@ -12,11 +12,11 @@
   "derived_from": [
     {
       "source": "FRED",
-      "generated_at": "2026-08-25T07:29:29Z",
+      "generated_at": "2026-10-02T01:07:04Z",
       "coverage": {
         "first": "1990-01-01",
-        "last": "2026-01-01",
-        "count": 145
+        "last": "2026-04-01",
+        "count": 146
       },
       "envelope": true
     },
@@ -42,17 +42,17 @@
     },
     {
       "source": "FRED",
-      "generated_at": "2026-08-25T07:29:29Z",
+      "generated_at": "2026-10-02T01:07:05Z",
       "coverage": {
         "first": "1990-01-01",
-        "last": "2025-10-01",
-        "count": 144
+        "last": "2026-01-01",
+        "count": 145
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-10-01T00:52:46Z",
+      "generated_at": "2026-10-02T01:07:05Z",
       "coverage": {
         "first": "1990-01-01",
         "last": "2026-04-01",
@@ -67,9 +67,9 @@
   "info": [
     "units_source=FRED metadata: GFDEBTN/FYGFDPUN/FDHBATN=Millions of Dollars, FDHBFIN/GDP=Billions of Dollars",
     "units_normalized=millions_divided_by_1000",
-    "debt_coverage=1990-01-01..2026-01-01 count=145",
-    "stack_coverage=1990-01-01..2025-10-01 count=141",
-    "ratio_coverage=1990-01-01..2026-01-01 count=145",
+    "debt_coverage=1990-01-01..2026-04-01 count=146",
+    "stack_coverage=1990-01-01..2026-01-01 count=142",
+    "ratio_coverage=1990-01-01..2026-04-01 count=146",
     "date_alignment=outer_join",
     "ratio=debt_bn/gdp_bn*100 same_quarter",
     "gdp_basis=SAAR_raw_not_divided_by_4",
@@ -1766,8 +1766,8 @@
         "total_bn": 36214.30952079646,
         "public_bn": 28932.97323814926,
         "intragov_bn": 7281.33628264719,
-        "domestic_public_bn": 19878.77323814926,
-        "foreign_bn": 9054.2,
+        "domestic_public_bn": 19880.97323814926,
+        "foreign_bn": 9052.0,
         "gdp_bn": 30171.979,
         "debt_gdp_pct": 120.02629831074871,
         "public_gdp_pct": 95.89352172805523
@@ -1778,8 +1778,8 @@
         "total_bn": 36211.469,
         "public_bn": 28976.176744858214,
         "intragov_bn": 7235.29225514179,
-        "domestic_public_bn": 19885.876744858215,
-        "foreign_bn": 9090.3,
+        "domestic_public_bn": 19882.576744858212,
+        "foreign_bn": 9093.6,
         "gdp_bn": 30630.174,
         "debt_gdp_pct": 118.22155825820644,
         "public_gdp_pct": 94.60010493201317
@@ -1790,8 +1790,8 @@
         "total_bn": 37637.55259555763,
         "public_bn": 30298.281338690893,
         "intragov_bn": 7339.27125686674,
-        "domestic_public_bn": 21063.881338690895,
-        "foreign_bn": 9234.4,
+        "domestic_public_bn": 21060.781338690893,
+        "foreign_bn": 9237.5,
         "gdp_bn": 31180.493,
         "debt_gdp_pct": 120.70865138520301,
         "public_gdp_pct": 97.17062953010684
@@ -1802,8 +1802,8 @@
         "total_bn": 38514.009,
         "public_bn": 30870.71309449654,
         "intragov_bn": 7643.29590550346,
-        "domestic_public_bn": 21599.813094496538,
-        "foreign_bn": 9270.9,
+        "domestic_public_bn": 21601.21309449654,
+        "foreign_bn": 9269.5,
         "gdp_bn": 31462.523,
         "debt_gdp_pct": 122.41233482769324,
         "public_gdp_pct": 98.11900048351664
@@ -1813,9 +1813,9 @@
         "quarter": "2026-Q1",
         "total_bn": 39065.421,
         "public_bn": 31454.810955549758,
-        "intragov_bn": null,
-        "domestic_public_bn": null,
-        "foreign_bn": null,
+        "intragov_bn": 7610.61004445024,
+        "domestic_public_bn": 22099.810955549758,
+        "foreign_bn": 9355.0,
         "gdp_bn": 31906.274,
         "debt_gdp_pct": 122.43805403288394,
         "public_gdp_pct": 98.58503363805424
@@ -1823,22 +1823,22 @@
       {
         "date": "2026-04-01",
         "quarter": "2026-Q2",
-        "total_bn": null,
+        "total_bn": 39462.398,
         "public_bn": null,
         "intragov_bn": null,
         "domestic_public_bn": null,
         "foreign_bn": null,
         "gdp_bn": 32563.03,
-        "debt_gdp_pct": null,
+        "debt_gdp_pct": 121.1877334510947,
         "public_gdp_pct": null
       }
     ],
     "meta": {
       "units": "billions_usd",
-      "stack_last": "2025-10-01",
-      "total_last": "2026-01-01",
-      "ratio_last": "2026-01-01",
-      "foreign_last": "2025-10-01",
+      "stack_last": "2026-01-01",
+      "total_last": "2026-04-01",
+      "ratio_last": "2026-04-01",
+      "foreign_last": "2026-01-01",
       "gdp_last": "2026-04-01",
       "foreign_lag_quarters": 1,
       "identity_max_abs_rel": 0.011416160030132688,
