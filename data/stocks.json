@@ -2,12 +2,12 @@
   "schema_version": 0,
   "source": "cme_gold_stocks",
   "freq": "daily",
-  "generated_at": "2026-10-02T01:06:56Z",
+  "generated_at": "2026-10-03T00:46:48Z",
   "date_field": "date",
   "coverage": {
     "first": "2026-06-04",
-    "last": "2026-09-30",
-    "count": 82
+    "last": "2026-10-01",
+    "count": 83
   },
   "derived_from": [],
   "warnings": [],
@@ -6082,6 +6082,91 @@
           "eligible": 2427596,
           "total": 4596935,
           "reg_adj": -50676
+        },
+        {
+          "name": "LOOMIS INTERNATIONAL (US) LLC",
+          "registered": 580449,
+          "eligible": 84265,
+          "total": 664714,
+          "reg_adj": 0
+        },
+        {
+          "name": "MALCA-AMIT USA, LLC",
+          "registered": 1561948,
+          "eligible": 7821,
+          "total": 1569769,
+          "reg_adj": 0
+        },
+        {
+          "name": "MANFRA, TORDELLA & BROOKES, LLC",
+          "registered": 1489812,
+          "eligible": 634871,
+          "total": 2124683,
+          "reg_adj": 0
+        },
+        {
+          "name": "STONEX PRECIOUS METALS LLC",
+          "registered": 149820,
+          "eligible": 16268,
+          "total": 166088,
+          "reg_adj": 0
+        },
+        {
+          "name": "TEXAS PRECIOUS METALS, LLC",
+          "registered": 35301,
+          "eligible": 5015,
+          "total": 40316,
+          "reg_adj": 0
+        }
+      ]
+    },
+    {
+      "date": "2026-10-01",
+      "registered": 15086528,
+      "eligible": 8393219,
+      "total": 23479747,
+      "depositories": [
+        {
+          "name": "ASAHI DEPOSITORY LLC",
+          "registered": 1676374,
+          "eligible": 221538,
+          "total": 1897912,
+          "reg_adj": 0
+        },
+        {
+          "name": "BRINK'S, INC.",
+          "registered": 5839703,
+          "eligible": 1210834,
+          "total": 7050537,
+          "reg_adj": 0
+        },
+        {
+          "name": "DELAWARE DEPOSITORY",
+          "registered": 63924,
+          "eligible": 118089,
+          "total": 182013,
+          "reg_adj": 0
+        },
+        {
+          "name": "HSBC BANK, USA",
+          "registered": 1421879,
+          "eligible": 3633052,
+          "total": 5054931,
+          "reg_adj": 0
+        },
+        {
+          "name": "INTERNATIONAL DEPOSITORY SERVICES OF DELAWARE",
+          "registered": 97974,
+          "eligible": 33866,
+          "total": 131840,
+          "reg_adj": 0
+        },
+        {
+          "name": "JP MORGAN CHASE BANK NA",
+          "registered": 2169339,
+          "eligible": 2427596,
+          "total": 4596935,
+          "reg_adj": 0
         },
         {
           "name": "LOOMIS INTERNATIONAL (US) LLC",

@@ -2,11 +2,11 @@
   "schema_version": 0,
   "source": "cftc_cot",
   "freq": "weekly",
-  "generated_at": "2026-09-26T00:12:15Z",
+  "generated_at": "2026-10-03T00:46:46Z",
   "date_field": "date",
   "coverage": {
-    "first": "2025-09-30",
-    "last": "2026-09-22",
+    "first": "2025-10-07",
+    "last": "2026-09-29",
     "count": 52
   },
   "derived_from": [],
@@ -14,30 +14,22 @@
   "info": [],
   "data": {
     "latest": {
-      "date": "2026-09-22",
-      "mf_net": 127389,
-      "comm_net": -262903,
-      "open_interest": 412800,
-      "mf_net_chg": -5727,
-      "comm_net_chg": -1182,
-      "mf_index": 68,
-      "comm_index": 31
+      "date": "2026-09-29",
+      "mf_net": 120318,
+      "comm_net": -250967,
+      "open_interest": 406456,
+      "mf_net_chg": -7071,
+      "comm_net_chg": 11936,
+      "mf_index": 56,
+      "comm_index": 41
     },
     "weekly": [
-      {
-        "date": "2025-09-30",
-        "mf_net": 145227,
-        "comm_net": -288236,
-        "open_interest": 493748,
-        "mf_index": 100,
-        "comm_index": 8
-      },
       {
         "date": "2025-10-07",
         "mf_net": 129759,
         "comm_net": -263772,
         "open_interest": 485559,
-        "mf_index": 72,
+        "mf_index": 73,
         "comm_index": 30
       },
       {
@@ -45,7 +37,7 @@
         "mf_net": 108310,
         "comm_net": -236867,
         "open_interest": 485788,
-        "mf_index": 33,
+        "mf_index": 34,
         "comm_index": 54
       },
       {
@@ -53,7 +45,7 @@
         "mf_net": 92227,
         "comm_net": -210117,
         "open_interest": 472421,
-        "mf_index": 4,
+        "mf_index": 5,
         "comm_index": 78
       },
       {
@@ -69,7 +61,7 @@
         "mf_net": 100545,
         "comm_net": -236542,
         "open_interest": 450399,
-        "mf_index": 19,
+        "mf_index": 20,
         "comm_index": 54
       },
       {
@@ -93,7 +85,7 @@
         "mf_net": 109309,
         "comm_net": -241403,
         "open_interest": 432946,
-        "mf_index": 35,
+        "mf_index": 36,
         "comm_index": 50
       },
       {
@@ -101,7 +93,7 @@
         "mf_net": 120324,
         "comm_net": -255348,
         "open_interest": 418490,
-        "mf_index": 55,
+        "mf_index": 56,
         "comm_index": 38
       },
       {
@@ -117,7 +109,7 @@
         "mf_net": 132596,
         "comm_net": -274358,
         "open_interest": 471093,
-        "mf_index": 77,
+        "mf_index": 78,
         "comm_index": 20
       },
       {
@@ -125,7 +117,7 @@
         "mf_net": 136270,
         "comm_net": -283526,
         "open_interest": 492103,
-        "mf_index": 84,
+        "mf_index": 85,
         "comm_index": 12
       },
       {
@@ -133,7 +125,7 @@
         "mf_net": 126040,
         "comm_net": -275246,
         "open_interest": 481866,
-        "mf_index": 65,
+        "mf_index": 66,
         "comm_index": 20
       },
       {
@@ -141,7 +133,7 @@
         "mf_net": 123213,
         "comm_net": -272035,
         "open_interest": 488116,
-        "mf_index": 60,
+        "mf_index": 61,
         "comm_index": 23
       },
       {
@@ -149,7 +141,7 @@
         "mf_net": 134745,
         "comm_net": -297106,
         "open_interest": 527455,
-        "mf_index": 81,
+        "mf_index": 82,
         "comm_index": 0
       },
       {
@@ -157,7 +149,7 @@
         "mf_net": 137444,
         "comm_net": -289689,
         "open_interest": 528004,
-        "mf_index": 86,
+        "mf_index": 87,
         "comm_index": 7
       },
       {
@@ -165,7 +157,7 @@
         "mf_net": 118159,
         "comm_net": -248285,
         "open_interest": 488463,
-        "mf_index": 51,
+        "mf_index": 52,
         "comm_index": 44
       },
       {
@@ -309,7 +301,7 @@
         "mf_net": 112179,
         "comm_net": -206345,
         "open_interest": 326052,
-        "mf_index": 40,
+        "mf_index": 41,
         "comm_index": 82
       },
       {
@@ -325,7 +317,7 @@
         "mf_net": 113721,
         "comm_net": -207563,
         "open_interest": 339330,
-        "mf_index": 43,
+        "mf_index": 44,
         "comm_index": 80
       },
       {
@@ -333,7 +325,7 @@
         "mf_net": 115395,
         "comm_net": -205404,
         "open_interest": 352167,
-        "mf_index": 46,
+        "mf_index": 47,
         "comm_index": 82
       },
       {
@@ -365,7 +357,7 @@
         "mf_net": 124831,
         "comm_net": -213199,
         "open_interest": 383368,
-        "mf_index": 63,
+        "mf_index": 64,
         "comm_index": 75
       },
       {
@@ -373,7 +365,7 @@
         "mf_net": 119795,
         "comm_net": -212309,
         "open_interest": 384603,
-        "mf_index": 54,
+        "mf_index": 55,
         "comm_index": 76
       },
       {
@@ -381,7 +373,7 @@
         "mf_net": 130766,
         "comm_net": -226491,
         "open_interest": 371551,
-        "mf_index": 74,
+        "mf_index": 75,
         "comm_index": 63
       },
       {
@@ -389,7 +381,7 @@
         "mf_net": 137662,
         "comm_net": -252640,
         "open_interest": 400309,
-        "mf_index": 86,
+        "mf_index": 87,
         "comm_index": 40
       },
       {
@@ -405,7 +397,7 @@
         "mf_net": 144747,
         "comm_net": -279585,
         "open_interest": 427957,
-        "mf_index": 99,
+        "mf_index": 100,
         "comm_index": 16
       },
       {
@@ -429,7 +421,7 @@
         "mf_net": 133116,
         "comm_net": -261721,
         "open_interest": 409899,
-        "mf_index": 78,
+        "mf_index": 79,
         "comm_index": 32
       },
       {
@@ -439,6 +431,14 @@
         "open_interest": 412800,
         "mf_index": 68,
         "comm_index": 31
+      },
+      {
+        "date": "2026-09-29",
+        "mf_net": 120318,
+        "comm_net": -250967,
+        "open_interest": 406456,
+        "mf_index": 56,
+        "comm_index": 41
       }
     ]
   }
