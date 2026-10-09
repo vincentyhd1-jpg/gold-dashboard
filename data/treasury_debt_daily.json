@@ -2,12 +2,12 @@
   "schema_version": 0,
   "source": "treasury_fiscal_data_debt_to_penny",
   "freq": "daily",
-  "generated_at": "2026-10-08T01:22:21Z",
+  "generated_at": "2026-10-09T01:31:03Z",
   "date_field": "date",
   "coverage": {
     "first": "1993-04-01",
-    "last": "2026-10-06",
-    "count": 8408
+    "last": "2026-10-07",
+    "count": 8409
   },
   "derived_from": [],
   "warnings": [
@@ -20,9 +20,9 @@
     "units_normalized=source_usd_divided_by_1e9",
     "identity=total_bn==public_bn+intragov_bn source_rounding_tolerance_usd=0.10",
     "source_frequency=daily_business_days_no_fill",
-    "total_coverage=1993-04-01..2026-10-06 count=8408",
-    "public_coverage=1997-09-30..2026-10-06 count=5449",
-    "intragov_coverage=1997-09-30..2026-10-06 count=5449"
+    "total_coverage=1993-04-01..2026-10-07 count=8409",
+    "public_coverage=1997-09-30..2026-10-07 count=5450",
+    "intragov_coverage=1997-09-30..2026-10-07 count=5450"
   ],
   "data": [
     {
@@ -50472,6 +50472,12 @@
       "total_bn": 40273.02457921917,
       "public_bn": 32440.26428490573,
       "intragov_bn": 7832.76029431344
+    },
+    {
+      "date": "2026-10-07",
+      "total_bn": 40284.03614736719,
+      "public_bn": 32439.26013855017,
+      "intragov_bn": 7844.77600881702
     }
   ]
 }
