@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_macro_debt",
   "freq": "quarterly",
-  "generated_at": "2026-10-03T00:46:59Z",
+  "generated_at": "2026-10-10T01:20:33Z",
   "date_field": "date",
   "coverage": {
     "first": "1990-01-01",
@@ -22,21 +22,21 @@
     },
     {
       "source": "FRED",
-      "generated_at": "2026-08-27T02:17:30Z",
+      "generated_at": "2026-10-10T01:20:31Z",
       "coverage": {
         "first": "1990-01-01",
-        "last": "2026-01-01",
-        "count": 145
+        "last": "2026-04-01",
+        "count": 146
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-08-25T07:29:29Z",
+      "generated_at": "2026-10-10T01:20:32Z",
       "coverage": {
         "first": "1990-01-01",
-        "last": "2026-01-01",
-        "count": 145
+        "last": "2026-04-01",
+        "count": 146
       },
       "envelope": true
     },
@@ -1824,13 +1824,13 @@
         "date": "2026-04-01",
         "quarter": "2026-Q2",
         "total_bn": 39462.398,
-        "public_bn": null,
+        "public_bn": 31705.5383534684,
         "intragov_bn": null,
         "domestic_public_bn": null,
         "foreign_bn": null,
         "gdp_bn": 32563.03,
         "debt_gdp_pct": 121.1877334510947,
-        "public_gdp_pct": null
+        "public_gdp_pct": 97.36667120187649
       }
     ],
     "meta": {
