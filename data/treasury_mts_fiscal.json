@@ -2,12 +2,12 @@
   "schema_version": 0,
   "source": "treasury_fiscal_data_mts_table_9",
   "freq": "monthly",
-  "generated_at": "2026-09-11T23:35:21Z",
+  "generated_at": "2026-10-16T23:59:50Z",
   "date_field": "date",
   "coverage": {
     "first": "2015-03-31",
-    "last": "2026-08-31",
-    "count": 138
+    "last": "2026-09-30",
+    "count": 139
   },
   "derived_from": [],
   "warnings": [],
@@ -849,6 +849,12 @@
       "receipts_bn": 360.03273584142,
       "total_outlays_bn": 526.8296881188,
       "net_interest_bn": 85.6104185472
+    },
+    {
+      "date": "2026-09-30",
+      "receipts_bn": 557.87451923824,
+      "total_outlays_bn": 584.77486634026,
+      "net_interest_bn": 34.78753190286
     }
   ]
 }
