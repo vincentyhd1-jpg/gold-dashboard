@@ -2,12 +2,12 @@
   "schema_version": 0,
   "source": "derived_macro_debt",
   "freq": "quarterly",
-  "generated_at": "2026-10-10T01:20:33Z",
+  "generated_at": "2026-10-30T01:23:12Z",
   "date_field": "date",
   "coverage": {
     "first": "1990-01-01",
-    "last": "2026-04-01",
-    "count": 146
+    "last": "2026-07-01",
+    "count": 147
   },
   "derived_from": [
     {
@@ -52,11 +52,11 @@
     },
     {
       "source": "FRED",
-      "generated_at": "2026-10-02T01:07:05Z",
+      "generated_at": "2026-10-30T01:23:09Z",
       "coverage": {
         "first": "1990-01-01",
-        "last": "2026-04-01",
-        "count": 146
+        "last": "2026-07-01",
+        "count": 147
       },
       "envelope": true
     }
@@ -1831,6 +1831,18 @@
         "gdp_bn": 32563.03,
         "debt_gdp_pct": 121.1877334510947,
         "public_gdp_pct": 97.36667120187649
+      },
+      {
+        "date": "2026-07-01",
+        "quarter": "2026-Q3",
+        "total_bn": null,
+        "public_bn": null,
+        "intragov_bn": null,
+        "domestic_public_bn": null,
+        "foreign_bn": null,
+        "gdp_bn": 33010.036,
+        "debt_gdp_pct": null,
+        "public_gdp_pct": null
       }
     ],
     "meta": {
@@ -1839,7 +1851,7 @@
       "total_last": "2026-04-01",
       "ratio_last": "2026-04-01",
       "foreign_last": "2026-01-01",
-      "gdp_last": "2026-04-01",
+      "gdp_last": "2026-07-01",
       "foreign_lag_quarters": 1,
       "identity_max_abs_rel": 0.011416160030132688,
       "identity_bad_quarters": [

@@ -2,12 +2,12 @@
   "schema_version": 0,
   "source": "derived_fiscal_sustainability",
   "freq": "quarterly",
-  "generated_at": "2026-10-29T01:19:30Z",
+  "generated_at": "2026-10-30T01:23:12Z",
   "date_field": "date",
   "coverage": {
     "first": "2016-01-01",
-    "last": "2026-04-01",
-    "count": 42
+    "last": "2026-07-01",
+    "count": 43
   },
   "derived_from": [
     {
@@ -22,21 +22,21 @@
     },
     {
       "source": "treasury_fiscal_data_debt_to_penny",
-      "generated_at": "2026-10-29T01:19:21Z",
+      "generated_at": "2026-10-30T01:23:03Z",
       "coverage": {
         "first": "1993-04-01",
-        "last": "2026-10-27",
-        "count": 8422
+        "last": "2026-10-28",
+        "count": 8423
       },
       "envelope": true
     },
     {
       "source": "derived_macro_debt",
-      "generated_at": "2026-10-10T01:20:33Z",
+      "generated_at": "2026-10-30T01:23:12Z",
       "coverage": {
         "first": "1990-01-01",
-        "last": "2026-04-01",
-        "count": 146
+        "last": "2026-07-01",
+        "count": 147
       },
       "envelope": true
     }
@@ -1225,6 +1225,34 @@
         "gap_positive_consecutive_complete_quarters": 0,
         "calculation_status": "complete",
         "trajectory_condition": "stabilizing_condition_met"
+      },
+      {
+        "quarter": "2026-Q3",
+        "date": "2026-07-01",
+        "fiscal_window_start": "2025-10-31",
+        "fiscal_window_end": "2026-09-30",
+        "receipts_ttm_bn": 5403.20718811635,
+        "total_outlays_ttm_bn": 7395.73535567181,
+        "net_interest_ttm_bn": 1051.75421895803,
+        "overall_balance_ttm_bn": -1992.5281675554597,
+        "primary_balance_ttm_bn": -940.7739485974298,
+        "average_public_debt_bn": 31327.230672755715,
+        "average_public_debt_observations": 251,
+        "public_debt_gdp_pct": null,
+        "effective_r_pct": 3.357316291199358,
+        "nominal_g_pct": 5.867588431010384,
+        "r_minus_g_pct_points": -2.5102721398110264,
+        "primary_balance_gdp_pct": -2.8499634129372953,
+        "stabilizing_primary_balance_pct_gdp": null,
+        "fiscal_gap_pct_gdp": null,
+        "net_interest_gdp_pct": 3.186165016475686,
+        "net_interest_receipts_pct": 19.465369036212905,
+        "observed_delta_public_debt_gdp": null,
+        "model_implied_delta_public_debt_gdp": null,
+        "stock_flow_residual_pct_gdp": null,
+        "gap_positive_consecutive_complete_quarters": 0,
+        "calculation_status": "incomplete",
+        "trajectory_condition": "unknown"
       }
     ],
     "latest": {
@@ -1257,8 +1285,8 @@
     },
     "meta": {
       "mts_as_of": "2026-09-30",
-      "daily_public_debt_as_of": "2026-10-27",
-      "gdp_as_of": "2026-04-01",
+      "daily_public_debt_as_of": "2026-10-28",
+      "gdp_as_of": "2026-07-01",
       "public_debt_gdp_as_of": "2026-04-01",
       "complete_through": "2026-Q2",
       "coverage": {
@@ -1269,13 +1297,13 @@
         },
         "daily_debt": {
           "first": "1993-04-01",
-          "last": "2026-10-27",
-          "count": 8422
+          "last": "2026-10-28",
+          "count": 8423
         },
         "macro_debt": {
           "first": "1990-01-01",
-          "last": "2026-04-01",
-          "count": 146
+          "last": "2026-07-01",
+          "count": 147
         }
       },
       "history_boundary": "2016-Q1",
