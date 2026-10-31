@@ -2,20 +2,20 @@
   "schema_version": 0,
   "source": "gold_price",
   "freq": "weekly",
-  "generated_at": "2026-10-24T20:27:25Z",
+  "generated_at": "2026-10-31T01:07:15Z",
   "date_field": "date",
   "coverage": {
-    "first": "2025-10-28",
-    "last": "2026-10-20",
+    "first": "2025-11-04",
+    "last": "2026-10-27",
     "count": 52
   },
   "derived_from": [
     {
       "source": "cftc_cot",
-      "generated_at": "2026-10-24T00:05:45Z",
+      "generated_at": "2026-10-31T01:07:15Z",
       "coverage": {
-        "first": "2025-10-28",
-        "last": "2026-10-20",
+        "first": "2025-11-04",
+        "last": "2026-10-27",
         "count": 52
       },
       "envelope": true
@@ -27,10 +27,6 @@
     "fallback_after=1 次失败：Stooq (xauusd): Stooq returned non-CSV response: <!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"robots\" content=\"noindex,nofollow\"></head><body><noscript>T"
   ],
   "data": [
-    {
-      "date": "2025-10-28",
-      "price": 3996.5
-    },
     {
       "date": "2025-11-04",
       "price": 4009.8
@@ -234,6 +230,10 @@
     {
       "date": "2026-10-20",
       "price": 4007.9
+    },
+    {
+      "date": "2026-10-27",
+      "price": 4031.4
     }
   ]
 }

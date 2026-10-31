@@ -2,11 +2,11 @@
   "schema_version": 0,
   "source": "cftc_cot",
   "freq": "weekly",
-  "generated_at": "2026-10-24T00:05:45Z",
+  "generated_at": "2026-10-31T01:07:15Z",
   "date_field": "date",
   "coverage": {
-    "first": "2025-10-28",
-    "last": "2026-10-20",
+    "first": "2025-11-04",
+    "last": "2026-10-27",
     "count": 52
   },
   "derived_from": [],
@@ -14,24 +14,16 @@
   "info": [],
   "data": {
     "latest": {
-      "date": "2026-10-20",
-      "mf_net": 104206,
-      "comm_net": -235582,
-      "open_interest": 402279,
-      "mf_net_chg": -2883,
-      "comm_net_chg": 6949,
-      "mf_index": 26,
-      "comm_index": 55
+      "date": "2026-10-27",
+      "mf_net": 105562,
+      "comm_net": -215624,
+      "open_interest": 396810,
+      "mf_net_chg": 1356,
+      "comm_net_chg": 19958,
+      "mf_index": 29,
+      "comm_index": 73
     },
     "weekly": [
-      {
-        "date": "2025-10-28",
-        "mf_net": 104159,
-        "comm_net": -237027,
-        "open_interest": 457122,
-        "mf_index": 26,
-        "comm_index": 54
-      },
       {
         "date": "2025-11-04",
         "mf_net": 100545,
@@ -439,6 +431,14 @@
         "open_interest": 402279,
         "mf_index": 26,
         "comm_index": 55
+      },
+      {
+        "date": "2026-10-27",
+        "mf_net": 105562,
+        "comm_net": -215624,
+        "open_interest": 396810,
+        "mf_index": 29,
+        "comm_index": 73
       }
     ]
   }

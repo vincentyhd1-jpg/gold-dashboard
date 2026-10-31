@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_fiscal_sustainability",
   "freq": "quarterly",
-  "generated_at": "2026-10-30T01:23:12Z",
+  "generated_at": "2026-10-31T01:07:26Z",
   "date_field": "date",
   "coverage": {
     "first": "2016-01-01",
@@ -22,11 +22,11 @@
     },
     {
       "source": "treasury_fiscal_data_debt_to_penny",
-      "generated_at": "2026-10-30T01:23:03Z",
+      "generated_at": "2026-10-31T01:07:19Z",
       "coverage": {
         "first": "1993-04-01",
-        "last": "2026-10-28",
-        "count": 8423
+        "last": "2026-10-29",
+        "count": 8424
       },
       "envelope": true
     },
@@ -1285,7 +1285,7 @@
     },
     "meta": {
       "mts_as_of": "2026-09-30",
-      "daily_public_debt_as_of": "2026-10-28",
+      "daily_public_debt_as_of": "2026-10-29",
       "gdp_as_of": "2026-07-01",
       "public_debt_gdp_as_of": "2026-04-01",
       "complete_through": "2026-Q2",
@@ -1297,8 +1297,8 @@
         },
         "daily_debt": {
           "first": "1993-04-01",
-          "last": "2026-10-28",
-          "count": 8423
+          "last": "2026-10-29",
+          "count": 8424
         },
         "macro_debt": {
           "first": "1990-01-01",
