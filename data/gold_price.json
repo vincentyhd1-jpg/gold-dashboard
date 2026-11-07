@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "gold_price",
   "freq": "weekly",
-  "generated_at": "2026-11-07T01:19:59Z",
+  "generated_at": "2026-11-07T21:37:42Z",
   "date_field": "date",
   "coverage": {
     "first": "2025-11-10",
@@ -24,7 +24,7 @@
   "warnings": [],
   "info": [
     "price_source=Yahoo Finance (GC=F)",
-    "fallback_after=1 次失败：Stooq (xauusd): Stooq returned non-CSV response: <!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"robots\" content=\"noindex,nofollow\"></head><body><noscript>T"
+    "fallback_after=1 次失败：Stooq (xauusd): <urlopen error timed out>"
   ],
   "data": [
     {
@@ -233,7 +233,7 @@
     },
     {
       "date": "2026-11-03",
-      "price": 4113.5
+      "price": 4074.9
     }
   ]
 }
