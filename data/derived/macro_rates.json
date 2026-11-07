@@ -2,79 +2,79 @@
   "schema_version": 0,
   "source": "derived_macro_rates",
   "freq": "daily",
-  "generated_at": "2026-11-06T01:51:16Z",
+  "generated_at": "2026-11-07T01:20:13Z",
   "date_field": "date",
   "coverage": {
     "first": "2016-01-01",
-    "last": "2026-11-05",
-    "count": 3962
+    "last": "2026-11-06",
+    "count": 3963
   },
   "derived_from": [
     {
       "source": "FRED",
-      "generated_at": "2026-11-06T01:51:08Z",
+      "generated_at": "2026-11-07T01:20:04Z",
       "coverage": {
         "first": "2016-01-04",
-        "last": "2026-11-04",
-        "count": 2711
+        "last": "2026-11-05",
+        "count": 2712
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-11-06T01:51:09Z",
+      "generated_at": "2026-11-07T01:20:04Z",
       "coverage": {
         "first": "2016-01-04",
-        "last": "2026-11-04",
-        "count": 2711
+        "last": "2026-11-05",
+        "count": 2712
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-11-06T01:51:09Z",
+      "generated_at": "2026-11-07T01:20:05Z",
       "coverage": {
         "first": "2016-01-04",
-        "last": "2026-11-04",
-        "count": 2711
+        "last": "2026-11-05",
+        "count": 2712
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-11-06T01:51:10Z",
+      "generated_at": "2026-11-07T01:20:06Z",
+      "coverage": {
+        "first": "2016-01-01",
+        "last": "2026-11-06",
+        "count": 3963
+      },
+      "envelope": true
+    },
+    {
+      "source": "FRED",
+      "generated_at": "2026-11-07T01:20:07Z",
+      "coverage": {
+        "first": "2016-01-01",
+        "last": "2026-11-06",
+        "count": 3963
+      },
+      "envelope": true
+    },
+    {
+      "source": "FRED",
+      "generated_at": "2026-11-07T01:20:07Z",
       "coverage": {
         "first": "2016-01-01",
         "last": "2026-11-05",
         "count": 3962
-      },
-      "envelope": true
-    },
-    {
-      "source": "FRED",
-      "generated_at": "2026-11-06T01:51:10Z",
-      "coverage": {
-        "first": "2016-01-01",
-        "last": "2026-11-05",
-        "count": 3962
-      },
-      "envelope": true
-    },
-    {
-      "source": "FRED",
-      "generated_at": "2026-11-06T01:51:11Z",
-      "coverage": {
-        "first": "2016-01-01",
-        "last": "2026-11-04",
-        "count": 3961
       },
       "envelope": true
     }
   ],
   "warnings": [],
   "info": [
-    "ust_coverage=2016-01-04..2026-11-04 count=2711",
-    "fed_coverage=2016-01-01..2026-11-05 count=3962",
+    "ust_coverage=2016-01-04..2026-11-05 count=2712",
+    "fed_coverage=2016-01-01..2026-11-06 count=3963",
     "date_alignment=outer_join",
     "missing_values=null"
   ],
@@ -16345,6 +16345,12 @@
         "dgs2": 4.58,
         "dgs10": 4.9,
         "dgs30": 5.28
+      },
+      {
+        "date": "2026-11-05",
+        "dgs2": 4.46,
+        "dgs10": 4.84,
+        "dgs30": 5.25
       }
     ],
     "fed": [
@@ -40116,6 +40122,12 @@
       },
       {
         "date": "2026-11-05",
+        "target_upper": 4.0,
+        "target_lower": 3.75,
+        "dff": 3.88
+      },
+      {
+        "date": "2026-11-06",
         "target_upper": 4.0,
         "target_lower": 3.75,
         "dff": null

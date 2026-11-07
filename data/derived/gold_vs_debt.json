@@ -2,31 +2,31 @@
   "schema_version": 0,
   "source": "derived_global_gold_value_vs_us_debt",
   "freq": "weekly",
-  "generated_at": "2026-11-06T01:51:16Z",
+  "generated_at": "2026-11-07T01:20:13Z",
   "date_field": "date",
   "coverage": {
-    "first": "2025-11-04",
-    "last": "2026-10-27",
+    "first": "2025-11-10",
+    "last": "2026-11-03",
     "count": 52
   },
   "derived_from": [
     {
       "source": "gold_price",
-      "generated_at": "2026-10-31T21:12:56Z",
+      "generated_at": "2026-11-07T01:19:59Z",
       "coverage": {
-        "first": "2025-11-04",
-        "last": "2026-10-27",
+        "first": "2025-11-10",
+        "last": "2026-11-03",
         "count": 52
       },
       "envelope": true
     },
     {
       "source": "treasury_fiscal_data_debt_to_penny",
-      "generated_at": "2026-11-06T01:51:06Z",
+      "generated_at": "2026-11-07T01:20:02Z",
       "coverage": {
         "first": "1993-04-01",
-        "last": "2026-11-04",
-        "count": 8428
+        "last": "2026-11-05",
+        "count": 8429
       },
       "envelope": true
     }
@@ -42,12 +42,6 @@
   ],
   "data": {
     "observations": [
-      {
-        "date": "2025-11-04",
-        "gold_price_usd_oz": 4009.8,
-        "global_gold_value_usd_tn": 28.452216634508204,
-        "us_total_public_debt_usd_tn": 38.04723975310302
-      },
       {
         "date": "2025-11-10",
         "gold_price_usd_oz": 4094.2,
@@ -353,6 +347,12 @@
         "gold_price_usd_oz": 3898.9,
         "global_gold_value_usd_tn": 27.665306857270696,
         "us_total_public_debt_usd_tn": 40.58227425484357
+      },
+      {
+        "date": "2026-11-03",
+        "gold_price_usd_oz": 4113.5,
+        "global_gold_value_usd_tn": 29.188037589418297,
+        "us_total_public_debt_usd_tn": 40.54740357098482
       }
     ],
     "methodology": {
