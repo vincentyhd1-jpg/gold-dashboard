@@ -2,39 +2,39 @@
   "schema_version": 0,
   "source": "derived_macro_cpi",
   "freq": "monthly",
-  "generated_at": "2026-10-15T00:09:37Z",
+  "generated_at": "2026-11-11T01:30:51Z",
   "date_field": "date",
   "coverage": {
     "first": "2016-01-01",
-    "last": "2026-09-01",
-    "count": 128
+    "last": "2026-10-01",
+    "count": 129
   },
   "derived_from": [
     {
       "source": "FRED",
-      "generated_at": "2026-10-15T00:09:34Z",
+      "generated_at": "2026-11-11T01:30:48Z",
       "coverage": {
         "first": "2016-01-01",
-        "last": "2026-09-01",
-        "count": 128
+        "last": "2026-10-01",
+        "count": 129
       },
       "envelope": true
     },
     {
       "source": "FRED",
-      "generated_at": "2026-10-15T00:09:34Z",
+      "generated_at": "2026-11-11T01:30:48Z",
       "coverage": {
         "first": "2016-01-01",
-        "last": "2026-09-01",
-        "count": 128
+        "last": "2026-10-01",
+        "count": 129
       },
       "envelope": true
     }
   ],
   "warnings": [],
   "info": [
-    "cpiaucsl_coverage=2016-01-01..2026-09-01 count=128",
-    "cpilfesl_coverage=2016-01-01..2026-09-01 count=128",
+    "cpiaucsl_coverage=2016-01-01..2026-10-01 count=129",
+    "cpilfesl_coverage=2016-01-01..2026-10-01 count=129",
     "date_alignment=outer_join",
     "missing_values=null",
     "yoy=exact_prior_year_month",
@@ -1193,10 +1193,19 @@
         "cpilfesl": 338.896,
         "cpilfesl_yoy": 0.025658408440218272,
         "published_at": null
+      },
+      {
+        "date": "2026-10-01",
+        "ref_period": "2026-10",
+        "cpiaucsl": 337.476,
+        "cpiaucsl_yoy": null,
+        "cpilfesl": 339.9,
+        "cpilfesl_yoy": null,
+        "published_at": null
       }
     ],
     "meta": {
-      "cpi_latest_ref_period": "2026-09",
+      "cpi_latest_ref_period": "2026-10",
       "cpi_latest_published_at": null,
       "cpi_release_date_available": false
     }
