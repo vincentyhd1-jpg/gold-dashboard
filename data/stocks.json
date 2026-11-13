@@ -2,95 +2,17 @@
   "schema_version": 0,
   "source": "cme_gold_stocks",
   "freq": "daily",
-  "generated_at": "2026-11-12T02:33:39Z",
+  "generated_at": "2026-11-13T02:11:29Z",
   "date_field": "date",
   "coverage": {
-    "first": "2026-07-07",
-    "last": "2026-11-10",
+    "first": "2026-07-08",
+    "last": "2026-11-11",
     "count": 90
   },
   "derived_from": [],
   "warnings": [],
   "info": [],
   "data": [
-    {
-      "date": "2026-07-07",
-      "registered": 14820993,
-      "eligible": 12294629,
-      "total": 27115622,
-      "depositories": [
-        {
-          "name": "ASAHI DEPOSITORY LLC",
-          "registered": 1659689,
-          "eligible": 113254,
-          "total": 1772943,
-          "reg_adj": 0
-        },
-        {
-          "name": "BRINK'S, INC.",
-          "registered": 5783427,
-          "eligible": 1155082,
-          "total": 6938509,
-          "reg_adj": 0
-        },
-        {
-          "name": "DELAWARE DEPOSITORY",
-          "registered": 63924,
-          "eligible": 118089,
-          "total": 182013,
-          "reg_adj": 0
-        },
-        {
-          "name": "HSBC BANK, USA",
-          "registered": 1534977,
-          "eligible": 4054417,
-          "total": 5589394,
-          "reg_adj": 0
-        },
-        {
-          "name": "INTERNATIONAL DEPOSITORY SERVICES OF DELAWARE",
-          "registered": 65748,
-          "eligible": 3457,
-          "total": 69205,
-          "reg_adj": 0
-        },
-        {
-          "name": "JP MORGAN CHASE BANK NA",
-          "registered": 2551327,
-          "eligible": 5929640,
-          "total": 8480967,
-          "reg_adj": 0
-        },
-        {
-          "name": "LOOMIS INTERNATIONAL (US) LLC",
-          "registered": 531961,
-          "eligible": 122696,
-          "total": 654657,
-          "reg_adj": 0
-        },
-        {
-          "name": "MALCA-AMIT USA, LLC",
-          "registered": 1223887,
-          "eligible": 747,
-          "total": 1224634,
-          "reg_adj": 0
-        },
-        {
-          "name": "MANFRA, TORDELLA & BROOKES, LLC",
-          "registered": 1319301,
-          "eligible": 745931,
-          "total": 2065232,
-          "reg_adj": 0
-        },
-        {
-          "name": "STONEX PRECIOUS METALS LLC",
-          "registered": 86747,
-          "eligible": 51312,
-          "total": 138059,
-          "reg_adj": 0
-        }
-      ]
-    },
     {
       "date": "2026-07-08",
       "registered": 14760025,
@@ -7505,6 +7427,91 @@
           "registered": 1374841,
           "eligible": 612619,
           "total": 1987460,
+          "reg_adj": 0
+        },
+        {
+          "name": "STONEX PRECIOUS METALS LLC",
+          "registered": 149229,
+          "eligible": 24531,
+          "total": 173760,
+          "reg_adj": 0
+        },
+        {
+          "name": "TEXAS PRECIOUS METALS, LLC",
+          "registered": 45701,
+          "eligible": 5015,
+          "total": 50716,
+          "reg_adj": 0
+        }
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "registered": 14241501,
+      "eligible": 8688689,
+      "total": 22930190,
+      "depositories": [
+        {
+          "name": "ASAHI DEPOSITORY LLC",
+          "registered": 1601457,
+          "eligible": 230230,
+          "total": 1831687,
+          "reg_adj": 0
+        },
+        {
+          "name": "BRINK'S, INC.",
+          "registered": 5342693,
+          "eligible": 1506484,
+          "total": 6849177,
+          "reg_adj": 0
+        },
+        {
+          "name": "DELAWARE DEPOSITORY",
+          "registered": 63924,
+          "eligible": 118089,
+          "total": 182013,
+          "reg_adj": 0
+        },
+        {
+          "name": "HSBC BANK, USA",
+          "registered": 1415177,
+          "eligible": 3680785,
+          "total": 5095962,
+          "reg_adj": 0
+        },
+        {
+          "name": "INTERNATIONAL DEPOSITORY SERVICES OF DELAWARE",
+          "registered": 98474,
+          "eligible": 33366,
+          "total": 131840,
+          "reg_adj": 0
+        },
+        {
+          "name": "JP MORGAN CHASE BANK NA",
+          "registered": 2076887,
+          "eligible": 2304493,
+          "total": 4381380,
+          "reg_adj": 0
+        },
+        {
+          "name": "LOOMIS INTERNATIONAL (US) LLC",
+          "registered": 580449,
+          "eligible": 99151,
+          "total": 679600,
+          "reg_adj": 0
+        },
+        {
+          "name": "MALCA-AMIT USA, LLC",
+          "registered": 1492664,
+          "eligible": 74179,
+          "total": 1566843,
+          "reg_adj": 0
+        },
+        {
+          "name": "MANFRA, TORDELLA & BROOKES, LLC",
+          "registered": 1374841,
+          "eligible": 612361,
+          "total": 1987202,
           "reg_adj": 0
         },
         {
