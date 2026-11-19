@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_official_reserve_composition",
   "freq": "quarterly",
-  "generated_at": "2026-11-18T03:10:41Z",
+  "generated_at": "2026-11-19T02:51:30Z",
   "date_field": "period",
   "coverage": {
     "first": "2000-Q4",
@@ -22,11 +22,11 @@
     },
     {
       "source": "FRED",
-      "generated_at": "2026-11-18T03:10:39Z",
+      "generated_at": "2026-11-19T02:51:27Z",
       "coverage": {
         "first": "2000-01-01",
-        "last": "2026-08-01",
-        "count": 320
+        "last": "2026-09-01",
+        "count": 321
       },
       "envelope": true
     }
@@ -13153,7 +13153,7 @@
         "period": "2026-Q2",
         "official_gold_value_usd": 3847980720000,
         "official_gold_share_pct": 23.698270686891338,
-        "foreign_official_ust_value_usd": 3778117000000,
+        "foreign_official_ust_value_usd": 3778147000000,
         "total_official_reserve_assets_usd": 16237390360000,
         "official_gold_tonnes": 29737.46,
         "matched_reporting_entities_count": 91,
