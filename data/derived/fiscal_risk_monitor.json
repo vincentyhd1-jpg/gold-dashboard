@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_fiscal_risk_monitor",
   "freq": "quarterly",
-  "generated_at": "2026-11-25T04:38:19Z",
+  "generated_at": "2026-11-26T03:49:06Z",
   "date_field": "date",
   "coverage": {
     "first": "2016-01-01",
@@ -12,7 +12,7 @@
   "derived_from": [
     {
       "source": "derived_fiscal_sustainability",
-      "generated_at": "2026-11-25T04:38:19Z",
+      "generated_at": "2026-11-26T03:49:06Z",
       "coverage": {
         "first": "2016-01-01",
         "last": "2026-07-01",
@@ -1640,12 +1640,12 @@
         "average_public_debt_observations": 251,
         "public_debt_gdp_pct": null,
         "effective_r_pct": 3.357316291199358,
-        "nominal_g_pct": 5.867588431010384,
-        "r_minus_g_pct_points": -2.5102721398110264,
-        "primary_balance_gdp_pct": -2.8499634129372953,
+        "nominal_g_pct": 6.015652157905271,
+        "r_minus_g_pct_points": -2.6583358667059134,
+        "primary_balance_gdp_pct": -2.8459830930897594,
         "stabilizing_primary_balance_pct_gdp": null,
         "fiscal_gap_pct_gdp": null,
-        "net_interest_gdp_pct": 3.186165016475686,
+        "net_interest_gdp_pct": 3.181715150279147,
         "net_interest_receipts_pct": 19.465369036212905,
         "observed_delta_public_debt_gdp": null,
         "model_implied_delta_public_debt_gdp": null,
