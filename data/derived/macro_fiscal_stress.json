@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_fiscal_sustainability",
   "freq": "quarterly",
-  "generated_at": "2026-11-26T03:49:06Z",
+  "generated_at": "2026-11-27T03:50:50Z",
   "date_field": "date",
   "coverage": {
     "first": "2016-01-01",
@@ -32,7 +32,7 @@
     },
     {
       "source": "derived_macro_debt",
-      "generated_at": "2026-11-26T03:49:05Z",
+      "generated_at": "2026-11-27T03:50:50Z",
       "coverage": {
         "first": "1990-01-01",
         "last": "2026-07-01",

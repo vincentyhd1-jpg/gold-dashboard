@@ -2,7 +2,7 @@
   "schema_version": 0,
   "source": "derived_macro_debt",
   "freq": "quarterly",
-  "generated_at": "2026-11-26T03:49:05Z",
+  "generated_at": "2026-11-27T03:50:50Z",
   "date_field": "date",
   "coverage": {
     "first": "1990-01-01",
@@ -52,7 +52,7 @@
     },
     {
       "source": "FRED",
-      "generated_at": "2026-11-26T03:49:04Z",
+      "generated_at": "2026-11-27T03:50:47Z",
       "coverage": {
         "first": "1990-01-01",
         "last": "2026-07-01",
